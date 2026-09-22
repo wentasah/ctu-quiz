@@ -1,0 +1,37 @@
+[workspace]
+members = ["common", "server", "cli", "testsupport"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Michal Sojka <sojkam1@cvut.cz>"]
+repository = "https://github.com/CTU-FEE-OSY/quiz"
+
+[workspace.dependencies]
+quiz-common = { path = "common" }
+quiz-testsupport = { path = "testsupport" }
+
+axum = { version = "0.8", features = ["macros"] }
+
+anyhow = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+# openidconnect 4 pulls in oauth2 5, which integrates with reqwest 0.12.
+# Keep every crate in the workspace on the same reqwest so the HTTP client
+# types can be shared with the OIDC code.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "io-std", "io-util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "time"] }
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[profile.release]
+strip = true

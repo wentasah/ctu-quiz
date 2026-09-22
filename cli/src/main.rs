@@ -1,0 +1,314 @@
+//! Teacher's command line tool.
+//!
+//! `quiz ask question.md` publishes a question on the quiz server, opens the
+//! presentation view in a browser, shows the number of answers as they arrive
+//! and, once the teacher closes the question, writes the collected answers next
+//! to the Markdown file as a CSV.
+
+mod auth;
+mod client;
+mod report;
+
+use std::{
+    io::{IsTerminal, Write},
+    path::{Path, PathBuf},
+    process::ExitCode,
+    time::Duration,
+};
+
+use anyhow::{Context, Result};
+use chrono::Local;
+use clap::{Parser, Subcommand};
+use client::Api;
+use quiz_common::api::CreateQuestion;
+use tokio::io::{AsyncBufReadExt, BufReader};
+use url::Url;
+
+/// Ask students a question and collect their answers.
+#[derive(Debug, Parser)]
+#[command(name = "quiz", version, about, long_about = None)]
+struct Cli {
+    /// Base URL of the quiz server.
+    #[arg(
+        long,
+        short = 's',
+        env = "QUIZ_SERVER",
+        default_value = "http://localhost:8080",
+        global = true
+    )]
+    server: Url,
+
+    /// Never try to open a browser, just print the URLs.
+    #[arg(long, global = true)]
+    no_browser: bool,
+
+    /// Port the OIDC login listens on; 0 picks a free one.
+    #[arg(long, env = "QUIZ_LOGIN_PORT", default_value_t = 8765, global = true)]
+    login_port: u16,
+
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Ask a question, show it to students and save their answers.
+    Ask {
+        /// Markdown file with the question.
+        file: PathBuf,
+        /// Where to write the answers; defaults to the question file name
+        /// followed by the date and time.
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+        /// Close the question automatically after this many seconds.
+        #[arg(long, value_name = "SECONDS")]
+        close_after: Option<u64>,
+    },
+    /// Show how a Markdown file is parsed, without contacting the server.
+    Parse {
+        /// Markdown file with the question.
+        file: PathBuf,
+    },
+    /// Log in to the quiz server and remember the token.
+    Login,
+    /// Forget the remembered token.
+    Logout {
+        /// Forget the tokens of all servers.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Show who this tool is logged in as.
+    Whoami,
+    /// Close a question that is still open and save its answers.
+    Close {
+        /// Question id, as printed by `quiz ask`.
+        id: String,
+        /// Where to write the answers.
+        #[arg(long, short)]
+        output: Option<PathBuf>,
+    },
+}
+
+#[tokio::main]
+async fn main() -> ExitCode {
+    let cli = Cli::parse();
+    match run(&cli).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("quiz: {error:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run(cli: &Cli) -> Result<()> {
+    match &cli.command {
+        Command::Ask {
+            file,
+            output,
+            close_after,
+        } => ask(cli, file, output.clone(), *close_after).await,
+        Command::Parse { file } => parse(file),
+        Command::Login => login(cli).await,
+        Command::Logout { all } => logout(cli, *all),
+        Command::Whoami => whoami(cli).await,
+        Command::Close { id, output } => close(cli, id, output.clone()).await,
+    }
+}
+
+/// The main workflow: publish, present, collect, save.
+async fn ask(
+    cli: &Cli,
+    file: &Path,
+    output: Option<PathBuf>,
+    close_after: Option<u64>,
+) -> Result<()> {
+    let markdown = read_question(file)?;
+    report::print_question(
+        &quiz_common::parse_question(&markdown)
+            .with_context(|| format!("{} is not a usable question", file.display()))?,
+    );
+
+    let api = connect(cli, false).await?;
+    let question = api
+        .create_question(&CreateQuestion {
+            source_name: file
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "question.md".to_owned()),
+            markdown,
+        })
+        .await?;
+
+    println!("Question code:     {}", question.code);
+    println!("Students answer at: {}", question.answer_url);
+    println!("Presentation view:  {}", question.display_url);
+    show_in_browser(&question.display_url, !cli.no_browser);
+
+    wait_for_close(&api, &question.id, close_after).await?;
+
+    let closed = api.close(&question.id).await?;
+    let results = api.results(&question.id).await?;
+
+    let path = output.unwrap_or_else(|| report::csv_path(file, Local::now()));
+    report::write_csv(&path, &results)?;
+    report::print_summary(&closed, &results);
+    println!("\nAnswers saved to {}", path.display());
+    Ok(())
+}
+
+/// Shows the parsed question without publishing it.
+fn parse(file: &Path) -> Result<()> {
+    let markdown = read_question(file)?;
+    let question = quiz_common::parse_question(&markdown)
+        .with_context(|| format!("{} is not a usable question", file.display()))?;
+    report::print_question(&question);
+    println!(
+        "{} is a valid question with {} possible answers.",
+        file.display(),
+        question.answers.len()
+    );
+    Ok(())
+}
+
+async fn login(cli: &Cli) -> Result<()> {
+    let api = connect(cli, true).await?;
+    let me = api.whoami().await?;
+    println!("Logged in as {} ({}).", me.name, me.login);
+    if !me.is_teacher {
+        println!("Note: this login is not allowed to ask questions on this server.");
+    }
+    Ok(())
+}
+
+fn logout(cli: &Cli, all: bool) -> Result<()> {
+    let server = cli.server.as_str().to_owned();
+    let forgotten = auth::forget((!all).then_some(server.as_str()))?;
+    if forgotten {
+        println!("Token forgotten.");
+    } else {
+        println!("There was no token to forget.");
+    }
+    Ok(())
+}
+
+async fn whoami(cli: &Cli) -> Result<()> {
+    let api = connect(cli, false).await?;
+    let me = api.whoami().await?;
+    println!("{} ({})", me.name, me.login);
+    println!(
+        "{}",
+        if me.is_teacher {
+            "May ask questions."
+        } else {
+            "May not ask questions on this server."
+        }
+    );
+    Ok(())
+}
+
+/// Closes a question whose `quiz ask` was interrupted, and saves its answers.
+async fn close(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<()> {
+    let api = connect(cli, false).await?;
+    let closed = api.close(id).await?;
+    let results = api.results(id).await?;
+
+    let path =
+        output.unwrap_or_else(|| report::csv_path(Path::new(&closed.source_name), Local::now()));
+    report::write_csv(&path, &results)?;
+    report::print_summary(&closed, &results);
+    println!("\nAnswers saved to {}", path.display());
+    Ok(())
+}
+
+/// Logs in if needed and returns a client for the server API.
+async fn connect(cli: &Cli, force_login: bool) -> Result<Api> {
+    // Redirects are not followed: the API answers directly, and the OIDC
+    // discovery must not be sent anywhere else.
+    let http = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .context("building the HTTP client failed")?;
+
+    let info = Api::oidc_info(&http, &cli.server).await?;
+    let token = auth::token(
+        &http,
+        cli.server.as_str(),
+        &info,
+        cli.login_port,
+        !cli.no_browser,
+        force_login,
+    )
+    .await?;
+
+    Ok(Api::new(http, cli.server.clone(), token.id_token))
+}
+
+fn read_question(file: &Path) -> Result<String> {
+    std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))
+}
+
+/// Requirement 7: show the question in a browser, or print the URL when that
+/// is not possible.
+fn show_in_browser(url: &str, open_browser: bool) {
+    if open_browser {
+        match open::that_detached(url) {
+            Ok(()) => {
+                println!("\nThe presentation view was opened in a browser.");
+                return;
+            }
+            Err(error) => println!("\nCannot open a browser ({error})."),
+        }
+    }
+    println!("\nOpen the presentation view manually:\n\n    {url}\n");
+}
+
+/// Shows the number of answers until the teacher closes the question.
+async fn wait_for_close(api: &Api, id: &str, close_after: Option<u64>) -> Result<()> {
+    println!("Press Enter to close the question and save the answers (Ctrl-C works too).");
+
+    let mut lines = BufReader::new(tokio::io::stdin()).lines();
+    let mut stdin_open = true;
+    // Redrawing one line is for a terminal; a log file wants one line per
+    // change instead of escape sequences.
+    let terminal = std::io::stdout().is_terminal();
+    let mut last_count = usize::MAX;
+    let mut ticker = tokio::time::interval(Duration::from_secs(1));
+    let deadline =
+        close_after.map(|seconds| tokio::time::Instant::now() + Duration::from_secs(seconds));
+
+    loop {
+        tokio::select! {
+            _ = ticker.tick() => {
+                let question = api.question(id).await?;
+                if terminal {
+                    print!("\r  answers: {}\x1b[K", question.answer_count);
+                    let _ = std::io::stdout().flush();
+                } else if question.answer_count != last_count {
+                    println!("  answers: {}", question.answer_count);
+                }
+                last_count = question.answer_count;
+
+                if !question.open {
+                    println!("\nThe question has been closed.");
+                    return Ok(());
+                }
+                if deadline.is_some_and(|deadline| tokio::time::Instant::now() >= deadline) {
+                    println!();
+                    return Ok(());
+                }
+            }
+            line = lines.next_line(), if stdin_open => {
+                match line {
+                    Ok(Some(_)) => return Ok(()),
+                    // No terminal on the standard input: wait for Ctrl-C.
+                    Ok(None) | Err(_) => stdin_open = false,
+                }
+            }
+            _ = tokio::signal::ctrl_c() => {
+                println!();
+                return Ok(());
+            }
+        }
+    }
+}

@@ -1,0 +1,36 @@
+# Reverse proxy for the quiz server, with TLS terminated by nginx.
+#
+# The two `events` endpoints are server-sent event streams: they must not be
+# buffered, and they stay open for as long as a question is shown.
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name quiz.osy.fel.cvut.cz;
+
+    ssl_certificate     /etc/letsencrypt/live/quiz.osy.fel.cvut.cz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/quiz.osy.fel.cvut.cz/privkey.pem;
+
+    location / {
+        # No trailing slash: the path is forwarded unchanged, which is what
+        # QUIZ_PUBLIC_URL with a path prefix (e.g. https://host/quiz) needs.
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Keep the event streams flowing.
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name quiz.osy.fel.cvut.cz;
+    return 301 https://$host$request_uri;
+}

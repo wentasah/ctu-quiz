@@ -1,0 +1,55 @@
+# systemd unit for the quiz server.
+#
+#   install -m644 quiz-server.service /etc/systemd/system/
+#   install -m600 quiz-server.env /etc/quiz-server.env   # see quiz-server.env.example
+#   systemctl daemon-reload && systemctl enable --now quiz-server
+#
+# The server keeps no state on disc, so it may be restarted at any time; only
+# questions that are currently open are lost.
+
+[Unit]
+Description=Quiz server (questions for students during a lecture)
+Documentation=https://osy.fel.cvut.cz/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/quiz-server
+EnvironmentFile=/etc/quiz-server.env
+Restart=on-failure
+RestartSec=5s
+
+# A user of its own, created on the fly; the log directory below belongs to it.
+DynamicUser=yes
+LogsDirectory=quiz-server
+LogsDirectoryMode=0750
+Environment=QUIZ_LOG_FILE=/var/log/quiz-server/quiz-server.log
+
+# The process only needs to listen on a TCP port and talk to the OIDC provider.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

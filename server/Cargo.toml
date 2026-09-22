@@ -1,0 +1,38 @@
+[package]
+name = "quiz-server"
+description = "HTTP server of the quiz app: shows questions to students and collects their answers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+quiz-common.workspace = true
+
+anyhow.workspace = true
+askama = "0.16"
+axum.workspace = true
+axum-extra = { version = "0.12", features = ["cookie-signed"] }
+chrono.workspace = true
+clap.workspace = true
+openidconnect.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream = { version = "0.1", features = ["sync"] }
+tower-http = { version = "0.7", features = ["trace"] }
+tracing.workspace = true
+tracing-appender = "0.2"
+tracing-subscriber.workspace = true
+url.workspace = true
+uuid.workspace = true
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+async-stream = "0.3"
+futures-core = "0.3"
+
+[dev-dependencies]
+quiz-testsupport.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "cookies"] }

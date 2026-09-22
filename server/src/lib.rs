@@ -1,0 +1,210 @@
+//! The quiz server: shows questions to students, collects their answers and
+//! serves the API used by the teacher CLI.
+//!
+//! All state lives in memory (see [`state`]); the only file the server writes
+//! is the log file, and it never reads it back.
+
+pub mod api;
+pub mod auth;
+pub mod config;
+pub mod display;
+pub mod error;
+pub mod live;
+pub mod state;
+pub mod views;
+pub mod web;
+
+use std::time::Duration;
+
+use anyhow::{Context, Result};
+use axum::{
+    Router,
+    body::Body,
+    http::{Request, header},
+    response::IntoResponse,
+    routing::{get, post},
+};
+use quiz_common::api::API_PREFIX;
+use tokio::net::TcpListener;
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
+use tracing::Level;
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+
+use crate::{auth::Oidc, config::Config, state::AppState};
+
+/// How often expired sessions and old questions are dropped from memory.
+const PRUNE_INTERVAL: Duration = Duration::from_secs(300);
+
+/// Sets up logging into the log file and onto the standard error output
+/// (requirement 5).
+///
+/// The returned guard flushes the log file when it is dropped, so it has to be
+/// kept alive for as long as the server runs.
+pub fn init_logging(cfg: &Config) -> Result<WorkerGuard> {
+    let directory = cfg
+        .log_file
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    let file_name = cfg
+        .log_file
+        .file_name()
+        .context("--log-file must end with a file name")?;
+
+    let (writer, guard) =
+        tracing_appender::non_blocking(tracing_appender::rolling::never(directory, file_name));
+
+    let filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(&cfg.log_filter))
+        .with_context(|| format!("invalid --log-filter {:?}", cfg.log_filter))?;
+
+    // `try_init` rather than `init`: the integration tests start several
+    // servers in one process, and only the first one installs the subscriber.
+    if let Err(error) = tracing_subscriber::registry()
+        .with(filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(writer)
+                .with_ansi(false),
+        )
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .try_init()
+    {
+        eprintln!("quiz-server: logging is already set up ({error})");
+    }
+
+    Ok(guard)
+}
+
+/// Builds the whole application.
+pub fn router(state: AppState) -> Router {
+    let trust_proxy = state.cfg.trust_proxy;
+
+    let api = Router::new()
+        .route("/oidc", get(api::oidc_info))
+        .route("/whoami", get(api::whoami))
+        .route("/questions", post(api::create_question))
+        .route("/questions/{id}", get(api::question))
+        .route("/questions/{id}/close", post(api::close_question))
+        .route("/questions/{id}/results", get(api::results));
+
+    Router::new()
+        // Web UI for students; every page requires an OIDC login.
+        .route("/", get(web::index))
+        .route("/join", post(web::join))
+        .route("/q/{id}", get(web::question))
+        .route("/q/{id}/answer", post(web::answer))
+        .route("/q/{id}/events", get(web::events))
+        // Presentation view, reachable with the secret display token.
+        .route("/d/{token}", get(display::display))
+        .route("/d/{token}/events", get(display::events))
+        // OIDC endpoints.
+        .route("/login", get(auth::login))
+        .route("/auth/callback", get(auth::callback))
+        .route("/logout", get(auth::logout))
+        // API for the CLI.
+        .nest(API_PREFIX, api)
+        .route("/static/app.css", get(stylesheet))
+        .route("/static/app.js", get(javascript))
+        .route("/healthz", get(|| async { "ok\n" }))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(move |request: &Request<Body>| {
+                    let client = if trust_proxy {
+                        request
+                            .headers()
+                            .get("x-forwarded-for")
+                            .and_then(|value| value.to_str().ok())
+                            .unwrap_or("-")
+                    } else {
+                        "-"
+                    };
+                    tracing::info_span!(
+                        "http",
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        client = %client,
+                    )
+                })
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
+        .with_state(state)
+}
+
+/// Serves the application on an already bound listener until the process is
+/// asked to terminate.
+pub async fn serve(cfg: Config, listener: TcpListener) -> Result<()> {
+    auth::check_config(&cfg)?;
+    views::set_prefix(cfg.prefix());
+
+    let oidc = Oidc::discover(&cfg).await?;
+    tracing::info!(issuer = %cfg.oidc_issuer, "OIDC provider discovered");
+
+    let state = AppState::new(cfg, oidc);
+
+    let pruner = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(PRUNE_INTERVAL);
+        loop {
+            interval.tick().await;
+            pruner.prune().await;
+        }
+    });
+
+    if let Ok(address) = listener.local_addr() {
+        tracing::info!(%address, "listening");
+    }
+
+    axum::serve(listener, router(state))
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .context("the HTTP server failed")
+}
+
+/// Resolves on SIGINT or SIGTERM, so that systemd can stop the server cleanly.
+async fn shutdown_signal() {
+    let interrupt = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => tracing::error!(%error, "cannot listen for SIGTERM"),
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = interrupt => {}
+        () = terminate => {}
+    }
+    tracing::info!("shutting down");
+}
+
+async fn stylesheet() -> impl IntoResponse {
+    static CSS: &str = include_str!("../static/app.css");
+    static_file("text/css; charset=utf-8", CSS)
+}
+
+async fn javascript() -> impl IntoResponse {
+    static JS: &str = include_str!("../static/app.js");
+    static_file("text/javascript; charset=utf-8", JS)
+}
+
+/// The two static files are compiled into the binary, so that the server needs
+/// nothing but its own executable to run.
+fn static_file(content_type: &'static str, body: &'static str) -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, "public, max-age=300"),
+        ],
+        body,
+    )
+}

@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body_class %}answer{% endblock %}
+{% block content %}
+<div class="card" id="live" data-events="{{ prefix }}/q/{{ id }}/events" data-open="{{ open }}">
+  <p class="who">{{ user.name }} ({{ user.login }}) &middot;
+    <a href="{{ prefix }}/logout">odhlásit</a></p>
+
+  <div class="prompt">{{ prompt_html|safe }}</div>
+
+  {% if open %}
+  <form method="post" action="{{ prefix }}/q/{{ id }}/answer" class="answers">
+    {% for bar in bars %}
+    <button type="submit" name="answer" value="{{ loop.index0 }}"
+            class="answer{% if bar.chosen %} chosen{% endif %}">
+      <span class="label">{{ bar.label }}</span>
+      <span class="text">{{ bar.html|safe }}</span>
+    </button>
+    {% endfor %}
+  </form>
+  {% if !chosen_label.is_empty() %}
+  <p class="status ok">Vaše odpověď <strong>{{ chosen_label }}</strong> byla zaznamenána.
+    Dokud je otázka otevřená, můžete ji změnit.</p>
+  {% else %}
+  <p class="status">Vyberte jednu z možností.</p>
+  {% endif %}
+  <p class="status count">Odpovědělo <strong data-count>{{ answer_count }}</strong>
+    <span class="unit">studentů</span></p>
+  {% else %}
+  <h2>Otázka je uzavřena</h2>
+  {% include "results.html" %}
+  {% if !chosen_label.is_empty() %}
+  <p class="status ok">Vaše odpověď byla <strong>{{ chosen_label }}</strong>.</p>
+  {% else %}
+  <p class="status">Na tuto otázku jste neodpověděl(a).</p>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ prefix }}/static/app.js"></script>{% endblock %}

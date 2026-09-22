@@ -1,0 +1,443 @@
+//! Parsing of a question written in Markdown.
+//!
+//! The format is the one described in the assignment: the file starts with the
+//! question itself (arbitrary Markdown), and the possible answers are the
+//! top-level list items that follow a Markdown horizontal rule (`---`). The
+//! `question.md` file next to this crate is a complete example.
+//!
+//! Splitting the file at the horizontal rule is done textually (not through the
+//! Markdown event stream) so that the rule is recognized even when it directly
+//! follows a paragraph, where CommonMark would read it as a setext heading.
+//! Horizontal rules inside fenced code blocks are ignored.
+
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, html};
+use serde::{Deserialize, Serialize};
+
+/// Answers are labelled `A`..`Z`, so this is the hard upper limit.
+pub const MAX_ANSWERS: usize = 26;
+
+/// A question with its possible answers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Question {
+    /// Text of the first Markdown heading, if the question has one.
+    pub title: Option<String>,
+    /// The question text, as written by the teacher (without the `---`).
+    pub prompt_markdown: String,
+    /// The question text rendered to HTML.
+    pub prompt_html: String,
+    /// The possible answers, in the order they appear in the file.
+    pub answers: Vec<Answer>,
+}
+
+/// One possible answer, i.e. one top-level list item after the `---` rule.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Answer {
+    /// `A`, `B`, `C`, ... as shown to students and stored in the CSV.
+    pub label: String,
+    /// The list item as written, with the bullet removed and de-indented.
+    pub markdown: String,
+    /// The list item rendered to HTML.
+    pub html: String,
+    /// One-line plain-text rendering, used in the CSV and in the terminal.
+    pub plain: String,
+}
+
+/// Reasons why a Markdown file is not a usable question.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ParseError {
+    #[error(
+        "no `---` separator found: the possible answers have to follow a Markdown horizontal rule"
+    )]
+    MissingSeparator,
+    #[error(
+        "no list item found after the `---` separator: every possible answer has to be a top-level list item"
+    )]
+    NoAnswers,
+    #[error("found only one possible answer, a question needs at least two")]
+    TooFewAnswers,
+    #[error("found {0} possible answers, at most 26 are supported")]
+    TooManyAnswers(usize),
+    #[error("the question text above the `---` separator is empty")]
+    EmptyPrompt,
+}
+
+/// Markdown extensions enabled for questions and answers.
+fn options() -> Options {
+    Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS
+}
+
+/// Parses a Markdown question file.
+pub fn parse(source: &str) -> Result<Question, ParseError> {
+    let (prompt_markdown, answers_source) =
+        split_at_rule(source).ok_or(ParseError::MissingSeparator)?;
+
+    let prompt_markdown = prompt_markdown.trim();
+    if prompt_markdown.is_empty() {
+        return Err(ParseError::EmptyPrompt);
+    }
+
+    let items = top_level_items(answers_source);
+    match items.len() {
+        0 => return Err(ParseError::NoAnswers),
+        1 => return Err(ParseError::TooFewAnswers),
+        n if n > MAX_ANSWERS => return Err(ParseError::TooManyAnswers(n)),
+        _ => {}
+    }
+
+    let answers = items
+        .into_iter()
+        .enumerate()
+        .map(|(i, markdown)| Answer {
+            label: label(i),
+            html: render_answer(&markdown),
+            plain: plain_text(&markdown),
+            markdown,
+        })
+        .collect();
+
+    Ok(Question {
+        title: first_heading(prompt_markdown),
+        prompt_html: render(prompt_markdown),
+        prompt_markdown: prompt_markdown.to_owned(),
+        answers,
+    })
+}
+
+/// The label of the `index`-th answer: `A`, `B`, `C`, ...
+pub fn label(index: usize) -> String {
+    debug_assert!(index < MAX_ANSWERS);
+    char::from(b'A' + (index % MAX_ANSWERS) as u8).to_string()
+}
+
+impl Question {
+    /// Title to show when the file contains no heading.
+    pub fn title_or<'a>(&'a self, fallback: &'a str) -> &'a str {
+        self.title.as_deref().unwrap_or(fallback)
+    }
+
+    /// Plain-text answers, in order; handy for CSV headers and terminal output.
+    pub fn plain_answers(&self) -> Vec<String> {
+        self.answers.iter().map(|a| a.plain.clone()).collect()
+    }
+}
+
+/// Splits the source at the first horizontal rule that is not inside a fenced
+/// code block. Returns the text before and after the rule line.
+fn split_at_rule(source: &str) -> Option<(&str, &str)> {
+    let mut fence: Option<(char, usize)> = None;
+    let mut offset = 0;
+
+    for line in source.split_inclusive('\n') {
+        let line_start = offset;
+        offset += line.len();
+        let line = line.trim_end_matches(['\n', '\r']);
+
+        match fence {
+            Some((marker, len)) => {
+                if closes_fence(line, marker, len) {
+                    fence = None;
+                }
+            }
+            None => {
+                if let Some(open) = opens_fence(line) {
+                    fence = Some(open);
+                } else if is_thematic_break(line) {
+                    return Some((&source[..line_start], &source[offset..]));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Indentation of at most three spaces keeps a line out of an indented code
+/// block, which is a precondition for both fences and thematic breaks.
+fn strip_indent(line: &str) -> Option<&str> {
+    let rest = line.trim_start_matches(' ');
+    if line.len() - rest.len() <= 3 {
+        Some(rest)
+    } else {
+        None
+    }
+}
+
+fn opens_fence(line: &str) -> Option<(char, usize)> {
+    let rest = strip_indent(line)?;
+    let marker = rest.chars().next().filter(|c| *c == '`' || *c == '~')?;
+    let len = rest.chars().take_while(|c| *c == marker).count();
+    // An info string must not contain backticks, but we do not care here: any
+    // run of three or more markers opens a block for our purposes.
+    (len >= 3).then_some((marker, len))
+}
+
+fn closes_fence(line: &str, marker: char, open_len: usize) -> bool {
+    let Some(rest) = strip_indent(line) else {
+        return false;
+    };
+    let len = rest.chars().take_while(|c| *c == marker).count();
+    len >= open_len && rest[len..].trim().is_empty()
+}
+
+/// `---`, `***`, `___`, also with spaces in between, as per CommonMark.
+fn is_thematic_break(line: &str) -> bool {
+    let Some(rest) = strip_indent(line) else {
+        return false;
+    };
+    let Some(marker) = rest.chars().next().filter(|c| "-*_".contains(*c)) else {
+        return false;
+    };
+    let mut count = 0;
+    for c in rest.chars() {
+        if c == marker {
+            count += 1;
+        } else if !c.is_whitespace() {
+            return false;
+        }
+    }
+    count >= 3
+}
+
+/// Source text of every top-level list item in `source`, with the bullet
+/// removed. Nested lists stay part of the item they belong to.
+fn top_level_items(source: &str) -> Vec<String> {
+    let mut depth = 0usize;
+    let mut items = Vec::new();
+
+    for (event, range) in Parser::new_ext(source, options()).into_offset_iter() {
+        match event {
+            Event::Start(Tag::List(_)) => depth += 1,
+            Event::End(TagEnd::List(_)) => depth = depth.saturating_sub(1),
+            // The range of a list item spans the whole item, including any
+            // nested blocks, and `depth` is still 1 when the item starts.
+            Event::Start(Tag::Item) if depth == 1 => items.push(dedent_item(&source[range])),
+            _ => {}
+        }
+    }
+    items
+}
+
+/// Removes the list bullet from the first line and the corresponding
+/// indentation from the continuation lines.
+fn dedent_item(item: &str) -> String {
+    let mut lines = item.lines();
+    let Some(first) = lines.next() else {
+        return String::new();
+    };
+
+    let after_indent = first.trim_start();
+    let marker_len = bullet_len(after_indent).unwrap_or(0);
+    let content_column = first.len() - after_indent.len() + marker_len;
+    let mut out = after_indent[marker_len..].to_owned();
+
+    for line in lines {
+        out.push('\n');
+        let strippable = line
+            .char_indices()
+            .take_while(|(i, c)| *c == ' ' && *i < content_column)
+            .count();
+        out.push_str(&line[strippable..]);
+    }
+    out.trim_end().to_owned()
+}
+
+/// Length of a `-`/`*`/`+`/`1.` bullet including the whitespace after it.
+fn bullet_len(line: &str) -> Option<usize> {
+    let mut chars = line.char_indices();
+    let (_, first) = chars.next()?;
+
+    let after_marker = if "-*+".contains(first) {
+        1
+    } else if first.is_ascii_digit() {
+        let digits = line.chars().take_while(char::is_ascii_digit).count();
+        let delimiter = line[digits..].chars().next()?;
+        if delimiter != '.' && delimiter != ')' {
+            return None;
+        }
+        digits + 1
+    } else {
+        return None;
+    };
+
+    let spaces = line[after_marker..]
+        .chars()
+        .take_while(|c| *c == ' ' || *c == '\t')
+        .count();
+    (spaces > 0 || line.len() == after_marker).then_some(after_marker + spaces)
+}
+
+fn render(markdown: &str) -> String {
+    let mut html = String::new();
+    html::push_html(&mut html, Parser::new_ext(markdown, options()));
+    html
+}
+
+/// Renders an answer, unwrapping the paragraph of a single-paragraph answer so
+/// that it can be placed inside a label or a table cell.
+fn render_answer(markdown: &str) -> String {
+    let html = render(markdown);
+    let trimmed = html.trim();
+    if let Some(inner) = trimmed
+        .strip_prefix("<p>")
+        .and_then(|rest| rest.strip_suffix("</p>"))
+        .filter(|inner| !inner.contains("<p>"))
+    {
+        return inner.to_owned();
+    }
+    trimmed.to_owned()
+}
+
+/// Collapses Markdown to a single line of plain text.
+fn plain_text(markdown: &str) -> String {
+    let mut text = String::new();
+    for event in Parser::new_ext(markdown, options()) {
+        match event {
+            Event::Text(t) | Event::Code(t) => text.push_str(&t),
+            Event::SoftBreak | Event::HardBreak => text.push(' '),
+            Event::End(TagEnd::Paragraph | TagEnd::Item | TagEnd::CodeBlock) => text.push(' '),
+            _ => {}
+        }
+    }
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn first_heading(markdown: &str) -> Option<String> {
+    let mut parser = Parser::new_ext(markdown, options());
+    while let Some(event) = parser.next() {
+        if !matches!(event, Event::Start(Tag::Heading { .. })) {
+            continue;
+        }
+        let mut title = String::new();
+        for event in parser.by_ref() {
+            match event {
+                Event::Text(t) | Event::Code(t) => title.push_str(&t),
+                Event::End(TagEnd::Heading(_)) => break,
+                _ => {}
+            }
+        }
+        let title = title.trim();
+        if !title.is_empty() {
+            return Some(title.to_owned());
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The example shipped with the app, so that a broken example is caught.
+    const EXAMPLE: &str = include_str!("../../question.md");
+
+    #[test]
+    fn parses_the_example_question() {
+        let q = parse(EXAMPLE).unwrap();
+        assert_eq!(q.title, None);
+        assert!(
+            q.prompt_markdown
+                .starts_with("Consider the following BASH code:")
+        );
+        assert!(q.prompt_markdown.ends_with("What's wrong with it?"));
+        // The fenced code block survives into the HTML.
+        assert!(q.prompt_html.contains("<code class=\"language-bash\">"));
+        assert!(q.prompt_html.contains("sum=$((sum + num))"));
+
+        let labels: Vec<_> = q.answers.iter().map(|a| a.label.as_str()).collect();
+        assert_eq!(labels, ["A", "B", "C"]);
+        // A multi-line answer becomes a single line of HTML and plain text.
+        assert!(q.answers[0].html.contains("<code>while</code>"));
+        assert_eq!(
+            q.answers[0].plain,
+            "In Bash, every stage of a pipeline runs in its own subshell. \
+             Modifications to variables inside the while loop affect the \
+             subshell, not the parent shell environment."
+        );
+        assert_eq!(q.answers[1].plain, "It doesn't handler errors.");
+        assert_eq!(
+            q.answers[2].plain,
+            "It will work only in BASH 4.0 and newer."
+        );
+    }
+
+    #[test]
+    fn takes_the_title_from_the_first_heading() {
+        let q = parse("# Pipelines\n\nWhich one?\n\n---\n\n- one\n- two\n").unwrap();
+        assert_eq!(q.title.as_deref(), Some("Pipelines"));
+        assert_eq!(q.title_or("fallback"), "Pipelines");
+        assert_eq!(
+            parse("Q?\n\n---\n\n- a\n- b\n")
+                .unwrap()
+                .title_or("file.md"),
+            "file.md"
+        );
+    }
+
+    #[test]
+    fn ignores_a_rule_inside_a_code_block() {
+        let q =
+            parse("Look:\n\n```\n---\nnot a separator\n---\n```\n\n---\n\n- yes\n- no\n").unwrap();
+        assert_eq!(q.answers.len(), 2);
+        assert!(q.prompt_markdown.contains("not a separator"));
+    }
+
+    #[test]
+    fn splits_at_a_rule_that_follows_a_paragraph_directly() {
+        // CommonMark would read this as a setext heading; teachers mean a rule.
+        let q = parse("Which one?\n---\n- one\n- two\n").unwrap();
+        assert_eq!(q.prompt_markdown, "Which one?");
+        assert_eq!(q.answers.len(), 2);
+    }
+
+    #[test]
+    fn accepts_other_rule_and_bullet_styles() {
+        let q = parse("Q?\n\n* * *\n\n1. first\n2. second\n3. third\n").unwrap();
+        assert_eq!(q.answers.len(), 3);
+        assert_eq!(q.answers[2].plain, "third");
+        assert_eq!(parse("Q?\n\n___\n\n+ a\n+ b\n").unwrap().answers.len(), 2);
+    }
+
+    #[test]
+    fn nested_items_belong_to_their_parent_answer() {
+        let q = parse("Q?\n\n---\n\n- first\n  - nested\n  - also nested\n- second\n").unwrap();
+        assert_eq!(q.answers.len(), 2);
+        assert!(q.answers[0].html.contains("<ul>"));
+        assert_eq!(q.answers[0].plain, "first nested also nested");
+    }
+
+    #[test]
+    fn keeps_multi_paragraph_answers_as_blocks() {
+        let q = parse("Q?\n\n---\n\n- one\n\n  still one\n\n- two\n").unwrap();
+        assert_eq!(q.answers.len(), 2);
+        assert!(q.answers[0].html.starts_with("<p>one</p>"));
+        assert_eq!(q.answers[0].plain, "one still one");
+    }
+
+    #[test]
+    fn rejects_unusable_files() {
+        assert_eq!(
+            parse("Just a question?\n").unwrap_err(),
+            ParseError::MissingSeparator
+        );
+        assert_eq!(
+            parse("Q?\n\n---\n\nnot a list\n").unwrap_err(),
+            ParseError::NoAnswers
+        );
+        assert_eq!(
+            parse("Q?\n\n---\n\n- lonely\n").unwrap_err(),
+            ParseError::TooFewAnswers
+        );
+        assert_eq!(
+            parse("\n---\n\n- a\n- b\n").unwrap_err(),
+            ParseError::EmptyPrompt
+        );
+
+        let many = format!("Q?\n\n---\n\n{}", "- answer\n".repeat(27));
+        assert_eq!(parse(&many).unwrap_err(), ParseError::TooManyAnswers(27));
+    }
+
+    #[test]
+    fn labels_run_from_a_to_z() {
+        assert_eq!(label(0), "A");
+        assert_eq!(label(25), "Z");
+    }
+}

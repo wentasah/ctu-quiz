@@ -1,0 +1,17 @@
+# Minimal deployment: the quiz server behind whatever TLS proxy you already
+# run. Copy deploy/quiz-server.env.example to .env and edit it first.
+services:
+  quiz-server:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - quiz-logs:/var/log/quiz
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/quiz-server", "--version"]
+      interval: 30s
+
+volumes:
+  quiz-logs:

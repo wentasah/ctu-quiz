@@ -1,0 +1,191 @@
+//! The HTTP API the teacher CLI talks to.
+//!
+//! Every endpoint except [`oidc_info`] requires an OIDC ID token in the
+//! `Authorization: Bearer` header; asking questions additionally requires the
+//! login to be on the teacher list.
+
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
+use chrono::Utc;
+use quiz_common::api::{CreateQuestion, OidcInfo, QuestionInfo, Results, WhoAmI};
+
+use crate::{
+    auth::{ApiUser, Identity, Teacher},
+    error::ApiFailure,
+    state::{AppState, Question, Store},
+};
+
+/// `GET /api/v1/oidc` - lets the CLI discover how to log the teacher in, so
+/// that it only has to be configured with the server URL.
+pub async fn oidc_info(State(state): State<AppState>) -> Json<OidcInfo> {
+    let cfg = &state.cfg;
+    Json(OidcInfo {
+        issuer: cfg.oidc_issuer.as_str().trim_end_matches('/').to_owned(),
+        client_id: cfg.cli_client_id().to_owned(),
+        redirect_uri: cfg
+            .oidc_cli_redirect_uri
+            .as_ref()
+            .map(|url| url.to_string()),
+        scopes: cfg.oidc_scopes.clone(),
+    })
+}
+
+/// `GET /api/v1/whoami` - who the CLI is logged in as.
+pub async fn whoami(State(state): State<AppState>, ApiUser(user): ApiUser) -> Json<WhoAmI> {
+    let is_teacher = state.cfg.is_teacher(&user.login);
+    tracing::info!(login = %user.login, is_teacher, "whoami");
+    Json(WhoAmI {
+        login: user.login,
+        name: user.name,
+        is_teacher,
+    })
+}
+
+/// `POST /api/v1/questions` - publishes a question read from a Markdown file.
+pub async fn create_question(
+    State(state): State<AppState>,
+    Teacher(teacher): Teacher,
+    Json(request): Json<CreateQuestion>,
+) -> Result<(StatusCode, Json<QuestionInfo>), ApiFailure> {
+    let content = quiz_common::parse_question(&request.markdown).map_err(|error| {
+        tracing::info!(
+            teacher = %teacher.login,
+            source = %request.source_name,
+            %error,
+            "rejected an unparsable question"
+        );
+        ApiFailure::bad_request(error.to_string())
+    })?;
+
+    let id = state
+        .add_question(source_name(&request.source_name), content, &teacher.login)
+        .await?;
+
+    let store = state.store.read().await;
+    let question = store
+        .get(&id)
+        .ok_or_else(|| ApiFailure::internal("the question vanished right after it was created"))?;
+
+    tracing::info!(
+        question = %question.id,
+        code = %question.code,
+        teacher = %teacher.login,
+        source = %question.source_name,
+        answers = question.content.answers.len(),
+        answer_url = %question.answer_url,
+        display_url = %question.display_url,
+        "question created"
+    );
+
+    Ok((StatusCode::CREATED, Json(question.info())))
+}
+
+/// `GET /api/v1/questions/{id}` - state of a question, including how many
+/// students have answered so far.
+pub async fn question(
+    State(state): State<AppState>,
+    Teacher(teacher): Teacher,
+    Path(id): Path<String>,
+) -> Result<Json<QuestionInfo>, ApiFailure> {
+    let store = state.store.read().await;
+    Ok(Json(owned(&store, &id, &teacher)?.info()))
+}
+
+/// `POST /api/v1/questions/{id}/close` - stops accepting answers, which also
+/// switches every open browser over to the bar graph.
+pub async fn close_question(
+    State(state): State<AppState>,
+    Teacher(teacher): Teacher,
+    Path(id): Path<String>,
+) -> Result<Json<QuestionInfo>, ApiFailure> {
+    let mut store = state.store.write().await;
+
+    // Check ownership before taking the mutable borrow.
+    owned(&store, &id, &teacher)?;
+    let question = store
+        .get_mut(&id)
+        .ok_or_else(|| ApiFailure::not_found("no such question"))?;
+
+    if question.is_open() {
+        question.closed_at = Some(Utc::now());
+        question.notify();
+        tracing::info!(
+            question = %id,
+            teacher = %teacher.login,
+            answers = question.responses.len(),
+            counts = ?question.counts(),
+            "question closed"
+        );
+    }
+
+    Ok(Json(question.info()))
+}
+
+/// `GET /api/v1/questions/{id}/results` - the collected answers, which the CLI
+/// writes to a CSV file.
+pub async fn results(
+    State(state): State<AppState>,
+    Teacher(teacher): Teacher,
+    Path(id): Path<String>,
+) -> Result<Json<Results>, ApiFailure> {
+    let store = state.store.read().await;
+    let question = owned(&store, &id, &teacher)?;
+
+    tracing::info!(
+        question = %id,
+        teacher = %teacher.login,
+        rows = question.responses.len(),
+        "results exported"
+    );
+
+    Ok(Json(question.results()))
+}
+
+/// Looks up a question and checks that it belongs to this teacher.
+fn owned<'a>(store: &'a Store, id: &str, teacher: &Identity) -> Result<&'a Question, ApiFailure> {
+    let question = store
+        .get(id)
+        .ok_or_else(|| ApiFailure::not_found("no such question"))?;
+
+    if question.teacher != teacher.login {
+        tracing::warn!(
+            question = %id,
+            login = %teacher.login,
+            owner = %question.teacher,
+            "refused access to somebody else's question"
+        );
+        return Err(ApiFailure::forbidden(
+            "this question was asked by another teacher",
+        ));
+    }
+    Ok(question)
+}
+
+/// Keeps only the file name of what the CLI sent, and keeps it short: it ends
+/// up in the log and in the page title.
+fn source_name(name: &str) -> String {
+    let name = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(name)
+        .trim()
+        .trim_matches('.');
+    let name = if name.is_empty() { "question.md" } else { name };
+    name.chars().take(100).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_name;
+
+    #[test]
+    fn source_name_keeps_only_the_file_name() {
+        assert_eq!(source_name("cviceni/01regex/otazky.md"), "otazky.md");
+        assert_eq!(source_name("../../etc/passwd"), "passwd");
+        assert_eq!(source_name("  "), "question.md");
+        assert_eq!(source_name("question.md"), "question.md");
+    }
+}

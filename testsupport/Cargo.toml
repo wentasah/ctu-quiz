@@ -1,0 +1,23 @@
+[package]
+name = "quiz-testsupport"
+description = "Mock OIDC provider and server fixture for the quiz app's tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+quiz-server = { path = "../server" }
+
+axum = { workspace = true }
+chrono.workspace = true
+clap.workspace = true
+openidconnect.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+url.workspace = true
+uuid.workspace = true

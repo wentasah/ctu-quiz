@@ -1,0 +1,33 @@
+[package]
+name = "quiz-cli"
+description = "Teacher's command line tool for asking questions with the quiz server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "quiz"
+path = "src/main.rs"
+
+[dependencies]
+quiz-common.workspace = true
+
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+csv = "1"
+open = "5"
+openidconnect.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+quiz-testsupport.workspace = true
+# Only the tests spawn the compiled binary.
+tokio = { version = "1", features = ["process"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "cookies"] }

@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body_class %}display{% endblock %}
+{% block content %}
+<div id="live" data-events="{{ prefix }}/d/{{ token }}/events" data-open="{{ open }}">
+  <div class="question">
+    <div class="prompt">{{ prompt_html|safe }}</div>
+    {% if open %}
+    <ol class="options">
+      {% for bar in bars %}
+      <li><span class="label">{{ bar.label }}</span>
+        <span class="text">{{ bar.html|safe }}</span></li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    {% include "results.html" %}
+    {% endif %}
+  </div>
+
+  <aside class="join">
+    {% if open %}
+    <div class="qr">{{ qr_svg|safe }}</div>
+    <p class="url">{{ answer_url }}</p>
+    <p class="code-label">nebo zadejte na <strong>{{ host }}</strong> kód</p>
+    <p class="code">{{ code }}</p>
+    <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>
+    {% else %}
+    <p class="closed">Otázka uzavřena</p>
+    <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ prefix }}/static/app.js"></script>{% endblock %}

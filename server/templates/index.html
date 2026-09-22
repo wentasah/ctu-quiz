@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+{% block title %}Kvíz{% endblock %}
+{% block body_class %}home{% endblock %}
+{% block content %}
+<div class="card">
+  <p class="who">Přihlášen jako <strong>{{ user.name }}</strong> ({{ user.login }})
+    &middot; <a href="{{ prefix }}/logout">odhlásit</a></p>
+  <h1>Kód otázky</h1>
+  <p>Zadejte kód, který vyučující zobrazil vedle QR kódu.</p>
+  {% if !error.is_empty() %}
+  <p class="error">{{ error }}</p>
+  {% endif %}
+  <form method="post" action="{{ prefix }}/join" class="code-form">
+    <input type="text" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+           autocomplete="off" autofocus aria-label="Kód otázky" placeholder="123456">
+    <button type="submit">Zobrazit otázku</button>
+  </form>
+</div>
+{% endblock %}
