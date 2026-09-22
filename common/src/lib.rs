@@ -6,8 +6,11 @@
 //!   list of possible answers (see [`question::parse`]).
 //! * [`api`] defines the JSON payloads of the HTTP API that the CLI uses to
 //!   talk to the server.
+//! * [`highlight`] renders fenced code blocks, with syntax highlighting when
+//!   the `highlight` feature is on.
 
 pub mod api;
+pub mod highlight;
 pub mod question;
 
 pub use api::*;

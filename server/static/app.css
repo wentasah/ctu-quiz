@@ -13,6 +13,15 @@
   --error: #b3261e;
   --bar: #9db8ff;
   --bar-best: #0b5fff;
+
+  /* Syntax highlighting. */
+  --hl-comment: #6a737d;
+  --hl-keyword: #cf222e;
+  --hl-string: #0a7d32;
+  --hl-constant: #8250df;
+  --hl-variable: #953800;
+  --hl-function: #0550ae;
+  --hl-punctuation: #57606a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,6 +37,14 @@
     --error: #ff8a80;
     --bar: #2f4a8a;
     --bar-best: #5b8cff;
+
+    --hl-comment: #8b949e;
+    --hl-keyword: #ff7b72;
+    --hl-string: #7ee787;
+    --hl-constant: #d2a8ff;
+    --hl-variable: #ffa657;
+    --hl-function: #79c0ff;
+    --hl-punctuation: #8b949e;
   }
 }
 
@@ -86,12 +103,14 @@ button, .button {
 
 /* ---- question text ---- */
 
-.prompt pre {
+pre.code {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: .75rem 1rem;
   overflow-x: auto;
+  /* Tabs in C and Makefiles are usually meant to be this wide. */
+  tab-size: 8;
 }
 
 .prompt code, .options code, .answers code, .bars code {
@@ -214,3 +233,22 @@ body.display .closed { font-weight: 700; color: var(--error); }
   border-radius: 6px;
   font-size: .85rem;
 }
+
+/* ---- syntax highlighting ---- */
+
+.hl-comment { color: var(--hl-comment); font-style: italic; }
+.hl-keyword, .hl-storage { color: var(--hl-keyword); }
+.hl-string { color: var(--hl-string); }
+.hl-constant { color: var(--hl-constant); }
+.hl-variable { color: var(--hl-variable); }
+.hl-entity.hl-name,
+.hl-support,
+.hl-variable.hl-function { color: var(--hl-function); }
+
+.hl-punctuation.hl-section,
+.hl-punctuation.hl-terminator,
+.hl-punctuation.hl-separator,
+.hl-punctuation.hl-accessor { color: var(--hl-punctuation); }
+
+/* Keep highlighted code readable when a line is long. */
+pre.code code { white-space: pre; }

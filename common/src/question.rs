@@ -10,8 +10,10 @@
 //! follows a paragraph, where CommonMark would read it as a setext heading.
 //! Horizontal rules inside fenced code blocks are ignored.
 
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, html};
+use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html};
 use serde::{Deserialize, Serialize};
+
+use crate::highlight;
 
 /// Answers are labelled `A`..`Z`, so this is the hard upper limit.
 pub const MAX_ANSWERS: usize = 26;
@@ -267,8 +269,48 @@ fn bullet_len(line: &str) -> Option<usize> {
 
 fn render(markdown: &str) -> String {
     let mut html = String::new();
-    html::push_html(&mut html, Parser::new_ext(markdown, options()));
+    html::push_html(&mut html, rendered_events(markdown).into_iter());
     html
+}
+
+/// The Markdown event stream, with every code block replaced by the HTML from
+/// [`crate::highlight`], which is where the syntax highlighting happens.
+fn rendered_events(markdown: &str) -> Vec<Event<'_>> {
+    let mut events = Vec::new();
+    // Language and contents of the code block currently being collected.
+    let mut code: Option<(String, String)> = None;
+
+    for event in Parser::new_ext(markdown, options()) {
+        match event {
+            Event::Start(Tag::CodeBlock(kind)) => {
+                let language = match &kind {
+                    // The info string may carry more than the language, as in
+                    // "```bash {.numberLines}".
+                    CodeBlockKind::Fenced(info) => info
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned(),
+                    CodeBlockKind::Indented => String::new(),
+                };
+                code = Some((language, String::new()));
+            }
+            Event::Text(text) if code.is_some() => {
+                if let Some((_, contents)) = &mut code {
+                    contents.push_str(&text);
+                }
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                if let Some((language, contents)) = code.take() {
+                    events.push(Event::Html(
+                        highlight::code_block(&language, &contents).into(),
+                    ));
+                }
+            }
+            other => events.push(other),
+        }
+    }
+    events
 }
 
 /// Renders an answer, unwrapping the paragraph of a single-paragraph answer so
@@ -326,8 +368,32 @@ fn first_heading(markdown: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    /// The example shipped with the app, so that a broken example is caught.
-    const EXAMPLE: &str = include_str!("../../question.md");
+    /// A question in the shape the teachers write them. The example shipped
+    /// with the app is checked by the integration tests instead, which have
+    /// the file itself at hand.
+    const EXAMPLE: &str = "\
+Consider the following BASH code:
+
+``` bash
+sum=0
+cat numbers.txt | while read -r num; do
+    sum=$((sum + num))
+done
+echo \"Total: $sum\"
+```
+
+What's wrong with it?
+
+---
+
+- In Bash, every stage of a pipeline runs in its own subshell.
+  Modifications to variables inside the `while` loop affect the
+  subshell, not the parent shell environment.
+
+- It doesn't handle errors.
+
+- It will work only in BASH 4.0 and newer.
+";
 
     #[test]
     fn parses_the_example_question() {
@@ -340,7 +406,7 @@ mod tests {
         assert!(q.prompt_markdown.ends_with("What's wrong with it?"));
         // The fenced code block survives into the HTML.
         assert!(q.prompt_html.contains("<code class=\"language-bash\">"));
-        assert!(q.prompt_html.contains("sum=$((sum + num))"));
+        assert!(highlight::text_of(&q.prompt_html).contains("sum=$((sum + num))"));
 
         let labels: Vec<_> = q.answers.iter().map(|a| a.label.as_str()).collect();
         assert_eq!(labels, ["A", "B", "C"]);
@@ -352,11 +418,49 @@ mod tests {
              Modifications to variables inside the while loop affect the \
              subshell, not the parent shell environment."
         );
-        assert_eq!(q.answers[1].plain, "It doesn't handler errors.");
+        assert_eq!(q.answers[1].plain, "It doesn't handle errors.");
         assert_eq!(
             q.answers[2].plain,
             "It will work only in BASH 4.0 and newer."
         );
+    }
+
+    #[test]
+    fn code_blocks_keep_their_language_and_their_contents() {
+        let q = parse("```c\nint x = 1 < 2;\n```\n\nQ?\n\n---\n\n- a\n- b\n").unwrap();
+        assert!(
+            q.prompt_html.contains("<code class=\"language-c\">"),
+            "{}",
+            q.prompt_html
+        );
+        // The `<` survived both the escaping and the highlighting.
+        assert!(
+            highlight::text_of(&q.prompt_html).contains("int x = 1 < 2;"),
+            "{}",
+            q.prompt_html
+        );
+
+        // An unlabelled block is rendered as well, just without highlighting.
+        let q = parse("```\nplain\n```\n\nQ?\n\n---\n\n- a\n- b\n").unwrap();
+        assert!(
+            q.prompt_html.contains("<pre class=\"code\"><code>"),
+            "{}",
+            q.prompt_html
+        );
+        assert!(
+            highlight::text_of(&q.prompt_html).contains("plain"),
+            "{}",
+            q.prompt_html
+        );
+
+        // Code in an answer is rendered the same way.
+        let q = parse("Q?\n\n---\n\n- one\n\n  ```c\n  return 0;\n  ```\n\n- two\n").unwrap();
+        assert!(
+            q.answers[0].html.contains("language-c"),
+            "{}",
+            q.answers[0].html
+        );
+        assert_eq!(q.answers[0].plain, "one return 0;");
     }
 
     #[test]

@@ -42,6 +42,9 @@ use uuid::Uuid;
 /// Key used to sign the ID tokens of the mock provider. Test fixture only.
 const SIGNING_KEY: &str = include_str!("test-key.pem");
 
+/// The example question, used by the tests of all the crates.
+pub const EXAMPLE_QUESTION: &str = include_str!("../question.md");
+
 /// How the mock provider decides who is logging in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoginMode {

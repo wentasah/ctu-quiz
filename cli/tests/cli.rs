@@ -3,7 +3,7 @@
 
 use std::{path::PathBuf, process::Stdio, time::Duration};
 
-use quiz_testsupport::{MockIdp, User, start_server};
+use quiz_testsupport::{EXAMPLE_QUESTION, MockIdp, User, start_server};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::Command,
@@ -29,7 +29,7 @@ async fn ask_flow() {
     // XDG_CONFIG_HOME, the token cache all live here instead of in $HOME.
     let dir = scratch("ask");
     let question = dir.join("otazky.md");
-    std::fs::write(&question, include_str!("../../question.md")).unwrap();
+    std::fs::write(&question, EXAMPLE_QUESTION).unwrap();
 
     idp.login_as(&User::new("sojkam1", "Michal Sojka"));
 
@@ -85,7 +85,7 @@ async fn ask_flow() {
     }
 
     // The parsed question is shown before anything is published.
-    let parsed = quiz_common::parse_question(include_str!("../../question.md")).unwrap();
+    let parsed = quiz_common::parse_question(EXAMPLE_QUESTION).unwrap();
     assert!(printed.contains("A) "), "{printed}");
     assert!(
         printed.contains(&format!("C) {}", parsed.answers[2].plain)),
@@ -198,7 +198,7 @@ async fn parse_checks_a_question_file_without_a_server() {
     let dir = scratch("parse");
 
     let good = dir.join("question.md");
-    std::fs::write(&good, include_str!("../../question.md")).unwrap();
+    std::fs::write(&good, EXAMPLE_QUESTION).unwrap();
     let output = Command::new(QUIZ)
         .arg("parse")
         .arg(&good)

@@ -11,7 +11,7 @@ use quiz_common::api::{CreateQuestion, QuestionInfo, Results, WhoAmI};
 use quiz_testsupport::{CLIENT_ID, MockIdp, User, start_server};
 use reqwest::StatusCode;
 
-const QUESTION: &str = include_str!("../../question.md");
+const QUESTION: &str = quiz_testsupport::EXAMPLE_QUESTION;
 
 #[tokio::test]
 async fn a_question_is_asked_answered_and_closed() {
@@ -401,12 +401,33 @@ async fn answer_as(
 
 /// Saves a rendered page when `QUIZ_DUMP_PAGES=<directory>` is set, so that the
 /// styling can be looked at in a browser without starting anything.
+///
+/// The stylesheet is inlined, because the saved file is opened over `file://`
+/// where the server is not there to serve it.
 fn dump_page(name: &str, html: &str) {
-    if let Some(dir) = std::env::var_os("QUIZ_DUMP_PAGES") {
-        let dir = std::path::PathBuf::from(dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(name), html).unwrap();
-    }
+    let Some(dir) = std::env::var_os("QUIZ_DUMP_PAGES") else {
+        return;
+    };
+    let css = concat!("<style>", include_str!("../static/app.css"), "</style>");
+    let html = regex_free_replace(html, "<link rel=\"stylesheet\"", "\">", css);
+
+    let dir = std::path::PathBuf::from(dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(name), html).unwrap();
+}
+
+/// Replaces everything from `from` up to and including `to` with `with`.
+fn regex_free_replace(text: &str, from: &str, to: &str, with: &str) -> String {
+    let Some(start) = text.find(from) else {
+        return text.to_owned();
+    };
+    let Some(end) = text[start..]
+        .find(to)
+        .map(|offset| start + offset + to.len())
+    else {
+        return text.to_owned();
+    };
+    format!("{}{with}{}", &text[..start], &text[end..])
 }
 
 /// Reads the first server-sent event from `url`.

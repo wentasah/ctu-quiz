@@ -54,7 +54,8 @@ Press Enter to close the question and save the answers (Ctrl-C works too).
 
 A question is one Markdown file. Everything above the first horizontal rule
 (`---`) is the question; the top-level list items below it are the possible
-answers. `question.md` in this directory is a working example:
+answers. `testsupport/question.md` is a working example, and the one the
+tests use:
 
 ````markdown
 Consider the following BASH code:
@@ -89,6 +90,13 @@ Details worth knowing:
 * `---`, `***` and `___` all work as the separator, and a rule inside a fenced
   code block is ignored.
 * If the file starts with a heading, it becomes the page title.
+* Fenced code blocks are **syntax highlighted**, in the question and in the
+  answers alike, from the language of the fence (```` ``` bash ````). The
+  highlighter is [syntect](https://crates.io/crates/syntect) with the Sublime
+  syntax definitions compiled into the server, so it needs no network and no
+  JavaScript: bash, C, C++, Rust, Python, Make, asm, diff, JSON, YAML, SQL and
+  about a hundred more work out of the box. An unknown or missing language
+  just means unhighlighted code.
 * `quiz parse otazky.md` shows how a file is parsed without contacting the
   server.
 
@@ -106,6 +114,10 @@ into the binaries.
 
 With Nix: `nix build` builds both binaries, `nix develop` gives a shell with
 the toolchain.
+
+Syntax highlighting sits behind the `highlight` feature of `quiz-common`, which
+`quiz-server` turns on: only the server renders HTML. Building the CLI on its
+own (`cargo build -p quiz-cli`) therefore leaves the syntax definitions out.
 
 ## Trying it out locally
 
@@ -128,7 +140,7 @@ cargo run -p quiz-server -- \
     --teachers sojkam1
 
 # 3. ask the example question
-cargo run -p quiz-cli --bin quiz -- ask question.md
+cargo run -p quiz-cli --bin quiz -- ask testsupport/question.md
 ```
 
 What happens then:
@@ -145,8 +157,8 @@ What happens then:
    presentation view and in terminal 3 goes up immediately. Repeat in further
    private windows for more students.
 4. Press Enter in terminal 3. The question closes, every open page switches to
-   the bar graph, and `question_<date>_<time>.csv` appears next to
-   `question.md`.
+   the bar graph, and `question_<date>_<time>.csv` appears next to the
+   Markdown file.
 
 Worth knowing:
 
@@ -302,6 +314,15 @@ Restarting the server is cheap: nothing is stored on disc, so only questions
 that are open at that moment are lost, and browser sessions have to log in
 again (the cookie signing key is new).
 
+## Changing the colours
+
+The highlighter emits one CSS class per Sublime scope (`hl-keyword`,
+`hl-string`, `hl-comment`, …) instead of inline colours, so the palette lives
+in `server/static/app.css` in the `--hl-*` variables, once for the light theme
+and once for the dark one. Only leaf scopes are coloured there: scopes such as
+`meta` or `function` wrap whole regions, and colouring them would tint entire
+function bodies.
+
 ## Logging
 
 All operations go to the log file **and** to the standard error output: logins,
@@ -360,6 +381,7 @@ change the verbosity. The log is append-only and never read back by the server.
 | --- | --- |
 | `common/src/question.rs` | parsing a question from Markdown |
 | `common/src/api.rs` | the JSON types of the HTTP API |
+| `common/src/highlight.rs` | syntax highlighting of code blocks, as CSS classes |
 | `server/src/config.rs` | command line and environment options |
 | `server/src/auth.rs` | OIDC: login in the browser, token checks for the CLI |
 | `server/src/state.rs` | the in-memory questions, answers and sessions |
@@ -387,7 +409,8 @@ tokens, so the actual OIDC code paths are exercised. `cargo test -p quiz-cli`
 runs the real `quiz` binary, including the loopback login and the CSV export.
 
 `QUIZ_DUMP_PAGES=/tmp/pages cargo test -p quiz-server --test e2e` additionally
-saves the rendered pages, which is a quick way to look at the styling.
+saves the rendered pages with the stylesheet inlined, so they can be opened
+straight from disc to check the styling and the highlighting.
 
 ## Troubleshooting
 

@@ -7,8 +7,20 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[features]
+# Syntax highlighting of fenced code blocks. Only the server renders HTML, so
+# the CLI can be built without the syntax definitions.
+highlight = ["dep:syntect"]
+
 [dependencies]
 chrono.workspace = true
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 serde.workspace = true
+# Pure Rust: fancy-regex instead of the oniguruma C library, and no themes,
+# because the highlighter emits CSS classes rather than inline colours.
+syntect = { version = "5", default-features = false, features = [
+    "default-syntaxes",
+    "html",
+    "regex-fancy",
+], optional = true }
 thiserror.workspace = true

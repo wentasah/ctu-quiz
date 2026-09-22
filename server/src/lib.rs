@@ -141,6 +141,16 @@ pub async fn serve(cfg: Config, listener: TcpListener) -> Result<()> {
     let oidc = Oidc::discover(&cfg).await?;
     tracing::info!(issuer = %cfg.oidc_issuer, "OIDC provider discovered");
 
+    // Unpacking the syntax definitions takes a moment, and doing it while a
+    // lecture hall waits for the first question would be a shame.
+    tokio::task::spawn_blocking(|| {
+        quiz_common::highlight::warm_up();
+        tracing::info!(
+            highlighting = quiz_common::highlight::is_available(),
+            "syntax highlighting ready"
+        );
+    });
+
     let state = AppState::new(cfg, oidc);
 
     let pruner = state.clone();

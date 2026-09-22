@@ -8,7 +8,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-quiz-common.workspace = true
+quiz-common = { workspace = true, features = ["highlight"] }
 
 anyhow.workspace = true
 askama = "0.16"
