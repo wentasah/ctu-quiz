@@ -173,6 +173,23 @@ Details worth knowing:
   Markdown file a first line starting with `#!` stays part of the question.
   `testsupport/executable.md` is the example question in this form.
 
+## Shell completions
+
+They are generated while the CLI is compiled, from the very command line the
+binary parses, so they never fall behind the options. `cli/build.rs` writes
+one script per shell (bash, zsh, fish, elvish, PowerShell) into
+`target/<profile>/build/quiz-cli-*/out/completions/`, and into
+`$QUIZ_COMPLETIONS_DIR` as well when that variable is set:
+
+```sh
+QUIZ_COMPLETIONS_DIR=$PWD/completions cargo build --release
+source completions/quiz.bash                       # this shell, right now
+install -Dm644 completions/_quiz ~/.local/share/zsh/site-functions/_quiz
+```
+
+`nix build` installs the bash, zsh and fish scripts into the package itself,
+so `nix profile install` or the NixOS module brings completion along.
+
 ## Building
 
 ```sh
@@ -468,6 +485,8 @@ change the verbosity. The log is append-only and never read back by the server.
 | `server/src/auth.rs` | OIDC: login in the browser, token checks for the CLI |
 | `server/src/state.rs` | the in-memory questions, answers and sessions |
 | `server/src/web.rs` | the student pages |
+| `cli/src/cli.rs` | the clap command line, shared with `cli/build.rs` |
+| `cli/build.rs` | writes the shell completions during the build |
 | `server/src/display.rs` | the presentation view and the QR code |
 | `server/src/live.rs` | the server-sent event streams |
 | `server/src/api.rs` | the API used by the CLI |

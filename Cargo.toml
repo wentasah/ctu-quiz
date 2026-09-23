@@ -19,6 +19,7 @@ axum = { version = "0.8", features = ["macros"] }
 anyhow = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+clap_complete = "4"
 # openidconnect 4 pulls in oauth2 5, which integrates with reqwest 0.12.
 # Keep every crate in the workspace on the same reqwest so the HTTP client
 # types can be shared with the OIDC code.

@@ -18,6 +18,20 @@
           # No vendor hash needed: the lock file pins everything.
           cargoLock.lockFile = ./Cargo.lock;
 
+          nativeBuildInputs = [ pkgs.installShellFiles ];
+
+          # `cli/build.rs` writes the completions here while it compiles.
+          preBuild = ''
+            export QUIZ_COMPLETIONS_DIR="$NIX_BUILD_TOP/completions"
+          '';
+
+          postInstall = ''
+            installShellCompletion \
+              --bash "$QUIZ_COMPLETIONS_DIR/quiz.bash" \
+              --zsh  "$QUIZ_COMPLETIONS_DIR/_quiz" \
+              --fish "$QUIZ_COMPLETIONS_DIR/quiz.fish"
+          '';
+
           # The tests start the server and a mock OIDC provider on loopback,
           # which works inside the build sandbox.
           meta = with pkgs.lib; {

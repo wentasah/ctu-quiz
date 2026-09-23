@@ -6,6 +6,9 @@
 //! to the Markdown file as a CSV.
 
 mod auth;
+/// The clap definition, in a file of its own so that `build.rs` can include
+/// it and generate the shell completions from it.
+mod cli;
 mod client;
 mod report;
 
@@ -18,96 +21,12 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use chrono::Local;
-use clap::{Parser, Subcommand};
+use clap::Parser;
+use cli::{Cli, Command};
 use client::Api;
 use quiz_common::api::{CreateQuestion, StudentView};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use url::Url;
-
-/// Ask students a question and collect their answers.
-#[derive(Debug, Parser)]
-#[command(name = "quiz", version, about, long_about = None)]
-struct Cli {
-    /// Base URL of the quiz server.
-    #[arg(
-        long,
-        short = 's',
-        env = "QUIZ_SERVER",
-        default_value = "http://localhost:8080",
-        global = true
-    )]
-    server: Url,
-
-    /// Never try to open a browser, just print the URLs.
-    #[arg(long, global = true)]
-    no_browser: bool,
-
-    /// Port the OIDC login listens on; 0 picks a free one.
-    #[arg(long, env = "QUIZ_LOGIN_PORT", default_value_t = 8765, global = true)]
-    login_port: u16,
-
-    #[command(subcommand)]
-    command: Command,
-}
-
-#[derive(Debug, Subcommand)]
-enum Command {
-    /// Ask a question, show it to students and save their answers.
-    Ask {
-        /// Markdown file with the question.
-        file: PathBuf,
-        /// Where to write the answers; defaults to the question file name
-        /// followed by the date and time.
-        #[arg(long, short)]
-        output: Option<PathBuf>,
-        /// Close the question automatically after this many seconds.
-        #[arg(long, value_name = "SECONDS")]
-        close_after: Option<u64>,
-        /// Keep the question text off the students' own screens.
-        ///
-        /// They read it from the projector and only tap an answer on their
-        /// phone, which makes it a lot more work to paste the question into
-        /// a chatbot.
-        #[arg(long)]
-        hide_question: bool,
-        /// Keep the answers off the students' own screens as well, leaving
-        /// them the bare labels `A`, `B`, `C`, ... to answer with.
-        #[arg(long)]
-        hide_answers: bool,
-        /// Show nothing but the answer labels: the same as passing both
-        /// `--hide-question` and `--hide-answers`.
-        #[arg(long)]
-        labels_only: bool,
-    },
-    /// Show how a Markdown file is parsed, without contacting the server.
-    Parse {
-        /// Markdown file with the question.
-        file: PathBuf,
-    },
-    /// Log in to the quiz server and remember the token.
-    Login,
-    /// Close the room students are in and forget the remembered token.
-    Logout {
-        /// Log out of all servers.
-        #[arg(long)]
-        all: bool,
-    },
-    /// Show who this tool is logged in as.
-    Whoami,
-    /// Close a question and save its answers, or close the whole room.
-    Close {
-        /// Question id, as printed by `quiz ask`.
-        ///
-        /// Without it the room is closed instead: the page students have
-        /// open stops working, the questions asked in it are removed from
-        /// the server and the next question starts a room with a new code.
-        /// The teacher stays logged in.
-        id: Option<String>,
-        /// Where to write the answers of the question being closed.
-        #[arg(long, short)]
-        output: Option<PathBuf>,
-    },
-}
 
 #[tokio::main]
 async fn main() -> ExitCode {

@@ -300,6 +300,27 @@ async fn an_executable_question_loses_its_shebang_line() {
     );
 }
 
+#[test]
+fn the_shell_completions_are_written_while_the_cli_is_compiled() {
+    // `build.rs` puts them here; the packaging picks them up from
+    // QUIZ_COMPLETIONS_DIR instead.
+    let dir = std::path::Path::new(env!("OUT_DIR")).join("completions");
+
+    for name in ["quiz.bash", "_quiz", "quiz.fish", "quiz.elv", "_quiz.ps1"] {
+        let script = dir.join(name);
+        let content = std::fs::read_to_string(&script)
+            .unwrap_or_else(|error| panic!("{} is missing: {error}", script.display()));
+        assert!(!content.is_empty(), "{name} is empty");
+    }
+
+    // The scripts are generated from the very command line the binary
+    // parses, so a new option is in them without anybody remembering to.
+    let bash = std::fs::read_to_string(dir.join("quiz.bash")).unwrap();
+    for expected in ["ask", "logout", "--labels-only", "--hide-question"] {
+        assert!(bash.contains(expected), "{expected} is not in quiz.bash");
+    }
+}
+
 /// A scratch directory of this test process.
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("quiz-cli-{}-{name}", std::process::id()));
