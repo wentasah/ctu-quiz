@@ -244,8 +244,52 @@ async fn connect(cli: &Cli, force_login: bool) -> Result<Api> {
     Ok(Api::new(http, cli.server.clone(), token.id_token))
 }
 
+/// Reads the Markdown of a question.
+///
+/// A question file may be made executable and given a shebang line, so that
+/// asking the question is a matter of running the file:
+///
+/// ```text
+/// #!/usr/bin/env -S quiz ask
+/// ```
+///
+/// Such a line is part of the script, not of the question, so it is dropped.
+/// Only an executable file is treated this way; in an ordinary Markdown file a
+/// first line starting with `#!` stays part of the question.
 fn read_question(file: &Path) -> Result<String> {
-    std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))
+    let markdown =
+        std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))?;
+    if is_executable(file) {
+        return Ok(strip_shebang(&markdown).to_owned());
+    }
+    Ok(markdown)
+}
+
+/// Whether the file has any of the execute bits set. On systems without file
+/// permissions nothing is executable, so nothing is stripped.
+fn is_executable(file: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(file).is_ok_and(|data| data.permissions().mode() & 0o111 != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = file;
+        false
+    }
+}
+
+/// Removes a leading `#!` line, if there is one.
+fn strip_shebang(markdown: &str) -> &str {
+    let Some(rest) = markdown.strip_prefix("#!") else {
+        return markdown;
+    };
+    match rest.split_once('\n') {
+        Some((_, after)) => after,
+        // A file that is nothing but a shebang line.
+        None => "",
+    }
 }
 
 /// Requirement 7: show the question in a browser, or print the URL when that
@@ -310,5 +354,52 @@ async fn wait_for_close(api: &Api, id: &str, close_after: Option<u64>) -> Result
                 return Ok(());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{read_question, strip_shebang};
+
+    #[test]
+    fn a_shebang_line_is_removed() {
+        assert_eq!(
+            strip_shebang("#!/usr/bin/env -S quiz ask\n\nQ?\n"),
+            "\nQ?\n"
+        );
+        assert_eq!(strip_shebang("#!quiz ask"), "");
+        // Only the very first line, and only a real shebang.
+        assert_eq!(
+            strip_shebang("# Heading\n#!not a shebang\n"),
+            "# Heading\n#!not a shebang\n"
+        );
+        assert_eq!(strip_shebang(" #!quiz ask\nQ?\n"), " #!quiz ask\nQ?\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_shebang_of_an_executable_question_is_not_part_of_the_question() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("quiz-shebang-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("otazky.md");
+        let source = "#!/usr/bin/env -S quiz ask\n\nQ?\n\n---\n\n- a\n- b\n";
+        std::fs::write(&file, source).unwrap();
+
+        // Not executable: the file is a plain Markdown file and is read as is.
+        assert_eq!(read_question(&file).unwrap(), source);
+
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let markdown = read_question(&file).unwrap();
+        assert!(!markdown.contains("#!"), "{markdown}");
+        assert_eq!(
+            quiz_common::parse_question(&markdown)
+                .unwrap()
+                .prompt_markdown,
+            "Q?"
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -3,7 +3,7 @@
 
 use std::{path::PathBuf, process::Stdio, time::Duration};
 
-use quiz_testsupport::{EXAMPLE_QUESTION, MockIdp, User, start_server};
+use quiz_testsupport::{EXAMPLE_QUESTION, EXECUTABLE_QUESTION, MockIdp, User, start_server};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::Command,
@@ -227,6 +227,47 @@ async fn parse_checks_a_question_file_without_a_server() {
         "{printed}"
     );
     assert!(printed.contains("no `---` separator found"), "{printed}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn an_executable_question_loses_its_shebang_line() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = scratch("shebang");
+    let question = dir.join("otazky.md");
+    std::fs::write(&question, EXECUTABLE_QUESTION).unwrap();
+
+    // As a plain Markdown file the shebang is text like any other.
+    let output = Command::new(QUIZ)
+        .arg("parse")
+        .arg(&question)
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(printed.contains("#!quiz ask"), "{printed}");
+
+    // Made executable, the file is a script and the shebang belongs to it.
+    std::fs::set_permissions(&question, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let output = Command::new(QUIZ)
+        .arg("parse")
+        .arg(&question)
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(!printed.contains("#!"), "{printed}");
+    assert!(
+        printed.starts_with("Consider the following BASH code:"),
+        "{printed}"
+    );
+    assert!(
+        printed.contains("valid question with 3 possible answers"),
+        "{printed}"
+    );
 }
 
 /// A scratch directory of this test process.

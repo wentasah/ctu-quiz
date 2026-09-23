@@ -45,6 +45,10 @@ const SIGNING_KEY: &str = include_str!("test-key.pem");
 /// The example question, used by the tests of all the crates.
 pub const EXAMPLE_QUESTION: &str = include_str!("../question.md");
 
+/// The same question written as a script: a shebang line, and the file made
+/// executable, so that running it asks the question.
+pub const EXECUTABLE_QUESTION: &str = include_str!("../executable.md");
+
 /// How the mock provider decides who is logging in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoginMode {

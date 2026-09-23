@@ -99,6 +99,17 @@ Details worth knowing:
   just means unhighlighted code.
 * `quiz parse otazky.md` shows how a file is parsed without contacting the
   server.
+* A question file may be made **executable** and given a shebang line, so that
+  asking the question is a matter of running the file:
+
+  ```markdown
+  #!/usr/bin/env -S quiz ask
+  ```
+
+  The shebang belongs to the script, not to the question, so `quiz` drops it.
+  This happens only for a file that really is executable: in an ordinary
+  Markdown file a first line starting with `#!` stays part of the question.
+  `testsupport/executable.md` is the example question in this form.
 
 ## Building
 
