@@ -7,8 +7,8 @@
 
 use std::time::Duration;
 
-use quiz_common::api::{CreateQuestion, QuestionInfo, Results, WhoAmI};
-use quiz_testsupport::{CLIENT_ID, MockIdp, User, start_server};
+use quiz_common::api::{CreateQuestion, QuestionInfo, Results, RoomClosed, WhoAmI};
+use quiz_testsupport::{CLIENT_ID, MockIdp, User, question_on_page, start_server};
 use reqwest::StatusCode;
 
 const QUESTION: &str = quiz_testsupport::EXAMPLE_QUESTION;
@@ -62,7 +62,11 @@ async fn a_question_is_asked_answered_and_closed() {
     );
     assert_eq!(question.code.len(), 6);
     assert!(question.code.chars().all(char::is_numeric));
-    assert_eq!(question.answer_url, format!("{base}/q/{}", question.id));
+    assert!(
+        question.answer_url.starts_with(&format!("{base}/r/")),
+        "students are sent to the teacher's room: {}",
+        question.answer_url
+    );
     assert!(question.display_url.starts_with(&format!("{base}/d/")));
     assert!(question.open);
     assert_eq!(question.answer_count, 0);
@@ -190,8 +194,8 @@ async fn a_question_is_asked_answered_and_closed() {
     idp.login_as(&students[1].0);
     student.get(format!("{base}/")).send().await.unwrap();
     let response = student
-        .post(format!("{base}/q/{}/answer", question.id))
-        .form(&[("answer", "0")])
+        .post(format!("{}/answer", question.answer_url))
+        .form(&[("question", question.id.as_str()), ("answer", "0")])
         .send()
         .await
         .unwrap();
@@ -328,6 +332,238 @@ async fn html_in_a_question_reaches_the_browser_escaped() {
 }
 
 #[tokio::test]
+async fn the_next_question_reaches_a_page_that_is_already_open() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.id_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let ask = |markdown: String| {
+        let request = api
+            .post(format!("{base}/api/v1/questions"))
+            .bearer_auth(token.clone())
+            .json(&CreateQuestion {
+                source_name: "otazky.md".to_owned(),
+                markdown,
+            });
+        async move {
+            let response = request.send().await.unwrap();
+            assert_eq!(response.status(), StatusCode::CREATED);
+            response.json::<QuestionInfo>().await.unwrap()
+        }
+    };
+
+    let first = ask("First?\n\n---\n\n- one\n- two\n".to_owned()).await;
+
+    // A student scans the QR code once.
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    student.get(format!("{base}/")).send().await.unwrap();
+    let response = student
+        .post(format!("{base}/join"))
+        .form(&[("code", first.code.as_str())])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.url().as_str(), first.answer_url);
+    assert!(response.text().await.unwrap().contains("First?"));
+
+    // The teacher asks the next one. It is the same room, so the code and
+    // the URL students use do not change.
+    let second = ask("Second?\n\n---\n\n- one\n- two\n".to_owned()).await;
+    assert_ne!(second.id, first.id);
+    assert_eq!(second.code, first.code);
+    assert_eq!(second.answer_url, first.answer_url);
+    assert_ne!(second.display_url, first.display_url);
+
+    // The page the student has open is told to render itself again, and it
+    // then shows the new question - without any code being typed again.
+    let events = live_state_as(&student, &format!("{}/events", first.answer_url)).await;
+    assert!(
+        events.contains(&format!("\"question\":\"{}\"", second.id)),
+        "the room announces the new question: {events}"
+    );
+
+    let body = student
+        .get(&first.answer_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(body.contains("Second?"), "{body}");
+    assert!(!body.contains("First?"), "{body}");
+    assert_eq!(question_on_page(&body).as_deref(), Some(second.id.as_str()));
+
+    // An answer sent for the question that was on the page a moment ago is
+    // not recorded; the student is shown what is being asked now.
+    let response = student
+        .post(format!("{}/answer", first.answer_url))
+        .form(&[("question", first.id.as_str()), ("answer", "0")])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.url().as_str(), first.answer_url);
+    let state: QuestionInfo = api
+        .get(format!("{base}/api/v1/questions/{}", first.id))
+        .bearer_auth(token.clone())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state.answer_count, 0, "the stale answer was not recorded");
+
+    // Answering the question that is being asked works as usual.
+    let response = student
+        .post(format!("{}/answer", first.answer_url))
+        .form(&[("question", second.id.as_str()), ("answer", "1")])
+        .send()
+        .await
+        .unwrap();
+    assert!(response.text().await.unwrap().contains("byla zaznamenána"));
+
+    // Once the teacher closes it, the page waits for the one after that.
+    api.post(format!("{base}/api/v1/questions/{}/close", second.id))
+        .bearer_auth(token.clone())
+        .send()
+        .await
+        .unwrap();
+    let body = student
+        .get(&first.answer_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(body.contains("Otázka je uzavřena"), "{body}");
+    assert!(body.contains("Další otázka se zde objeví sama"), "{body}");
+}
+
+#[tokio::test]
+async fn logging_out_removes_the_room() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.id_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let response = api
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(&token)
+        .json(&CreateQuestion {
+            source_name: "otazky.md".to_owned(),
+            markdown: QUESTION.to_owned(),
+        })
+        .send()
+        .await
+        .unwrap();
+    let question: QuestionInfo = response.json().await.unwrap();
+
+    // A student is in the room, with the page open.
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    student.get(format!("{base}/")).send().await.unwrap();
+    let response = student
+        .post(format!("{base}/join"))
+        .form(&[("code", question.code.as_str())])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut events = student
+        .get(format!("{}/events", question.answer_url))
+        .send()
+        .await
+        .unwrap();
+
+    // `quiz logout` closes the room before it forgets the token.
+    let closed: RoomClosed = api
+        .post(format!("{base}/api/v1/room/close"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(closed.closed);
+    assert_eq!(closed.questions, 1);
+
+    // The page that is still open is told to have another look.
+    let mut seen = String::new();
+    while !seen.contains("event: gone") {
+        let chunk = tokio::time::timeout(Duration::from_secs(5), events.chunk())
+            .await
+            .expect("the stream says that the room is gone")
+            .unwrap()
+            .expect("the stream is not over before it says so");
+        seen.push_str(&String::from_utf8_lossy(&chunk));
+    }
+
+    // And there is nothing left to come back to.
+    let response = student.get(&question.answer_url).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let response = reqwest::Client::new()
+        .get(&question.display_url)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = student
+        .post(format!("{base}/join"))
+        .form(&[("code", question.code.as_str())])
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(body.contains("nepatří k žádné otázce"), "got: {body}");
+
+    // Logging out again has nothing to close.
+    let closed: RoomClosed = api
+        .post(format!("{base}/api/v1/room/close"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(!closed.closed);
+    assert_eq!(closed.questions, 0);
+
+    // The next lecture starts from scratch.
+    let next: QuestionInfo = api
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(&token)
+        .json(&CreateQuestion {
+            source_name: "otazky.md".to_owned(),
+            markdown: QUESTION.to_owned(),
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_ne!(next.answer_url, question.answer_url);
+    assert_ne!(next.code, question.code);
+}
+
+#[tokio::test]
 async fn an_unusable_question_is_refused_with_an_explanation() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &[]).await;
@@ -383,9 +619,9 @@ async fn a_wrong_code_is_reported_on_the_main_page() {
         .unwrap();
     assert!(body.contains("nepatří k žádné otázce"), "got: {body}");
 
-    // An unknown question is a plain 404 page.
+    // An unknown room is a plain 404 page.
     let response = student
-        .get(format!("{base}/q/does-not-exist"))
+        .get(format!("{base}/r/does-not-exist"))
         .send()
         .await
         .unwrap();
@@ -423,9 +659,18 @@ async fn answer_as(
     let body = response.text().await.unwrap();
     assert!(body.contains("What&#x27;s wrong with it?") || body.contains("What's wrong with it?"));
 
+    assert_eq!(
+        question_on_page(&body).as_deref(),
+        Some(question.id.as_str()),
+        "the room shows the question that was just asked"
+    );
+
     let response = browser
-        .post(format!("{base}/q/{}/answer", question.id))
-        .form(&[("answer", &answer.to_string())])
+        .post(format!("{}/answer", question.answer_url))
+        .form(&[
+            ("question", question.id.as_str()),
+            ("answer", answer.to_string().as_str()),
+        ])
         .send()
         .await
         .unwrap();
@@ -471,7 +716,12 @@ fn regex_free_replace(text: &str, from: &str, to: &str, with: &str) -> String {
 
 /// Reads the first server-sent event from `url`.
 async fn live_state(url: &str) -> String {
-    let mut response = reqwest::Client::new().get(url).send().await.unwrap();
+    live_state_as(&reqwest::Client::new(), url).await
+}
+
+/// Reads the first server-sent event from `url`, as a logged-in browser.
+async fn live_state_as(client: &reqwest::Client, url: &str) -> String {
+    let mut response = client.get(url).send().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let chunk = tokio::time::timeout(Duration::from_secs(5), response.chunk())
         .await

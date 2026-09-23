@@ -27,7 +27,7 @@ Consider the following BASH code: ...
   C) It will work only in BASH 4.0 and newer.
 
 Question code:     428173
-Students answer at: https://quiz.osy.fel.cvut.cz/q/4f3c...c1
+Students answer at: https://quiz.osy.fel.cvut.cz/r/4f3c...c1
 Presentation view:  https://quiz.osy.fel.cvut.cz/d/9a77...b4
 
 The presentation view was opened in a browser.
@@ -49,6 +49,44 @@ Press Enter to close the question and save the answers (Ctrl-C works too).
 5. Pressing Enter closes the question. Every open browser switches over to a
    bar graph with the results, and the CLI writes
    `otazky_2026-09-21_14-05-03.csv` next to `otazky.md`.
+6. The **next question of the same teacher goes to the same URL**, so the
+   students scan or type nothing again: the page they still have open shows
+   the new question by itself.
+
+## One room per teacher
+
+The URL behind the QR code (`/r/<token>`) and the six-digit code belong to the
+**teacher**, not to the single question, and they stay the same for as long as
+the teacher keeps asking — up to `--question-ttl-hours` after the last
+question, or until the server is restarted. So a lecture goes like this:
+
+* The first `quiz ask` opens the room. Students scan the QR code or type the
+  code once, and stay on that page.
+* Every further `quiz ask` of the same teacher puts a new question into the
+  same room. The pages the students have open notice it over the event stream
+  and render the new question themselves; latecomers can still use the QR code
+  or the code, which have not changed.
+* Between questions the page shows the results of the last one, and then the
+  next question when it arrives.
+* A question that is still open when the next one is asked stays open for its
+  own `quiz ask` — Enter still closes it and writes its CSV — but the students
+  have already moved on to the new one.
+* **`quiz close` (with no question id) closes the room**: its questions are
+  dropped, the pages students have open reload and say that the room is gone,
+  and the URL and the code stop working. The next question opens a room with a
+  new code. This is how a lecture is ended deliberately instead of waiting for
+  the TTL; the teacher stays logged in.
+* **`quiz logout` does the same and forgets the token** as well, which is what
+  ends a lecture for good on a shared machine.
+* An answer carries the id of the question that was on the screen, so an
+  answer sent just as the teacher moves on is dropped rather than counted for
+  the wrong question.
+
+Each question still gets a presentation view of its own (`/d/<token>`), which
+is what `quiz ask` opens on the projector, and its own CSV.
+
+Two lectures at the same time under the same login would share the room; use a
+second login (or log out in between) to keep them apart.
 
 ## The question format
 
@@ -179,8 +217,9 @@ Worth knowing:
 * Use `http://localhost:8080` consistently. The session cookie belongs to the
   host name it was issued for, so mixing `localhost` and `127.0.0.1` means
   logging in twice.
-* `quiz logout` forgets the cached teacher token, which is how you log in as
-  somebody else on the next `quiz ask`.
+* `quiz logout` closes the room and forgets the cached teacher token, which
+  is how you end a lecture and how you log in as somebody else on the next
+  `quiz ask`.
 * The server logs everything to `quiz-server.log` in the current directory, so
   `tail -f quiz-server.log` is a good fourth terminal.
 * To scan the QR code with a phone, everything has to be reachable from the
@@ -271,8 +310,9 @@ quiz ask otazky.md -o answers.csv --close-after 120
 quiz parse otazky.md          # check the Markdown, no server needed
 quiz login                    # log in ahead of the lecture
 quiz whoami                    # who am I, and may I ask questions?
-quiz logout [--all]
+quiz logout [--all]          # end the lecture: close the room, forget the token
 quiz close <question id>      # if `quiz ask` was interrupted: close and save
+quiz close                    # end the lecture but stay logged in: close the room
 ```
 
 `--server` (or `QUIZ_SERVER`) selects the server, `--no-browser` never opens a
@@ -347,7 +387,7 @@ question, exported results, refused tokens and one line per HTTP request.
 ```
 2026-09-21T12:04:58.402Z  INFO http{method=POST uri=/api/v1/questions}: quiz_server::api:
     question created question=4f3c…c1 code=428173 teacher=sojkam1 source=otazky.md answers=3
-2026-09-21T12:05:41.881Z  INFO http{method=POST uri=/q/4f3c…c1/answer}: quiz_server::web:
+2026-09-21T12:05:41.881Z  INFO http{method=POST uri=/r/7b21…9f/answer}: quiz_server::web:
     answer recorded question=4f3c…c1 login=novakja1 answer=B changed=false total=12
 ```
 
@@ -389,8 +429,8 @@ change the verbosity. The log is append-only and never read back by the server.
 | 6 | Authorization via OIDC | `server/src/auth.rs` (browser sessions, ID-token checks), `cli/src/auth.rs` (loopback login) |
 | 7 | Question read from Markdown, shown in a browser, URL printed otherwise | `cli/src/main.rs`: `ask` and `show_in_browser` |
 | 8 | Answers are the top-level list items after `---` | `common/src/question.rs` |
-| 9 | QR code with the answer URL and a random question code | `server/src/display.rs` (`qr_svg`), code generated in `state.rs` |
-| 10 | Main page asks for the code and redirects to the QR URL | `server/src/web.rs`: `index` and `join` |
+| 9 | QR code with the answer URL and a random question code | `server/src/display.rs` (`qr_svg`), room URL and code generated in `state.rs` |
+| 10 | Main page asks for the code and redirects to the QR URL | `server/src/web.rs`: `index`, `join` and `room` |
 | 11 | Live update of the number of answers | `server/src/live.rs` (server-sent events) and `server/static/app.js` |
 | 12 | Closing shows a bar graph and writes a CSV of logins and answers | `api::close_question`, `templates/results.html`, `cli/src/report.rs` |
 

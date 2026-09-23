@@ -1,9 +1,11 @@
 // Live updates for the student and presentation views.
 //
 // The server pushes a small JSON snapshot over server-sent events whenever
-// somebody answers or the question is closed. Only the counter is updated in
-// place; closing the question reloads the page so that the bar graph is
-// rendered by the server, exactly like on a fresh visit.
+// somebody answers, the question is closed or the teacher asks the next one.
+// Only the counter is updated in place; anything that changes the layout
+// reloads the page, so that it is rendered by the server, exactly like on a
+// fresh visit. That is also how the next question of a lecture reaches the
+// students: their page has been open all along and reloads itself.
 (function () {
   "use strict";
 
@@ -13,6 +15,8 @@
   }
 
   var wasOpen = live.dataset.open === "true";
+  // Empty on the presentation view, and while a room waits for a question.
+  var shownQuestion = live.dataset.question || "";
   var source = new EventSource(live.dataset.events);
 
   function setOffline(offline) {
@@ -35,11 +39,19 @@
       node.textContent = state.answer_count;
     });
 
-    // The open/closed state decides the whole layout, so let the server
-    // re-render it. The guard keeps a closed page from reloading forever.
-    if (wasOpen !== state.open) {
+    // The open/closed state and the question itself decide the whole
+    // layout, so let the server re-render it. The guard keeps a page from
+    // reloading forever once it shows what the server sent.
+    if (wasOpen !== state.open || shownQuestion !== (state.question || "")) {
       window.location.reload();
     }
+  });
+
+  // The question or the room is gone, for instance because the lecture is
+  // over. Reloading shows what the server has to say about it.
+  source.addEventListener("gone", function () {
+    source.close();
+    window.location.reload();
   });
 
   source.addEventListener("error", function () {

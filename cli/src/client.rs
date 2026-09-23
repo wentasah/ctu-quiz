@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 use quiz_common::api::{
-    API_PREFIX, ApiError, CreateQuestion, OidcInfo, QuestionInfo, Results, WhoAmI,
+    API_PREFIX, ApiError, CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, WhoAmI,
 };
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -38,6 +38,11 @@ impl Api {
 
     pub async fn whoami(&self) -> Result<WhoAmI> {
         self.send(self.get("whoami")?).await
+    }
+
+    /// Asks the server to drop the room this teacher's students are in.
+    pub async fn close_room(&self) -> Result<RoomClosed> {
+        self.send(self.post("room/close")?).await
     }
 
     pub async fn create_question(&self, question: &CreateQuestion) -> Result<QuestionInfo> {

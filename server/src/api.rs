@@ -10,7 +10,7 @@ use axum::{
     http::StatusCode,
 };
 use chrono::Utc;
-use quiz_common::api::{CreateQuestion, OidcInfo, QuestionInfo, Results, WhoAmI};
+use quiz_common::api::{CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, WhoAmI};
 
 use crate::{
     auth::{ApiUser, Identity, Teacher},
@@ -42,6 +42,19 @@ pub async fn whoami(State(state): State<AppState>, ApiUser(user): ApiUser) -> Js
         name: user.name,
         is_teacher,
     })
+}
+
+/// `POST /api/v1/room/close` - drops the teacher's room and its questions.
+///
+/// `quiz logout` calls this before it forgets the token: the lecture is over,
+/// so the URL and the code students have been using stop working instead of
+/// waiting for the next teacher to inherit them.
+pub async fn close_room(State(state): State<AppState>, ApiUser(user): ApiUser) -> Json<RoomClosed> {
+    let (closed, questions) = state.close_room(&user.login).await;
+    if closed {
+        tracing::info!(teacher = %user.login, questions, "room closed");
+    }
+    Json(RoomClosed { closed, questions })
 }
 
 /// `POST /api/v1/questions` - publishes a question read from a Markdown file.
@@ -120,8 +133,12 @@ pub async fn close_question(
             "question closed"
         );
     }
+    let info = question.info();
 
-    Ok(Json(question.info()))
+    // The students in the room switch over to the results.
+    store.notify_room_of(&id);
+
+    Ok(Json(info))
 }
 
 /// `GET /api/v1/questions/{id}/results` - the collected answers, which the CLI

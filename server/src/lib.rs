@@ -84,18 +84,21 @@ pub fn router(state: AppState) -> Router {
     let api = Router::new()
         .route("/oidc", get(api::oidc_info))
         .route("/whoami", get(api::whoami))
+        .route("/room/close", post(api::close_room))
         .route("/questions", post(api::create_question))
         .route("/questions/{id}", get(api::question))
         .route("/questions/{id}/close", post(api::close_question))
         .route("/questions/{id}/results", get(api::results));
 
     Router::new()
-        // Web UI for students; every page requires an OIDC login.
+        // Web UI for students; every page requires an OIDC login. The room
+        // is where they stay for the whole lecture, however many questions
+        // the teacher asks.
         .route("/", get(web::index))
         .route("/join", post(web::join))
-        .route("/q/{id}", get(web::question))
-        .route("/q/{id}/answer", post(web::answer))
-        .route("/q/{id}/events", get(web::events))
+        .route("/r/{token}", get(web::room))
+        .route("/r/{token}/answer", post(web::answer))
+        .route("/r/{token}/events", get(web::events))
         // Presentation view, reachable with the secret display token.
         .route("/d/{token}", get(display::display))
         .route("/d/{token}/events", get(display::events))

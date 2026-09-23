@@ -32,6 +32,7 @@ pub async fn display(
     let page = DisplayPage {
         prefix: views::prefix(),
         token: token.clone(),
+        question: question.id.clone(),
         title: question.title().to_owned(),
         prompt_html: question.content.prompt_html.clone(),
         open: question.is_open(),
@@ -59,7 +60,7 @@ pub async fn events(
         .map(|question| question.id.clone())
         .ok_or_else(not_found)?;
 
-    Ok(live::stream(state, id).into_response())
+    Ok(live::stream(state, live::Source::Question(id)).into_response())
 }
 
 /// What students have to type into a browser to reach the main page.

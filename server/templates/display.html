@@ -2,7 +2,8 @@
 {% block title %}{{ title }}{% endblock %}
 {% block body_class %}display{% endblock %}
 {% block content %}
-<div id="live" data-events="{{ prefix }}/d/{{ token }}/events" data-open="{{ open }}">
+<div id="live" data-events="{{ prefix }}/d/{{ token }}/events" data-open="{{ open }}"
+     data-question="{{ question }}">
   <div class="question">
     <div class="prompt">{{ prompt_html|safe }}</div>
     {% if open %}

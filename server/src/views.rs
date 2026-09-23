@@ -97,15 +97,23 @@ pub struct MessagePage {
     pub message: String,
 }
 
-/// The page where a student answers a question.
+/// The page a student stays on: the room, showing whichever question the
+/// teacher is asking, or waiting for the next one.
 #[derive(Template)]
 #[template(path = "answer.html")]
 pub struct AnswerPage {
     pub prefix: String,
     pub user: Identity,
-    pub id: String,
+    /// Token of the room, i.e. the page's own URL.
+    pub room: String,
+    /// The numeric code of the room, shown so that a neighbour can join.
+    pub code: String,
+    /// Id of the question being shown; empty while there is none.
+    pub question: String,
     pub title: String,
     pub prompt_html: String,
+    /// Whether the teacher has yet to ask the next question.
+    pub waiting: bool,
     pub open: bool,
     pub answer_count: usize,
     /// Label of the student's own answer, empty if they did not answer.
@@ -120,6 +128,9 @@ pub struct DisplayPage {
     pub prefix: String,
     /// Secret part of the presentation URL, used to build the event stream URL.
     pub token: String,
+    /// Id of the question shown, so that the page notices when the stream
+    /// starts talking about another one.
+    pub question: String,
     pub title: String,
     pub prompt_html: String,
     pub open: bool,

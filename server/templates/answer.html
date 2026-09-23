@@ -1,15 +1,23 @@
 {% extends "layout.html" %}
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{% if waiting %}Kvíz{% else %}{{ title }}{% endif %}{% endblock %}
 {% block body_class %}answer{% endblock %}
 {% block content %}
-<div class="card" id="live" data-events="{{ prefix }}/q/{{ id }}/events" data-open="{{ open }}">
+<div class="card" id="live" data-events="{{ prefix }}/r/{{ room }}/events"
+     data-open="{{ open }}" data-question="{{ question }}">
   <p class="who">{{ user.name }} ({{ user.login }}) &middot;
     <a href="{{ prefix }}/logout">odhlásit</a></p>
 
+  {% if waiting %}
+  <h1>Čekejte na otázku</h1>
+  <p class="status">Až vyučující položí otázku, objeví se zde sama.
+    Tuto stránku nezavírejte.</p>
+  <p class="status count">Kód této místnosti: <strong>{{ code }}</strong></p>
+  {% else %}
   <div class="prompt">{{ prompt_html|safe }}</div>
 
   {% if open %}
-  <form method="post" action="{{ prefix }}/q/{{ id }}/answer" class="answers">
+  <form method="post" action="{{ prefix }}/r/{{ room }}/answer" class="answers">
+    <input type="hidden" name="question" value="{{ question }}">
     {% for bar in bars %}
     <button type="submit" name="answer" value="{{ loop.index0 }}"
             class="answer{% if bar.chosen %} chosen{% endif %}">
@@ -33,6 +41,8 @@
   <p class="status ok">Vaše odpověď byla <strong>{{ chosen_label }}</strong>.</p>
   {% else %}
   <p class="status">Na tuto otázku jste neodpověděl(a).</p>
+  {% endif %}
+  <p class="status">Další otázka se zde objeví sama, stránku nezavírejte.</p>
   {% endif %}
   {% endif %}
 </div>

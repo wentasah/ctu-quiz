@@ -50,11 +50,16 @@ pub struct AnswerInfo {
 pub struct QuestionInfo {
     pub id: String,
     /// Short numeric code students type on the main page.
+    ///
+    /// It belongs to the teacher's room, not to the single question, so it
+    /// stays the same for every question the teacher asks.
     pub code: String,
     pub title: Option<String>,
     /// Name of the Markdown file the question was read from.
     pub source_name: String,
-    /// URL students are sent to, also encoded in the QR code.
+    /// URL students are sent to, also encoded in the QR code. It is the URL
+    /// of the teacher's room, so students who are already on it see this
+    /// question without scanning anything again.
     pub answer_url: String,
     /// Capability URL of the presentation view; keep it secret.
     pub display_url: String,
@@ -73,6 +78,10 @@ pub struct QuestionInfo {
 /// Live state pushed to browsers over server-sent events.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiveState {
+    /// Id of the question being asked, `None` while the room is waiting for
+    /// the next one. A change means the page has to be re-rendered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub question: Option<String>,
     pub open: bool,
     pub answer_count: usize,
     /// Per-answer counts. Only revealed once the question is closed, so that
@@ -82,6 +91,28 @@ pub struct LiveState {
     /// Answer labels, to keep the browser from having to know them up front.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub labels: Option<Vec<String>>,
+}
+
+impl LiveState {
+    /// The state of a room in which no question is being asked.
+    pub fn waiting() -> Self {
+        Self {
+            question: None,
+            open: false,
+            answer_count: 0,
+            counts: None,
+            labels: None,
+        }
+    }
+}
+
+/// `POST /api/v1/room/close` - what became of the teacher's room.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomClosed {
+    /// Whether there was a room to close.
+    pub closed: bool,
+    /// How many questions were dropped together with it.
+    pub questions: usize,
 }
 
 /// One row of the collected answers, and one row of the exported CSV.

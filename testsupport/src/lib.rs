@@ -49,6 +49,13 @@ pub const EXAMPLE_QUESTION: &str = include_str!("../question.md");
 /// executable, so that running it asks the question.
 pub const EXECUTABLE_QUESTION: &str = include_str!("../executable.md");
 
+/// The question id that the answer form of a room page carries, which a
+/// browser submits together with the chosen answer.
+pub fn question_on_page(html: &str) -> Option<String> {
+    let rest = html.split_once("name=\"question\" value=\"")?.1;
+    Some(rest.split_once('"')?.0.to_owned())
+}
+
 /// How the mock provider decides who is logging in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoginMode {

@@ -3,7 +3,9 @@
 
 use std::{path::PathBuf, process::Stdio, time::Duration};
 
-use quiz_testsupport::{EXAMPLE_QUESTION, EXECUTABLE_QUESTION, MockIdp, User, start_server};
+use quiz_testsupport::{
+    EXAMPLE_QUESTION, EXECUTABLE_QUESTION, MockIdp, User, question_on_page, start_server,
+};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::Command,
@@ -111,10 +113,12 @@ async fn ask_flow() {
         .await
         .unwrap();
     assert_eq!(response.url().as_str(), answer_url);
-    let id = response.url().path().rsplit('/').next().unwrap().to_owned();
+    let room = response.url().path().rsplit('/').next().unwrap().to_owned();
+    let question = question_on_page(&response.text().await.unwrap())
+        .expect("the room page shows a question to answer");
     let response = browser
-        .post(format!("{base}/q/{id}/answer"))
-        .form(&[("answer", "0")])
+        .post(format!("{base}/r/{room}/answer"))
+        .form(&[("question", question.as_str()), ("answer", "0")])
         .send()
         .await
         .unwrap();
@@ -182,7 +186,29 @@ async fn ask_flow() {
     assert!(printed.contains("Michal Sojka (sojkam1)"), "{printed}");
     assert!(printed.contains("May ask questions."), "{printed}");
 
-    // And it can be forgotten again.
+    // `quiz close` without a question id ends the lecture: the page the
+    // student has open stops working, but the teacher stays logged in.
+    let output = Command::new(QUIZ)
+        .args(["--server", &base, "--no-browser", "close"])
+        .env("XDG_CONFIG_HOME", &dir)
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(
+        printed.contains("Room closed (1 question(s) removed)"),
+        "{printed}"
+    );
+
+    let response = browser.get(&answer_url).send().await.unwrap();
+    assert_eq!(
+        response.status(),
+        reqwest::StatusCode::NOT_FOUND,
+        "the room outlived `quiz close`"
+    );
+
+    // And logging out forgets the token; there is no room left to close.
     let output = Command::new(QUIZ)
         .args(["--server", &base, "logout"])
         .env("XDG_CONFIG_HOME", &dir)
@@ -190,7 +216,9 @@ async fn ask_flow() {
         .await
         .unwrap();
     assert!(output.status.success());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("Token forgotten"));
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(printed.contains("Token forgotten"), "{printed}");
+    assert!(printed.contains("No room was open"), "{printed}");
 }
 
 #[tokio::test]

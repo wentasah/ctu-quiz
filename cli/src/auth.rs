@@ -110,6 +110,22 @@ fn private_file(path: &std::path::Path) -> std::io::Result<std::fs::File> {
     options.open(path)
 }
 
+/// The cached tokens: those of one server, or of all of them.
+///
+/// Used by `quiz logout`, which has something to say to every server it is
+/// still logged in to before it forgets how to talk to them.
+pub fn cached(server: Option<&str>) -> Vec<(String, Token)> {
+    let cache = load_cache();
+    match server {
+        Some(server) => cache
+            .tokens
+            .get(server)
+            .map(|token| vec![(server.to_owned(), token.clone())])
+            .unwrap_or_default(),
+        None => cache.tokens.into_iter().collect(),
+    }
+}
+
 /// Forgets the token for one server, or for all of them.
 pub fn forget(server: Option<&str>) -> Result<bool> {
     let mut cache = load_cache();

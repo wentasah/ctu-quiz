@@ -16,7 +16,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use client::Api;
@@ -71,19 +71,24 @@ enum Command {
     },
     /// Log in to the quiz server and remember the token.
     Login,
-    /// Forget the remembered token.
+    /// Close the room students are in and forget the remembered token.
     Logout {
-        /// Forget the tokens of all servers.
+        /// Log out of all servers.
         #[arg(long)]
         all: bool,
     },
     /// Show who this tool is logged in as.
     Whoami,
-    /// Close a question that is still open and save its answers.
+    /// Close a question and save its answers, or close the whole room.
     Close {
         /// Question id, as printed by `quiz ask`.
-        id: String,
-        /// Where to write the answers.
+        ///
+        /// Without it the room is closed instead: the page students have
+        /// open stops working, the questions asked in it are removed from
+        /// the server and the next question starts a room with a new code.
+        /// The teacher stays logged in.
+        id: Option<String>,
+        /// Where to write the answers of the question being closed.
         #[arg(long, short)]
         output: Option<PathBuf>,
     },
@@ -110,9 +115,12 @@ async fn run(cli: &Cli) -> Result<()> {
         } => ask(cli, file, output.clone(), *close_after).await,
         Command::Parse { file } => parse(file),
         Command::Login => login(cli).await,
-        Command::Logout { all } => logout(cli, *all),
+        Command::Logout { all } => logout(cli, *all).await,
         Command::Whoami => whoami(cli).await,
-        Command::Close { id, output } => close(cli, id, output.clone()).await,
+        Command::Close { id, output } => match id {
+            Some(id) => close(cli, id, output.clone()).await,
+            None => close_room(cli, output.is_some()).await,
+        },
     }
 }
 
@@ -181,9 +189,37 @@ async fn login(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn logout(cli: &Cli, all: bool) -> Result<()> {
+/// Ends the lecture: the students' page stops working and the token is
+/// forgotten.
+///
+/// The room is closed first, because doing so needs the very token that is
+/// about to be dropped. A server that cannot be reached is only reported: the
+/// token is forgotten either way, which is what the teacher asked for.
+async fn logout(cli: &Cli, all: bool) -> Result<()> {
     let server = cli.server.as_str().to_owned();
-    let forgotten = auth::forget((!all).then_some(server.as_str()))?;
+    let selected = (!all).then_some(server.as_str());
+
+    for (server, token) in auth::cached(selected) {
+        let Ok(url) = Url::parse(&server) else {
+            continue;
+        };
+        let Ok(http) = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+        else {
+            continue;
+        };
+        match Api::new(http, url, token.id_token).close_room().await {
+            Ok(room) if room.closed => println!(
+                "Room on {server} closed ({} question(s) removed); students can no longer answer.",
+                room.questions
+            ),
+            Ok(_) => println!("No room was open on {server}."),
+            Err(error) => println!("Cannot close the room on {server} ({error:#})."),
+        }
+    }
+
+    let forgotten = auth::forget(selected)?;
     if forgotten {
         println!("Token forgotten.");
     } else {
@@ -218,6 +254,27 @@ async fn close(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<()> {
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
+    Ok(())
+}
+
+/// Ends the lecture without logging out: the room, and everything asked in
+/// it, is dropped.
+async fn close_room(cli: &Cli, has_output: bool) -> Result<()> {
+    if has_output {
+        bail!("--output needs the id of the question whose answers to save");
+    }
+
+    let api = connect(cli, false).await?;
+    let room = api.close_room().await?;
+    if room.closed {
+        println!(
+            "Room closed ({} question(s) removed); students can no longer answer.",
+            room.questions
+        );
+        println!("The next question will open a room with a new code.");
+    } else {
+        println!("There was no room to close.");
+    }
     Ok(())
 }
 
