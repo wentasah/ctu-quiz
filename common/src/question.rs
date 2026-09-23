@@ -275,6 +275,12 @@ fn render(markdown: &str) -> String {
 
 /// The Markdown event stream, with every code block replaced by the HTML from
 /// [`crate::highlight`], which is where the syntax highlighting happens.
+///
+/// Raw HTML written in the Markdown is turned into text, so that it ends up
+/// escaped in the output: a question is written by a teacher, but it is shown
+/// to everybody in the room, and `<script>` in a question must not run in
+/// their browsers. The only HTML in the stream is the one this function puts
+/// there itself.
 fn rendered_events(markdown: &str) -> Vec<Event<'_>> {
     let mut events = Vec::new();
     // Language and contents of the code block currently being collected.
@@ -307,6 +313,10 @@ fn rendered_events(markdown: &str) -> Vec<Event<'_>> {
                     ));
                 }
             }
+            // Raw HTML, escaped rather than dropped, so that a teacher sees
+            // what they wrote instead of the text silently disappearing.
+            Event::Html(html) => events.push(Event::Text(html)),
+            Event::InlineHtml(html) => events.push(Event::Text(html)),
             other => events.push(other),
         }
     }
@@ -333,7 +343,9 @@ fn plain_text(markdown: &str) -> String {
     let mut text = String::new();
     for event in Parser::new_ext(markdown, options()) {
         match event {
-            Event::Text(t) | Event::Code(t) => text.push_str(&t),
+            Event::Text(t) | Event::Code(t) | Event::Html(t) | Event::InlineHtml(t) => {
+                text.push_str(&t)
+            }
             Event::SoftBreak | Event::HardBreak => text.push(' '),
             Event::End(TagEnd::Paragraph | TagEnd::Item | TagEnd::CodeBlock) => text.push(' '),
             _ => {}
@@ -461,6 +473,33 @@ What's wrong with it?
             q.answers[0].html
         );
         assert_eq!(q.answers[0].plain, "one return 0;");
+    }
+
+    #[test]
+    fn raw_html_in_a_question_is_escaped() {
+        let q = parse(
+            "Q <img src=x onerror=alert(1)>\n\n<script>alert(document.cookie)</script>\n\n\
+             ---\n\n- <b onmouseover=alert(2)>bold</b>\n- plain\n",
+        )
+        .unwrap();
+
+        assert!(!q.prompt_html.contains("<img"), "{}", q.prompt_html);
+        assert!(!q.prompt_html.contains("<script"), "{}", q.prompt_html);
+        assert!(
+            q.prompt_html
+                .contains("&lt;script&gt;alert(document.cookie)"),
+            "{}",
+            q.prompt_html
+        );
+
+        let answer = &q.answers[0];
+        assert!(!answer.html.contains("<b "), "{}", answer.html);
+        assert!(
+            answer.html.contains("&lt;b onmouseover="),
+            "{}",
+            answer.html
+        );
+        assert_eq!(answer.plain, "<b onmouseover=alert(2)>bold</b>");
     }
 
     #[test]

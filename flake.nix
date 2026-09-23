@@ -90,8 +90,17 @@
               default = [ ];
               example = [ "sojkam1" ];
               description = ''
-                Logins allowed to ask questions. Empty means everybody who can
-                log in with the identity provider.
+                Logins allowed to ask questions. The server refuses to start
+                with an empty list unless allowAnyTeacher is set.
+              '';
+            };
+
+            allowAnyTeacher = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = ''
+                Let everybody who can log in with the identity provider ask
+                questions, instead of only the logins in teachers.
               '';
             };
 
@@ -133,6 +142,7 @@
                 QUIZ_OIDC_ISSUER = cfg.issuer;
                 QUIZ_OIDC_CLIENT_ID = cfg.clientId;
                 QUIZ_TEACHERS = lib.concatStringsSep "," cfg.teachers;
+                QUIZ_ALLOW_ANY_TEACHER = lib.boolToString cfg.allowAnyTeacher;
                 QUIZ_TRUST_PROXY = lib.boolToString cfg.trustProxy;
                 QUIZ_LOG_FILE = "/var/log/quiz-server/quiz-server.log";
               } // cfg.extraEnvironment;

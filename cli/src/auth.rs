@@ -73,13 +73,22 @@ fn load_cache() -> Cache {
 }
 
 fn store_cache(cache: &Cache) -> Result<()> {
+    use std::io::Write;
+
     let path = cache_path()?;
     let dir = path.parent().context("the cache path has no directory")?;
     std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    let json = serde_json::to_vec_pretty(cache)?;
-    std::fs::write(&path, json).with_context(|| format!("cannot write {}", path.display()))?;
 
-    // The file holds a bearer token, so keep it to ourselves.
+    // The file holds bearer tokens, so it is private from the moment it is
+    // created: writing it first and fixing the mode afterwards would leave it
+    // readable to everybody on the machine for a moment.
+    let mut file =
+        private_file(&path).with_context(|| format!("cannot write {}", path.display()))?;
+    let json = serde_json::to_vec_pretty(cache)?;
+    file.write_all(&json)
+        .with_context(|| format!("cannot write {}", path.display()))?;
+
+    // A file from an older version of the CLI may still be world-readable.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -87,6 +96,18 @@ fn store_cache(cache: &Cache) -> Result<()> {
             .with_context(|| format!("cannot chmod {}", path.display()))?;
     }
     Ok(())
+}
+
+/// Creates (or truncates) a file that only its owner may read.
+fn private_file(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
 }
 
 /// Forgets the token for one server, or for all of them.

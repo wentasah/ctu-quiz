@@ -24,6 +24,16 @@ use crate::{
     config::Config,
 };
 
+/// How long a login that was started may still be finished.
+const LOGIN_TTL_MINUTES: i64 = 15;
+
+/// How many logins may be in progress at once.
+///
+/// `GET /login` needs no authentication and remembers something for every
+/// visit, so without a limit anybody could fill the server's memory by asking
+/// for logins they never finish.
+pub const MAX_PENDING_LOGINS: usize = 4096;
+
 /// A login started in a browser and not yet finished.
 pub struct PendingLogin {
     pub pkce_verifier: PkceCodeVerifier,
@@ -31,6 +41,31 @@ pub struct PendingLogin {
     /// Path to send the browser to once the login succeeds.
     pub next: String,
     pub created_at: DateTime<Utc>,
+}
+
+/// Remembers a login that has just been started, unless too many are already
+/// in progress. Returns whether it was remembered.
+///
+/// A full table is first rid of the logins that have expired anyway; only if
+/// that does not help is the new one refused.
+fn insert_pending_login(
+    logins: &mut HashMap<String, PendingLogin>,
+    csrf: String,
+    pending: PendingLogin,
+) -> bool {
+    if logins.len() >= MAX_PENDING_LOGINS {
+        let cutoff = pending.created_at - login_ttl();
+        logins.retain(|_, login| login.created_at > cutoff);
+    }
+    if logins.len() >= MAX_PENDING_LOGINS {
+        return false;
+    }
+    logins.insert(csrf, pending);
+    true
+}
+
+fn login_ttl() -> TimeDelta {
+    TimeDelta::try_minutes(LOGIN_TTL_MINUTES).unwrap_or(TimeDelta::zero())
 }
 
 /// A logged-in browser.
@@ -298,6 +333,12 @@ impl AppState {
         Ok(id)
     }
 
+    /// Remembers a login that is under way. Returns `false` when too many
+    /// are in progress, in which case the visitor has to try again later.
+    pub async fn begin_login(&self, csrf: String, pending: PendingLogin) -> bool {
+        insert_pending_login(&mut *self.logins.write().await, csrf, pending)
+    }
+
     /// Creates a session for `identity` and returns the session id.
     pub async fn start_session(&self, identity: Identity) -> String {
         let id = random_token();
@@ -337,7 +378,7 @@ impl AppState {
             before - sessions.len()
         };
         let logins = {
-            let cutoff = now - TimeDelta::try_minutes(15).unwrap_or(TimeDelta::zero());
+            let cutoff = now - login_ttl();
             let mut logins = self.logins.write().await;
             let before = logins.len();
             logins.retain(|_, l| l.created_at > cutoff);
@@ -362,4 +403,49 @@ impl AppState {
 /// An unguessable identifier: 32 hexadecimal characters of a random UUID.
 pub fn random_token() -> String {
     Uuid::new_v4().simple().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pending(created_at: DateTime<Utc>) -> PendingLogin {
+        PendingLogin {
+            pkce_verifier: PkceCodeVerifier::new("verifier".to_owned()),
+            nonce: Nonce::new("nonce".to_owned()),
+            next: "/".to_owned(),
+            created_at,
+        }
+    }
+
+    #[test]
+    fn logins_that_are_never_finished_cannot_fill_the_memory() {
+        let now = Utc::now();
+        let mut logins = HashMap::new();
+        for i in 0..MAX_PENDING_LOGINS {
+            assert!(insert_pending_login(
+                &mut logins,
+                i.to_string(),
+                pending(now)
+            ));
+        }
+        assert_eq!(logins.len(), MAX_PENDING_LOGINS);
+
+        // The table is full of logins that are still fresh, so no more fit.
+        assert!(!insert_pending_login(
+            &mut logins,
+            "one more".to_owned(),
+            pending(now)
+        ));
+        assert_eq!(logins.len(), MAX_PENDING_LOGINS);
+
+        // Once they are old enough to be useless, they make room again.
+        let later = now + login_ttl() + TimeDelta::seconds(1);
+        assert!(insert_pending_login(
+            &mut logins,
+            "later".to_owned(),
+            pending(later)
+        ));
+        assert_eq!(logins.len(), 1);
+    }
 }

@@ -76,9 +76,17 @@ pub struct Config {
     #[arg(long, env = "QUIZ_OIDC_AUDIENCES", value_delimiter = ',')]
     pub oidc_audiences: Vec<String>,
 
-    /// Logins allowed to ask questions. Empty means every user that can log in.
+    /// Logins allowed to ask questions.
     #[arg(long, env = "QUIZ_TEACHERS", value_delimiter = ',')]
     pub teachers: Vec<String>,
+
+    /// Let everybody who can log in ask questions.
+    ///
+    /// Without it an empty `--teachers` list is a configuration error rather
+    /// than an invitation: on a server open to a whole university, anybody
+    /// could otherwise publish a question.
+    #[arg(long, env = "QUIZ_ALLOW_ANY_TEACHER")]
+    pub allow_any_teacher: bool,
 
     /// Claim used as the login name of a user.
     #[arg(long, env = "QUIZ_LOGIN_CLAIM", default_value = "preferred-username")]
@@ -150,9 +158,27 @@ impl Config {
 
     /// Whether `login` is allowed to ask questions.
     ///
-    /// An empty teacher list means everybody who can log in may ask.
+    /// Only the logins on the list, unless `--allow-any-teacher` opens the
+    /// server to everybody who can log in.
     pub fn is_teacher(&self, login: &str) -> bool {
-        self.teachers.is_empty() || self.teachers.iter().any(|t| t == login)
+        self.allow_any_teacher || self.teachers.iter().any(|t| t == login)
+    }
+
+    /// Fails when nobody could ask a question, or when the server would
+    /// accept one from anybody without having been told to.
+    pub fn check_teachers(&self) -> Result<()> {
+        if self.teachers.is_empty() && !self.allow_any_teacher {
+            anyhow::bail!(
+                "no --teachers given: list the logins that may ask questions, \
+                 or pass --allow-any-teacher to let everybody who can log in ask"
+            );
+        }
+        if !self.teachers.is_empty() && self.allow_any_teacher {
+            tracing::warn!(
+                "--allow-any-teacher overrides the --teachers list: everybody may ask questions"
+            );
+        }
+        Ok(())
     }
 }
 
@@ -183,10 +209,19 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_teacher_list_allows_everybody() {
+    fn an_empty_teacher_list_is_refused() {
         let cfg = config(&["--teachers", ""]);
         assert!(cfg.teachers.is_empty());
+        assert!(!cfg.is_teacher("anybody"));
+        let error = cfg.check_teachers().unwrap_err().to_string();
+        assert!(error.contains("--allow-any-teacher"), "{error}");
+    }
+
+    #[test]
+    fn everybody_may_ask_only_when_that_is_asked_for() {
+        let cfg = config(&["--allow-any-teacher"]);
         assert!(cfg.is_teacher("anybody"));
+        assert!(cfg.check_teachers().is_ok());
     }
 
     #[test]

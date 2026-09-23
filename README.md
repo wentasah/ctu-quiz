@@ -99,6 +99,9 @@ Details worth knowing:
   just means unhighlighted code.
 * `quiz parse otazky.md` shows how a file is parsed without contacting the
   server.
+* HTML written in the Markdown is **escaped**, not rendered: the question is
+  shown to a whole lecture hall, so `<script>` in it must not run in their
+  browsers.
 * A question file may be made **executable** and given a shebang line, so that
   asking the question is a matter of running the file:
 
@@ -249,7 +252,8 @@ the container image use (`quiz-server --help` lists them all):
 | `--oidc-cli-redirect-uri` | `QUIZ_OIDC_CLI_REDIRECT_URI` | any loopback port |
 | `--oidc-scopes` | `QUIZ_OIDC_SCOPES` | `openid,profile,email` |
 | `--oidc-audiences` | `QUIZ_OIDC_AUDIENCES` | none |
-| `--teachers` | `QUIZ_TEACHERS` | empty: everybody may ask |
+| `--teachers` | `QUIZ_TEACHERS` | required, unless `--allow-any-teacher` |
+| `--allow-any-teacher` | `QUIZ_ALLOW_ANY_TEACHER` | off |
 | `--login-claim` | `QUIZ_LOGIN_CLAIM` | `preferred-username` |
 | `--question-ttl-hours` | `QUIZ_QUESTION_TTL_HOURS` | `12` |
 | `--session-ttl-hours` | `QUIZ_SESSION_TTL_HOURS` | `12` |
@@ -367,7 +371,11 @@ change the verbosity. The log is append-only and never read back by the server.
 * ID tokens presented by the CLI are verified against the provider's signing
   keys, with issuer, audience and expiry checked.
 * Only logins on the `--teachers` list may ask questions, and a question can
-  only be closed or exported by the teacher who asked it.
+  only be closed or exported by the teacher who asked it. The server refuses to
+  start with an empty list unless `--allow-any-teacher` says that everybody who
+  can log in may ask.
+* A question is Markdown, but HTML written in it is escaped rather than
+  rendered, so a question cannot bring scripts into the students' browsers.
 
 ## Where each requirement is implemented
 
@@ -431,6 +439,7 @@ straight from disc to check the styling and the highlighting.
 | Login ends with `redirect_uri` mismatch | `<public URL>/auth/callback` is not registered with the provider |
 | `not logged in: the ID token is not valid` | the cached token expired and could not be refreshed — `quiz login` |
 | `not allowed: … is not allowed to ask questions` | the login is missing from `--teachers` |
+| `no --teachers given` | list the teachers, or pass `--allow-any-teacher` |
 | Asked to log in again and again, or the code form comes back after submitting | the server is being reached under a different host name than `--public-url`, so the session cookie does not come back |
 | The answer count does not move | the reverse proxy buffers the event streams; see `deploy/nginx.conf.example` |
 | The QR code leads nowhere | `--public-url` does not match how students reach the server |

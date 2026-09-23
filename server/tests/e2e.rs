@@ -289,6 +289,45 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
 }
 
 #[tokio::test]
+async fn html_in_a_question_reaches_the_browser_escaped() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+
+    let response = reqwest::Client::new()
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(idp.id_token(&teacher, CLIENT_ID))
+        .json(&CreateQuestion {
+            source_name: "xss.md".to_owned(),
+            markdown: "<script>alert(1)</script>\n\nQ?\n\n---\n\n\
+                       - <img src=x onerror=alert(2)>\n- plain\n"
+                .to_owned(),
+        })
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let question: QuestionInfo = response.json().await.unwrap();
+
+    // The projector page and the student page both show the question.
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+
+    for url in [&question.display_url, &question.answer_url] {
+        let page = student.get(url).send().await.unwrap().text().await.unwrap();
+        assert!(
+            !page.contains("<script>alert(1)"),
+            "{url} rendered a script"
+        );
+        assert!(!page.contains("<img src=x"), "{url} rendered an image");
+        assert!(page.contains("&lt;script&gt;alert(1)"), "{url}: {page}");
+    }
+}
+
+#[tokio::test]
 async fn an_unusable_question_is_refused_with_an_explanation() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &[]).await;

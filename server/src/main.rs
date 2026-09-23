@@ -32,12 +32,10 @@ async fn run() -> anyhow::Result<()> {
         issuer = %cfg.oidc_issuer,
         client_id = %cfg.oidc_client_id,
         teachers = ?cfg.teachers,
+        allow_any_teacher = cfg.allow_any_teacher,
         log_file = ?cfg.log_file,
         "starting the quiz server"
     );
-    if cfg.teachers.is_empty() {
-        tracing::warn!("--teachers is empty: every user who can log in may ask questions");
-    }
 
     // Bind before contacting the provider, so that a port clash is reported
     // right away.

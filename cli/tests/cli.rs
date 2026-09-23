@@ -237,6 +237,8 @@ async fn an_executable_question_loses_its_shebang_line() {
     let dir = scratch("shebang");
     let question = dir.join("otazky.md");
     std::fs::write(&question, EXECUTABLE_QUESTION).unwrap();
+    let shebang = EXECUTABLE_QUESTION.lines().next().unwrap();
+    assert!(shebang.starts_with("#!"), "the fixture has no shebang line");
 
     // As a plain Markdown file the shebang is text like any other.
     let output = Command::new(QUIZ)
@@ -247,7 +249,7 @@ async fn an_executable_question_loses_its_shebang_line() {
         .unwrap();
     let printed = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{printed}");
-    assert!(printed.contains("#!quiz ask"), "{printed}");
+    assert!(printed.contains(shebang), "{printed}");
 
     // Made executable, the file is a script and the shebang belongs to it.
     std::fs::set_permissions(&question, std::fs::Permissions::from_mode(0o755)).unwrap();

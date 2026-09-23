@@ -424,26 +424,31 @@ fn init_logging_once(cfg: &Config) {
 }
 
 /// Starts the quiz server on a random port and returns its base URL.
+///
+/// An empty `teachers` list means every login may ask questions, which the
+/// server only does when it is told to explicitly.
 pub async fn start_server(idp: &MockIdp, teachers: &[&str]) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
 
     // Go through the real command line parser, so that the tests cover it too.
-    let cfg = Config::parse_from([
-        "quiz-server",
-        "--public-url",
-        &base,
-        "--oidc-issuer",
-        &idp.issuer,
-        "--oidc-client-id",
-        CLIENT_ID,
-        "--teachers",
-        &teachers.join(","),
-        "--log-file",
-        &log_file().display().to_string(),
-    ])
-    .normalize()
-    .unwrap();
+    let mut args = vec![
+        "quiz-server".to_owned(),
+        "--public-url".to_owned(),
+        base.clone(),
+        "--oidc-issuer".to_owned(),
+        idp.issuer.clone(),
+        "--oidc-client-id".to_owned(),
+        CLIENT_ID.to_owned(),
+        "--teachers".to_owned(),
+        teachers.join(","),
+        "--log-file".to_owned(),
+        log_file().display().to_string(),
+    ];
+    if teachers.is_empty() {
+        args.push("--allow-any-teacher".to_owned());
+    }
+    let cfg = Config::parse_from(args).normalize().unwrap();
 
     init_logging_once(&cfg);
 

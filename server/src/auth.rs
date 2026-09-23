@@ -297,15 +297,27 @@ pub async fn login(State(state): State<AppState>, Query(query): Query<LoginQuery
     let (url, csrf, nonce, pkce_verifier) = state.oidc.authorize_url();
     let next = sanitize_next(query.next.as_deref());
 
-    state.logins.write().await.insert(
-        csrf.secret().clone(),
-        PendingLogin {
-            pkce_verifier,
-            nonce,
-            next: next.clone(),
-            created_at: Utc::now(),
-        },
-    );
+    let remembered = state
+        .begin_login(
+            csrf.secret().clone(),
+            PendingLogin {
+                pkce_verifier,
+                nonce,
+                next: next.clone(),
+                created_at: Utc::now(),
+            },
+        )
+        .await;
+
+    if !remembered {
+        tracing::warn!("too many logins in progress, refusing to start another");
+        return PageError::new(
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "Server je zaneprázdněn",
+            "Právě probíhá příliš mnoho přihlášení. Zkuste to prosím za chvíli znovu.",
+        )
+        .into_response();
+    }
 
     tracing::info!(%next, "redirecting a visitor to the OIDC provider");
     Redirect::to(url.as_str()).into_response()
@@ -402,20 +414,36 @@ fn return_path(method: &axum::http::Method, path: &str) -> String {
     }
 }
 
+/// Longest `next` parameter that is kept; the paths of this server are short.
+const MAX_NEXT: usize = 256;
+
 /// Keeps the `next` parameter from turning into an open redirect.
+///
+/// Only a path on this server is accepted. `//host` is the obvious way out,
+/// but so is `/\host`: browsers normalize the backslash to a slash, so the
+/// redirect would leave the site. Control characters are refused as well,
+/// because the value ends up in a `Location` header.
 fn sanitize_next(next: Option<&str>) -> String {
-    match next {
-        Some(next) if next.starts_with('/') && !next.starts_with("//") => next.to_owned(),
-        _ => "/".to_owned(),
+    let acceptable = |next: &&str| {
+        next.len() <= MAX_NEXT
+            && next.starts_with('/')
+            && !next[1..].starts_with(['/', '\\'])
+            && !next.contains('\\')
+            && !next.chars().any(char::is_control)
+    };
+    match next.filter(acceptable) {
+        Some(next) => next.to_owned(),
+        None => "/".to_owned(),
     }
 }
 
-/// Fails the startup when the OIDC client is obviously unusable.
+/// Fails the startup when the OIDC client is obviously unusable, or when
+/// nobody, or everybody, would be allowed to ask questions.
 pub fn check_config(cfg: &Config) -> Result<()> {
     if cfg.oidc_client_id.is_empty() {
         bail!("--oidc-client-id must not be empty");
     }
-    Ok(())
+    cfg.check_teachers()
 }
 
 #[cfg(test)]
@@ -437,5 +465,11 @@ mod tests {
         assert_eq!(sanitize_next(Some("//evil.example.com")), "/");
         assert_eq!(sanitize_next(Some("https://evil.example.com")), "/");
         assert_eq!(sanitize_next(None), "/");
+        // A backslash is a slash to a browser, so `/\host` is `//host`.
+        assert_eq!(sanitize_next(Some("/\\evil.example.com")), "/");
+        assert_eq!(sanitize_next(Some("/q/\\\\evil.example.com")), "/");
+        // Nothing that could break the Location header out of its line.
+        assert_eq!(sanitize_next(Some("/q/a\r\nSet-Cookie: x=y")), "/");
+        assert_eq!(sanitize_next(Some(&"/q/".repeat(200))), "/");
     }
 }
