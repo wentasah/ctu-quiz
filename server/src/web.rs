@@ -78,6 +78,8 @@ pub async fn room(
         question: String::new(),
         title: String::new(),
         prompt_html: String::new(),
+        show_question: true,
+        show_answers: true,
         waiting: true,
         open: false,
         answer_count: 0,
@@ -88,8 +90,14 @@ pub async fn room(
     if let Some(question) = store.current_question(&token) {
         let chosen = question.responses.get(&page.user.login).map(|r| r.index);
         page.question = question.id.clone();
-        page.title = question.title().to_owned();
-        page.prompt_html = question.content.prompt_html.clone();
+        page.show_question = question.view.show_question;
+        page.show_answers = question.view.show_answers;
+        // The title is the first heading of the question, so it is part of
+        // what a hidden question hides - including in the browser tab.
+        if page.show_question {
+            page.title = question.title().to_owned();
+            page.prompt_html = question.content.prompt_html.clone();
+        }
         page.waiting = false;
         page.open = question.is_open();
         page.answer_count = question.responses.len();

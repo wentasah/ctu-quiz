@@ -31,6 +31,7 @@ pub async fn display(
 
     let page = DisplayPage {
         prefix: views::prefix(),
+        show_answers: true,
         token: token.clone(),
         question: question.id.clone(),
         title: question.title().to_owned(),

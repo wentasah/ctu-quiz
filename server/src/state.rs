@@ -20,7 +20,7 @@ use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use chrono::{DateTime, TimeDelta, Utc};
 use openidconnect::{Nonce, PkceCodeVerifier};
-use quiz_common::api::{AnswerInfo, LiveState, QuestionInfo, ResultRow, Results};
+use quiz_common::api::{AnswerInfo, LiveState, QuestionInfo, ResultRow, Results, StudentView};
 use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
 
@@ -132,6 +132,8 @@ pub struct Question {
     /// Name of the Markdown file the question came from.
     pub source_name: String,
     pub content: quiz_common::Question,
+    /// What of this question students see on their own device.
+    pub view: StudentView,
     pub answer_url: String,
     pub display_url: String,
     pub teacher: String,
@@ -167,6 +169,7 @@ impl Question {
     pub fn info(&self) -> QuestionInfo {
         QuestionInfo {
             id: self.id.clone(),
+            view: self.view,
             code: self.code.clone(),
             title: self.content.title.clone(),
             source_name: self.source_name.clone(),
@@ -462,6 +465,7 @@ impl AppState {
         &self,
         source_name: String,
         content: quiz_common::Question,
+        view: StudentView,
         teacher: &str,
     ) -> Result<String> {
         let now = Utc::now();
@@ -503,6 +507,7 @@ impl AppState {
             answer_url,
             source_name,
             content,
+            view,
             teacher: teacher.to_owned(),
             created_at: now,
             closed_at: None,

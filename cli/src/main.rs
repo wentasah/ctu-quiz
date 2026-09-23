@@ -20,7 +20,7 @@ use anyhow::{Context, Result, bail};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use client::Api;
-use quiz_common::api::CreateQuestion;
+use quiz_common::api::{CreateQuestion, StudentView};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use url::Url;
 
@@ -63,6 +63,21 @@ enum Command {
         /// Close the question automatically after this many seconds.
         #[arg(long, value_name = "SECONDS")]
         close_after: Option<u64>,
+        /// Keep the question text off the students' own screens.
+        ///
+        /// They read it from the projector and only tap an answer on their
+        /// phone, which makes it a lot more work to paste the question into
+        /// a chatbot.
+        #[arg(long)]
+        hide_question: bool,
+        /// Keep the answers off the students' own screens as well, leaving
+        /// them the bare labels `A`, `B`, `C`, ... to answer with.
+        #[arg(long)]
+        hide_answers: bool,
+        /// Show nothing but the answer labels: the same as passing both
+        /// `--hide-question` and `--hide-answers`.
+        #[arg(long)]
+        labels_only: bool,
     },
     /// Show how a Markdown file is parsed, without contacting the server.
     Parse {
@@ -112,7 +127,19 @@ async fn run(cli: &Cli) -> Result<()> {
             file,
             output,
             close_after,
-        } => ask(cli, file, output.clone(), *close_after).await,
+            hide_question,
+            hide_answers,
+            labels_only,
+        } => {
+            ask(
+                cli,
+                file,
+                output.clone(),
+                *close_after,
+                student_view(*hide_question, *hide_answers, *labels_only),
+            )
+            .await
+        }
         Command::Parse { file } => parse(file),
         Command::Login => login(cli).await,
         Command::Logout { all } => logout(cli, *all).await,
@@ -124,12 +151,23 @@ async fn run(cli: &Cli) -> Result<()> {
     }
 }
 
+/// What the `--hide-...` flags leave for the students to see.
+///
+/// `--labels-only` is the short way of saying both of them.
+fn student_view(hide_question: bool, hide_answers: bool, labels_only: bool) -> StudentView {
+    StudentView {
+        show_question: !(hide_question || labels_only),
+        show_answers: !(hide_answers || labels_only),
+    }
+}
+
 /// The main workflow: publish, present, collect, save.
 async fn ask(
     cli: &Cli,
     file: &Path,
     output: Option<PathBuf>,
     close_after: Option<u64>,
+    view: StudentView,
 ) -> Result<()> {
     let markdown = read_question(file)?;
     report::print_question(
@@ -145,12 +183,14 @@ async fn ask(
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "question.md".to_owned()),
             markdown,
+            view,
         })
         .await?;
 
     println!("Question code:     {}", question.code);
     println!("Students answer at: {}", question.answer_url);
     println!("Presentation view:  {}", question.display_url);
+    println!("Students see:       {}", describe(view));
     show_in_browser(&question.display_url, !cli.no_browser);
 
     wait_for_close(&api, &question.id, close_after).await?;
@@ -163,6 +203,17 @@ async fn ask(
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
     Ok(())
+}
+
+/// One line about what is on the students' own screens, so that the teacher
+/// notices a `--hide-...` they did not mean to pass.
+fn describe(view: StudentView) -> &'static str {
+    match (view.show_question, view.show_answers) {
+        (true, true) => "the question and the answers",
+        (true, false) => "the question, and the answer labels only",
+        (false, true) => "the answers only; the question is on the projector",
+        (false, false) => "the answer labels only; everything else is on the projector",
+    }
 }
 
 /// Shows the parsed question without publishing it.
@@ -416,7 +467,7 @@ async fn wait_for_close(api: &Api, id: &str, close_after: Option<u64>) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{read_question, strip_shebang};
+    use super::{describe, read_question, strip_shebang, student_view};
 
     #[test]
     fn a_shebang_line_is_removed() {
@@ -431,6 +482,24 @@ mod tests {
             "# Heading\n#!not a shebang\n"
         );
         assert_eq!(strip_shebang(" #!quiz ask\nQ?\n"), " #!quiz ask\nQ?\n");
+    }
+
+    #[test]
+    fn hiding_flags_decide_what_students_get_to_see() {
+        let all = student_view(false, false, false);
+        assert!(all.show_question && all.show_answers);
+        assert_eq!(describe(all), "the question and the answers");
+
+        let hidden = student_view(true, false, false);
+        assert!(!hidden.show_question && hidden.show_answers);
+
+        // Both flags: the students' screens carry nothing but the labels,
+        // and `--labels-only` is the same thing said in one word.
+        let both = student_view(true, true, false);
+        let labels_only = student_view(false, false, true);
+        assert_eq!(both, labels_only);
+        assert!(!labels_only.show_question && !labels_only.show_answers);
+        assert!(describe(labels_only).contains("labels only"));
     }
 
     #[cfg(unix)]

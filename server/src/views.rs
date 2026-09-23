@@ -110,8 +110,13 @@ pub struct AnswerPage {
     pub code: String,
     /// Id of the question being shown; empty while there is none.
     pub question: String,
+    /// Title of the question, empty when it is not for students to see.
     pub title: String,
     pub prompt_html: String,
+    /// Whether the question text is for the students' own screens.
+    pub show_question: bool,
+    /// Whether the answers are shown with their text, or as bare labels.
+    pub show_answers: bool,
     /// Whether the teacher has yet to ask the next question.
     pub waiting: bool,
     pub open: bool,
@@ -126,6 +131,10 @@ pub struct AnswerPage {
 #[template(path = "display.html")]
 pub struct DisplayPage {
     pub prefix: String,
+    /// Always true: the presentation view is the one screen that shows
+    /// everything. It is here because `results.html` is shared with the
+    /// students' page, which may not.
+    pub show_answers: bool,
     /// Secret part of the presentation URL, used to build the event stream URL.
     pub token: String,
     /// Id of the question shown, so that the page notices when the stream

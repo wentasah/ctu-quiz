@@ -5,7 +5,7 @@
     <span class="graph"><span class="fill" style="width: {{ bar.width }}%"></span></span>
     <span class="count">{{ bar.count }}</span>
     <span class="share">{{ bar.share }}&nbsp;%</span>
-    <span class="text">{{ bar.html|safe }}</span>
+    {% if show_answers %}<span class="text">{{ bar.html|safe }}</span>{% endif %}
   </li>
   {% endfor %}
 </ul>

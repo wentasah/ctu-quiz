@@ -7,7 +7,7 @@
 
 use std::time::Duration;
 
-use quiz_common::api::{CreateQuestion, QuestionInfo, Results, RoomClosed, WhoAmI};
+use quiz_common::api::{CreateQuestion, QuestionInfo, Results, RoomClosed, StudentView, WhoAmI};
 use quiz_testsupport::{CLIENT_ID, MockIdp, User, question_on_page, start_server};
 use reqwest::StatusCode;
 
@@ -43,6 +43,7 @@ async fn a_question_is_asked_answered_and_closed() {
         .json(&CreateQuestion {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
         })
         .send()
         .await
@@ -232,6 +233,7 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
         let request = api.post(&url).json(&CreateQuestion {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
         });
         let request = match token {
             Some(token) => request.bearer_auth(token),
@@ -275,6 +277,7 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
         .json(&CreateQuestion {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
         })
         .send()
         .await
@@ -306,6 +309,7 @@ async fn html_in_a_question_reaches_the_browser_escaped() {
             markdown: "<script>alert(1)</script>\n\nQ?\n\n---\n\n\
                        - <img src=x onerror=alert(2)>\n- plain\n"
                 .to_owned(),
+            view: StudentView::default(),
         })
         .send()
         .await
@@ -346,6 +350,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
             .json(&CreateQuestion {
                 source_name: "otazky.md".to_owned(),
                 markdown,
+                view: StudentView::default(),
             });
         async move {
             let response = request.send().await.unwrap();
@@ -449,6 +454,140 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
 }
 
 #[tokio::test]
+async fn a_hidden_question_stays_on_the_projector() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.id_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let markdown = "# Roury\n\nWhat is wrong with the pipeline?\n\n---\n\n\
+                    - a subshell swallows the variable\n- nothing at all\n";
+    let ask = |view: StudentView| {
+        let request = api
+            .post(format!("{base}/api/v1/questions"))
+            .bearer_auth(token.clone())
+            .json(&CreateQuestion {
+                source_name: "otazky.md".to_owned(),
+                markdown: markdown.to_owned(),
+                view,
+            });
+        async move {
+            request
+                .send()
+                .await
+                .unwrap()
+                .json::<QuestionInfo>()
+                .await
+                .unwrap()
+        }
+    };
+
+    // Only the answers on the phones: the question is for the projector.
+    let question = ask(StudentView {
+        show_question: false,
+        show_answers: true,
+    })
+    .await;
+    assert!(!question.view.show_question);
+
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    student.get(format!("{base}/")).send().await.unwrap();
+    let page = student
+        .get(&question.answer_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!page.contains("wrong with the pipeline"), "{page}");
+    assert!(
+        !page.contains("Roury"),
+        "the heading is part of the question"
+    );
+    assert!(page.contains("Otázka je jen na plátně"), "{page}");
+    assert!(page.contains("a subshell swallows the variable"), "{page}");
+
+    // The teacher's screen shows everything, which is the whole point.
+    let display = reqwest::Client::new()
+        .get(&question.display_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(display.contains("wrong with the pipeline"), "{display}");
+    assert!(display.contains("a subshell swallows the variable"));
+
+    // Nothing but the labels: the phone is a keypad with A and B on it.
+    let question = ask(StudentView {
+        show_question: false,
+        show_answers: false,
+    })
+    .await;
+    let page = student
+        .get(&question.answer_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!page.contains("wrong with the pipeline"), "{page}");
+    assert!(!page.contains("a subshell swallows"), "{page}");
+    assert!(page.contains("labels-only"), "{page}");
+    assert!(page.contains(">A</span>"), "{page}");
+    assert!(page.contains(">B</span>"), "{page}");
+    dump_page("answer-labels-only.html", &page);
+
+    // Answering works the same way, and so do the results.
+    let response = student
+        .post(format!("{}/answer", question.answer_url))
+        .form(&[("question", question.id.as_str()), ("answer", "0")])
+        .send()
+        .await
+        .unwrap();
+    assert!(response.text().await.unwrap().contains("byla zaznamenána"));
+
+    api.post(format!("{base}/api/v1/questions/{}/close", question.id))
+        .bearer_auth(token.clone())
+        .send()
+        .await
+        .unwrap();
+    let page = student
+        .get(&question.answer_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(page.contains("class=\"bars\""), "the bar graph is there");
+    assert!(!page.contains("a subshell swallows"), "{page}");
+
+    // The teacher's CSV keeps the real text, hidden or not.
+    let results: Results = api
+        .get(format!("{base}/api/v1/questions/{}/results", question.id))
+        .bearer_auth(token.clone())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        results.rows[0].answer_text,
+        "a subshell swallows the variable"
+    );
+}
+
+#[tokio::test]
 async fn logging_out_removes_the_room() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
@@ -462,6 +601,7 @@ async fn logging_out_removes_the_room() {
         .json(&CreateQuestion {
             source_name: "otazky.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
         })
         .send()
         .await
@@ -552,6 +692,7 @@ async fn logging_out_removes_the_room() {
         .json(&CreateQuestion {
             source_name: "otazky.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
         })
         .send()
         .await
@@ -575,6 +716,7 @@ async fn an_unusable_question_is_refused_with_an_explanation() {
         .json(&CreateQuestion {
             source_name: "broken.md".to_owned(),
             markdown: "A question without any answers.\n".to_owned(),
+            view: StudentView::default(),
         })
         .send()
         .await

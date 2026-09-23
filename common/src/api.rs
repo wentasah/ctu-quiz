@@ -26,6 +26,30 @@ pub struct OidcInfo {
     pub scopes: Vec<String>,
 }
 
+/// What of a question students see on their own device.
+///
+/// The question and the answers are on the teacher's screen in any case;
+/// keeping them off the phones makes it harder to paste the question into a
+/// chatbot, and the students still have their buttons to answer with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StudentView {
+    /// Whether the question text is shown to students.
+    pub show_question: bool,
+    /// Whether the answers are shown with their text. Without it a student
+    /// sees the labels `A`, `B`, `C`, ... alone.
+    pub show_answers: bool,
+}
+
+impl Default for StudentView {
+    /// Everything, which is what a question without an opinion gets.
+    fn default() -> Self {
+        Self {
+            show_question: true,
+            show_answers: true,
+        }
+    }
+}
+
 /// `POST /api/v1/questions` - publish a question read from a Markdown file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateQuestion {
@@ -34,6 +58,10 @@ pub struct CreateQuestion {
     /// The Markdown source; the server parses it with
     /// [`quiz_common::parse_question`](crate::parse_question).
     pub markdown: String,
+    /// What students see on their own device; everything by default, which
+    /// is also what an older CLI that does not send it gets.
+    #[serde(default)]
+    pub view: StudentView,
 }
 
 /// One possible answer as shown to students.
@@ -49,6 +77,9 @@ pub struct AnswerInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuestionInfo {
     pub id: String,
+    /// What students see of this question on their own device.
+    #[serde(default)]
+    pub view: StudentView,
     /// Short numeric code students type on the main page.
     ///
     /// It belongs to the teacher's room, not to the single question, so it

@@ -88,6 +88,27 @@ is what `quiz ask` opens on the projector, and its own CSV.
 Two lectures at the same time under the same login would share the room; use a
 second login (or log out in between) to keep them apart.
 
+## Keeping the question off the phones
+
+Everything students need is on the projector, so their own screen does not
+have to repeat it — and what is not on their screen is a lot more work to
+paste into a chatbot:
+
+| `quiz ask` | On the phone |
+| --- | --- |
+| (nothing) | the question and the answers, as before |
+| `--hide-question` | the answers only; *„Otázka je jen na plátně.“* instead of the text |
+| `--labels-only` | a keypad of the labels `A`, `B`, `C`, … |
+
+`--labels-only` is the short way of writing `--hide-question --hide-answers`.
+
+`--hide-answers` on its own is allowed too, and leaves the question with bare
+labels to choose from. `quiz ask` prints what it settled on (`Students see:
+…`), the choice is in the log next to the created question, and it holds for
+the results of that question as well — the bar graph on a phone then shows
+the counts without the answer texts. The presentation view, the CSV and the
+API always carry the full text.
+
 ## The question format
 
 A question is one Markdown file. Everything above the first horizontal rule
@@ -307,6 +328,8 @@ forward the path unchanged — see `deploy/nginx.conf.example`.
 ```sh
 quiz ask otazky.md            # publish, present, collect, save (the main one)
 quiz ask otazky.md -o answers.csv --close-after 120
+quiz ask otazky.md --hide-question   # question only on the projector
+quiz ask otazky.md --labels-only     # phones show A, B, C only
 quiz parse otazky.md          # check the Markdown, no server needed
 quiz login                    # log in ahead of the lecture
 quiz whoami                    # who am I, and may I ask questions?

@@ -74,7 +74,12 @@ pub async fn create_question(
     })?;
 
     let id = state
-        .add_question(source_name(&request.source_name), content, &teacher.login)
+        .add_question(
+            source_name(&request.source_name),
+            content,
+            request.view,
+            &teacher.login,
+        )
         .await?;
 
     let store = state.store.read().await;
@@ -88,6 +93,8 @@ pub async fn create_question(
         teacher = %teacher.login,
         source = %question.source_name,
         answers = question.content.answers.len(),
+        show_question = question.view.show_question,
+        show_answers = question.view.show_answers,
         answer_url = %question.answer_url,
         display_url = %question.display_url,
         "question created"

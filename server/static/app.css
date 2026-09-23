@@ -154,6 +154,22 @@ button.answer .label, .options .label, .bars .label {
 button.answer p:first-child { margin-top: 0; }
 button.answer p:last-child { margin-bottom: 0; }
 
+/* Question and answers are on the projector only: the phone is a keypad. */
+.hidden-prompt { font-style: italic; }
+
+.answers.labels-only {
+  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  gap: .8rem;
+}
+
+.answers.labels-only button.answer {
+  display: block;
+  text-align: center;
+  padding: 1.4rem .5rem;
+}
+
+.answers.labels-only .label { font-size: 2rem; }
+
 /* ---- bar graph of the results ---- */
 
 .bars { list-style: none; margin: 1rem 0; padding: 0; display: grid; gap: .5rem; }

@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}{% if waiting %}Kvíz{% else %}{{ title }}{% endif %}{% endblock %}
+{% block title %}{% if title.is_empty() %}Kvíz{% else %}{{ title }}{% endif %}{% endblock %}
 {% block body_class %}answer{% endblock %}
 {% block content %}
 <div class="card" id="live" data-events="{{ prefix }}/r/{{ room }}/events"
@@ -13,19 +13,27 @@
     Tuto stránku nezavírejte.</p>
   <p class="status count">Kód této místnosti: <strong>{{ code }}</strong></p>
   {% else %}
+  {% if show_question %}
   <div class="prompt">{{ prompt_html|safe }}</div>
+  {% else %}
+  <p class="status hidden-prompt">Otázka je jen na plátně.</p>
+  {% endif %}
 
   {% if open %}
-  <form method="post" action="{{ prefix }}/r/{{ room }}/answer" class="answers">
+  <form method="post" action="{{ prefix }}/r/{{ room }}/answer"
+        class="answers{% if !show_answers %} labels-only{% endif %}">
     <input type="hidden" name="question" value="{{ question }}">
     {% for bar in bars %}
     <button type="submit" name="answer" value="{{ loop.index0 }}"
             class="answer{% if bar.chosen %} chosen{% endif %}">
       <span class="label">{{ bar.label }}</span>
-      <span class="text">{{ bar.html|safe }}</span>
+      {% if show_answers %}<span class="text">{{ bar.html|safe }}</span>{% endif %}
     </button>
     {% endfor %}
   </form>
+  {% if !show_answers %}
+  <p class="status">Možnosti jsou na plátně; vyberte písmeno své odpovědi.</p>
+  {% endif %}
   {% if !chosen_label.is_empty() %}
   <p class="status ok">Vaše odpověď <strong>{{ chosen_label }}</strong> byla zaznamenána.
     Dokud je otázka otevřená, můžete ji změnit.</p>
