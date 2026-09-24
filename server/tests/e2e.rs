@@ -44,6 +44,7 @@ async fn a_question_is_asked_answered_and_closed() {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
+            shuffle: false,
         })
         .send()
         .await
@@ -234,6 +235,7 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
+            shuffle: false,
         });
         let request = match token {
             Some(token) => request.bearer_auth(token),
@@ -278,6 +280,7 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
+            shuffle: false,
         })
         .send()
         .await
@@ -310,6 +313,7 @@ async fn html_in_a_question_reaches_the_browser_escaped() {
                        - <img src=x onerror=alert(2)>\n- plain\n"
                 .to_owned(),
             view: StudentView::default(),
+            shuffle: false,
         })
         .send()
         .await
@@ -351,6 +355,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
                 source_name: "otazky.md".to_owned(),
                 markdown,
                 view: StudentView::default(),
+                shuffle: false,
             });
         async move {
             let response = request.send().await.unwrap();
@@ -471,6 +476,7 @@ async fn a_hidden_question_stays_on_the_projector() {
                 source_name: "otazky.md".to_owned(),
                 markdown: markdown.to_owned(),
                 view,
+                shuffle: false,
             });
         async move {
             request
@@ -588,6 +594,131 @@ async fn a_hidden_question_stays_on_the_projector() {
 }
 
 #[tokio::test]
+async fn shuffled_answers_are_the_same_for_everybody() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.id_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    // Eight answers, so an order that comes out unshuffled by chance is a
+    // 1 in 40320 event rather than something to worry about.
+    let markdown = format!(
+        "Which one?\n\n---\n\n{}",
+        (0..8).fold(String::new(), |mut list, i| {
+            list.push_str(&format!("- answer number {i}\n"));
+            list
+        })
+    );
+    let of_the_file: Vec<String> = quiz_common::parse_question(&markdown)
+        .unwrap()
+        .answers
+        .iter()
+        .map(|answer| answer.plain.clone())
+        .collect();
+
+    let ask = |shuffle: bool| {
+        let request = api
+            .post(format!("{base}/api/v1/questions"))
+            .bearer_auth(token.clone())
+            .json(&CreateQuestion {
+                source_name: "otazky.md".to_owned(),
+                markdown: markdown.clone(),
+                view: StudentView::default(),
+                shuffle,
+            });
+        async move {
+            request
+                .send()
+                .await
+                .unwrap()
+                .json::<QuestionInfo>()
+                .await
+                .unwrap()
+        }
+    };
+
+    // Without the flag the answers are in the order of the Markdown file.
+    let plain = ask(false).await;
+    let order: Vec<_> = plain.answers.iter().map(|a| a.text.clone()).collect();
+    assert_eq!(order, of_the_file);
+
+    let question = ask(true).await;
+    let shuffled: Vec<_> = question.answers.iter().map(|a| a.text.clone()).collect();
+    assert_ne!(shuffled, of_the_file, "the answers were not shuffled");
+    let mut sorted = shuffled.clone();
+    sorted.sort();
+    let mut expected = of_the_file.clone();
+    expected.sort();
+    assert_eq!(sorted, expected, "an answer was lost or duplicated");
+
+    // The labels still run down the screen.
+    let labels: Vec<_> = question.answers.iter().map(|a| a.label.as_str()).collect();
+    assert_eq!(labels, ["A", "B", "C", "D", "E", "F", "G", "H"]);
+
+    // Everybody sees that one order: the projector and the phones alike.
+    let display = reqwest::Client::new()
+        .get(&question.display_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    student.get(format!("{base}/")).send().await.unwrap();
+    let page = student
+        .get(&question.answer_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert_eq!(order_of(&display, &of_the_file), shuffled);
+    assert_eq!(order_of(&page, &of_the_file), shuffled);
+
+    // And the answer a student picks is the one that was in that place.
+    let response = student
+        .post(format!("{}/answer", question.answer_url))
+        .form(&[("question", question.id.as_str()), ("answer", "0")])
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+    api.post(format!("{base}/api/v1/questions/{}/close", question.id))
+        .bearer_auth(token.clone())
+        .send()
+        .await
+        .unwrap();
+    let results: Results = api
+        .get(format!("{base}/api/v1/questions/{}/results", question.id))
+        .bearer_auth(token.clone())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(results.rows[0].answer, "A");
+    assert_eq!(results.rows[0].answer_text, shuffled[0]);
+}
+
+/// The answers of `texts` in the order in which they appear in a page.
+fn order_of(page: &str, texts: &[String]) -> Vec<String> {
+    let mut found: Vec<(usize, String)> = texts
+        .iter()
+        .filter_map(|text| page.find(text.as_str()).map(|at| (at, text.clone())))
+        .collect();
+    found.sort();
+    found.into_iter().map(|(_, text)| text).collect()
+}
+
+#[tokio::test]
 async fn logging_out_removes_the_room() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
@@ -602,6 +733,7 @@ async fn logging_out_removes_the_room() {
             source_name: "otazky.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
+            shuffle: false,
         })
         .send()
         .await
@@ -693,6 +825,7 @@ async fn logging_out_removes_the_room() {
             source_name: "otazky.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
+            shuffle: false,
         })
         .send()
         .await
@@ -717,6 +850,7 @@ async fn an_unusable_question_is_refused_with_an_explanation() {
             source_name: "broken.md".to_owned(),
             markdown: "A question without any answers.\n".to_owned(),
             view: StudentView::default(),
+            shuffle: false,
         })
         .send()
         .await

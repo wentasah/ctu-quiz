@@ -11,6 +11,7 @@
 //! Horizontal rules inside fenced code blocks are ignored.
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html};
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
 use crate::highlight;
@@ -103,6 +104,19 @@ pub fn parse(source: &str) -> Result<Question, ParseError> {
         prompt_markdown: prompt_markdown.to_owned(),
         answers,
     })
+}
+
+/// Puts the possible answers in a random order.
+///
+/// The labels are handed out again afterwards, so `A` is still the first
+/// answer on the screen and everybody - the projector, every phone and the
+/// CSV - sees the same order. Asking the same file again shuffles anew,
+/// which is the point: the right answer is not always `B`.
+pub fn shuffle_answers(question: &mut Question) {
+    question.answers.shuffle(&mut rand::rng());
+    for (index, answer) in question.answers.iter_mut().enumerate() {
+        answer.label = label(index);
+    }
 }
 
 /// The label of the `index`-th answer: `A`, `B`, `C`, ...
@@ -576,6 +590,42 @@ What's wrong with it?
 
         let many = format!("Q?\n\n---\n\n{}", "- answer\n".repeat(27));
         assert_eq!(parse(&many).unwrap_err(), ParseError::TooManyAnswers(27));
+    }
+
+    #[test]
+    fn shuffling_keeps_every_answer_and_hands_the_labels_out_again() {
+        let source = format!(
+            "Q?\n\n---\n\n{}",
+            (0..8).fold(String::new(), |mut list, i| {
+                list.push_str(&format!("- answer {i}\n"));
+                list
+            })
+        );
+        let original = parse(&source).unwrap();
+
+        let mut orders = std::collections::HashSet::new();
+        for _ in 0..50 {
+            let mut question = original.clone();
+            shuffle_answers(&mut question);
+
+            // The labels are always A, B, C, ... down the screen.
+            let labels: Vec<_> = question.answers.iter().map(|a| a.label.clone()).collect();
+            assert_eq!(labels, (0..8).map(label).collect::<Vec<_>>());
+
+            // Every answer is still there, exactly once, with its own text.
+            let mut texts: Vec<_> = question.answers.iter().map(|a| a.plain.clone()).collect();
+            orders.insert(texts.clone());
+            texts.sort();
+            let mut expected: Vec<_> = original.answers.iter().map(|a| a.plain.clone()).collect();
+            expected.sort();
+            assert_eq!(texts, expected);
+            for answer in &question.answers {
+                assert!(answer.html.contains(&answer.plain), "{answer:?}");
+            }
+        }
+
+        // 8 answers, 50 tries: one single order would not be a shuffle.
+        assert!(orders.len() > 1, "the order never changed");
     }
 
     #[test]

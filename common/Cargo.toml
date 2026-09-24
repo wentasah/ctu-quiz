@@ -15,6 +15,7 @@ highlight = ["dep:syntect"]
 [dependencies]
 chrono.workspace = true
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+rand.workspace = true
 serde.workspace = true
 # Pure Rust: fancy-regex instead of the oniguruma C library, and no themes,
 # because the highlighter emits CSS classes rather than inline colours.

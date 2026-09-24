@@ -63,7 +63,7 @@ pub async fn create_question(
     Teacher(teacher): Teacher,
     Json(request): Json<CreateQuestion>,
 ) -> Result<(StatusCode, Json<QuestionInfo>), ApiFailure> {
-    let content = quiz_common::parse_question(&request.markdown).map_err(|error| {
+    let mut content = quiz_common::parse_question(&request.markdown).map_err(|error| {
         tracing::info!(
             teacher = %teacher.login,
             source = %request.source_name,
@@ -72,6 +72,10 @@ pub async fn create_question(
         );
         ApiFailure::bad_request(error.to_string())
     })?;
+
+    if request.shuffle {
+        quiz_common::question::shuffle_answers(&mut content);
+    }
 
     let id = state
         .add_question(
@@ -95,6 +99,7 @@ pub async fn create_question(
         answers = question.content.answers.len(),
         show_question = question.view.show_question,
         show_answers = question.view.show_answers,
+        shuffled = request.shuffle,
         answer_url = %question.answer_url,
         display_url = %question.display_url,
         "question created"

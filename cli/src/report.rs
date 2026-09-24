@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use quiz_common::{
     Question,
-    api::{QuestionInfo, Results},
+    api::{AnswerInfo, QuestionInfo, Results},
 };
 
 /// Shows the parsed question, so that the teacher can check the Markdown was
@@ -21,6 +21,14 @@ pub fn print_question(question: &Question) {
         println!("  {}) {}", answer.label, ellipsis(&answer.plain, 100));
     }
     println!();
+}
+
+/// Lists the answers of a published question, in the order the students see
+/// them, which after a shuffle is not the order of the Markdown file.
+pub fn print_answers(answers: &[AnswerInfo]) {
+    for answer in answers {
+        println!("  {}) {}", answer.label, ellipsis(&answer.text, 100));
+    }
 }
 
 /// Prints the final counts as a bar graph, the same data the browser shows.

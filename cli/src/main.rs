@@ -49,6 +49,7 @@ async fn run(cli: &Cli) -> Result<()> {
             hide_question,
             hide_answers,
             labels_only,
+            shuffle,
         } => {
             ask(
                 cli,
@@ -56,6 +57,7 @@ async fn run(cli: &Cli) -> Result<()> {
                 output.clone(),
                 *close_after,
                 student_view(*hide_question, *hide_answers, *labels_only),
+                *shuffle,
             )
             .await
         }
@@ -87,6 +89,7 @@ async fn ask(
     output: Option<PathBuf>,
     close_after: Option<u64>,
     view: StudentView,
+    shuffle: bool,
 ) -> Result<()> {
     let markdown = read_question(file)?;
     report::print_question(
@@ -103,8 +106,16 @@ async fn ask(
                 .unwrap_or_else(|| "question.md".to_owned()),
             markdown,
             view,
+            shuffle,
         })
         .await?;
+
+    // The order on the screen is the server's now, so show it rather than
+    // the one the file has.
+    if shuffle {
+        println!("\nThe answers were shuffled into this order:");
+        report::print_answers(&question.answers);
+    }
 
     println!("Question code:     {}", question.code);
     println!("Students answer at: {}", question.answer_url);

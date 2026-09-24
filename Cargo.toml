@@ -25,6 +25,8 @@ clap_complete = "4"
 # types can be shared with the OIDC code.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
+# Already in the tree through the HTTP stack; used to shuffle the answers.
+rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

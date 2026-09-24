@@ -64,6 +64,13 @@ pub enum Command {
         /// `--hide-question` and `--hide-answers`.
         #[arg(long)]
         labels_only: bool,
+        /// Put the answers in a random order.
+        ///
+        /// Everybody sees the same order - the projector, every phone and
+        /// the CSV - but asking the same file again shuffles anew, so the
+        /// right answer is not in the same place as last year.
+        #[arg(long)]
+        shuffle: bool,
     },
     /// Show how a Markdown file is parsed, without contacting the server.
     Parse {

@@ -62,6 +62,11 @@ pub struct CreateQuestion {
     /// is also what an older CLI that does not send it gets.
     #[serde(default)]
     pub view: StudentView,
+    /// Whether the server shuffles the answers before showing them. The
+    /// labels are handed out after the shuffle, so `A` is the first answer
+    /// on the screen either way.
+    #[serde(default)]
+    pub shuffle: bool,
 }
 
 /// One possible answer as shown to students.

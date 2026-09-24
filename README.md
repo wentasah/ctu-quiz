@@ -109,6 +109,15 @@ the results of that question as well — the bar graph on a phone then shows
 the counts without the answer texts. The presentation view, the CSV and the
 API always carry the full text.
 
+## Shuffling the answers
+
+`quiz ask --shuffle` puts the possible answers in a random order before the
+question is published. The labels are handed out afterwards, so `A` is still
+the first answer on the screen and everybody sees that one order: the
+projector, every phone and the CSV. Asking the same file again shuffles
+anew, so the right answer is not where it was last year, and the CLI prints
+the order it ended up with.
+
 ## The question format
 
 A question is one Markdown file. Everything above the first horizontal rule
@@ -347,6 +356,7 @@ quiz ask otazky.md            # publish, present, collect, save (the main one)
 quiz ask otazky.md -o answers.csv --close-after 120
 quiz ask otazky.md --hide-question   # question only on the projector
 quiz ask otazky.md --labels-only     # phones show A, B, C only
+quiz ask otazky.md --shuffle         # answers in a random order
 quiz parse otazky.md          # check the Markdown, no server needed
 quiz login                    # log in ahead of the lecture
 quiz whoami                    # who am I, and may I ask questions?
@@ -468,7 +478,7 @@ change the verbosity. The log is append-only and never read back by the server.
 | 5 | All operations logged to a file by a logging framework | `tracing` with a file and a stderr layer, set up in `init_logging` (`server/src/lib.rs`) |
 | 6 | Authorization via OIDC | `server/src/auth.rs` (browser sessions, ID-token checks), `cli/src/auth.rs` (loopback login) |
 | 7 | Question read from Markdown, shown in a browser, URL printed otherwise | `cli/src/main.rs`: `ask` and `show_in_browser` |
-| 8 | Answers are the top-level list items after `---` | `common/src/question.rs` |
+| 8 | Answers are the top-level list items after `---` | `common/src/question.rs` (`parse`, and `shuffle_answers` for `--shuffle`) |
 | 9 | QR code with the answer URL and a random question code | `server/src/display.rs` (`qr_svg`), room URL and code generated in `state.rs` |
 | 10 | Main page asks for the code and redirects to the QR URL | `server/src/web.rs`: `index`, `join` and `room` |
 | 11 | Live update of the number of answers | `server/src/live.rs` (server-sent events) and `server/static/app.js` |
