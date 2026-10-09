@@ -29,7 +29,7 @@ pub struct Cli {
     pub no_browser: bool,
 
     /// Port the OIDC login listens on; 0 picks a free one.
-    #[arg(long, env = "QUIZ_LOGIN_PORT", default_value_t = 8765, global = true)]
+    #[arg(long, env = "QUIZ_LOGIN_PORT", default_value_t = 0, global = true)]
     pub login_port: u16,
 
     #[command(subcommand)]
