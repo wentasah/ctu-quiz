@@ -225,7 +225,8 @@ body.display .qr svg { width: 100%; height: auto; background: #fff; border-radiu
 body.display .url { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
 body.display .code-label { color: var(--muted); margin-bottom: 0; }
 
-body.display .code {
+/* `.join` keeps this off the `pre.code` blocks of the question. */
+body.display .join .code {
   font: 700 clamp(2rem, 4vw, 3.4rem)/1 ui-monospace, monospace;
   letter-spacing: .25rem;
   margin: .25rem 0 1rem;
