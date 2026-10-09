@@ -22,7 +22,7 @@
   <aside class="join">
     {% if open %}
     <div class="qr">{{ qr_svg|safe }}</div>
-    <p class="url">{{ answer_url }}</p>
+    <p class="url"><a href="{{ answer_url }}" target="_blank" rel="noopener">{{ answer_url }}</a></p>
     <p class="code-label">nebo zadejte na <strong>{{ host }}</strong> kód</p>
     <p class="code">{{ code }}</p>
     <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>
@@ -33,4 +33,4 @@
   </aside>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ prefix }}/static/app.js"></script>{% endblock %}
+{% block scripts %}<script src="{{ prefix }}/static/app.js?v={{ crate::views::asset_version() }}"></script>{% endblock %}

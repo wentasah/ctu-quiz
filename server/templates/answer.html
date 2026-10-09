@@ -55,4 +55,4 @@
   {% endif %}
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ prefix }}/static/app.js"></script>{% endblock %}
+{% block scripts %}<script src="{{ prefix }}/static/app.js?v={{ crate::views::asset_version() }}"></script>{% endblock %}

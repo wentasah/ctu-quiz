@@ -819,6 +819,47 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
     assert_eq!(results.rows[0].points, Some(-1.0));
 }
 
+#[tokio::test]
+async fn pages_link_the_stylesheet_and_script_of_this_version() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let question: QuestionInfo = reqwest::Client::new()
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(idp.id_token(&teacher, CLIENT_ID))
+        .json(&CreateQuestion {
+            source_name: "otazky.md".to_owned(),
+            markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
+            shuffle: false,
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let page = reqwest::get(&question.display_url)
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+
+    // A new server changes the URLs, so no browser keeps an old copy.
+    for (file, expected) in [("app.css", "body.display"), ("app.js", "EventSource")] {
+        let at = page.find(&format!("/static/{file}?v=")).expect(file);
+        let url = &page[at..at + page[at..].find('"').unwrap()];
+        let body = reqwest::get(format!("{base}{url}"))
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        assert!(body.contains(expected), "{url}");
+    }
+}
+
 /// The answers of `texts` in the order in which they appear in a page.
 fn order_of(page: &str, texts: &[String]) -> Vec<String> {
     let mut found: Vec<(usize, String)> = texts

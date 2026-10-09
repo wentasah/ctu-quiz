@@ -21,6 +21,24 @@ pub fn prefix() -> String {
     PREFIX.get().cloned().unwrap_or_default()
 }
 
+/// The stylesheet and the script, compiled into the binary.
+pub const CSS: &str = include_str!("../static/app.css");
+pub const JS: &str = include_str!("../static/app.js");
+
+/// A short hash of [`CSS`] and [`JS`], appended to their URLs as `?v=...`.
+///
+/// Browsers cache the two files for a while; a new version of the server
+/// changes the URL, so pages never pair new HTML with an old stylesheet.
+pub fn asset_version() -> &'static str {
+    static VERSION: OnceLock<String> = OnceLock::new();
+    VERSION.get_or_init(|| {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        (CSS, JS).hash(&mut hasher);
+        format!("{:08x}", hasher.finish() as u32)
+    })
+}
+
 /// Builds a link to a path of this server, honouring the path prefix.
 pub fn link(path: &str) -> String {
     debug_assert!(path.starts_with('/'));

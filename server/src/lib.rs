@@ -202,13 +202,11 @@ async fn shutdown_signal() {
 }
 
 async fn stylesheet() -> impl IntoResponse {
-    static CSS: &str = include_str!("../static/app.css");
-    static_file("text/css; charset=utf-8", CSS)
+    static_file("text/css; charset=utf-8", views::CSS)
 }
 
 async fn javascript() -> impl IntoResponse {
-    static JS: &str = include_str!("../static/app.js");
-    static_file("text/javascript; charset=utf-8", JS)
+    static_file("text/javascript; charset=utf-8", views::JS)
 }
 
 /// The two static files are compiled into the binary, so that the server needs
