@@ -10,6 +10,7 @@ mod auth;
 /// it and generate the shell completions from it.
 mod cli;
 mod client;
+mod config;
 mod report;
 
 use std::{
@@ -21,7 +22,7 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use chrono::Local;
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command};
 use client::Api;
 use quiz_common::api::{CreateQuestion, StudentView};
@@ -30,7 +31,13 @@ use url::Url;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let cli = match parse_command_line() {
+        Ok(cli) => cli,
+        Err(error) => {
+            eprintln!("quiz: {error:#}");
+            return ExitCode::FAILURE;
+        }
+    };
     match run(&cli).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -38,6 +45,13 @@ async fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Parses the command line, with the defaults from the configuration files
+/// in place of the built-in ones.
+fn parse_command_line() -> Result<Cli> {
+    let command = config::apply(Cli::command()).context("reading the configuration failed")?;
+    Ok(Cli::from_arg_matches(&command.get_matches()).unwrap_or_else(|error| error.exit()))
 }
 
 async fn run(cli: &Cli) -> Result<()> {

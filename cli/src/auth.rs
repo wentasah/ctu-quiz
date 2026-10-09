@@ -52,14 +52,7 @@ struct Cache {
 
 /// `$XDG_CONFIG_HOME/quiz/tokens.json`.
 fn cache_path() -> Result<PathBuf> {
-    let dir = match std::env::var_os("XDG_CONFIG_HOME") {
-        Some(dir) if !dir.is_empty() => PathBuf::from(dir),
-        _ => PathBuf::from(
-            std::env::var_os("HOME").context("neither XDG_CONFIG_HOME nor HOME is set")?,
-        )
-        .join(".config"),
-    };
-    Ok(dir.join("quiz").join("tokens.json"))
+    Ok(crate::config::dir()?.join("tokens.json"))
 }
 
 fn load_cache() -> Cache {

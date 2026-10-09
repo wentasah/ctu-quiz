@@ -371,6 +371,27 @@ listener used during the login. The ID token is cached in
 `$XDG_CONFIG_HOME/quiz/tokens.json` (mode 0600), so the browser is normally
 only needed once a day.
 
+Default values of the options can be kept in TOML files, so that they need
+not be typed every time. `quiz` reads `$XDG_CONFIG_HOME/quiz/config.toml` and
+`quiz.toml` from the current directory or the nearest of its parents; the
+latter wins, so a course directory can override the teacher's own defaults.
+The keys are the long option names, with the options of a subcommand in a
+table of its name:
+
+```toml
+server = "https://quiz.osy.fel.cvut.cz"
+
+[ask]
+shuffle = true
+hide-question = true
+close-after = 120
+```
+
+An environment variable or an option on the command line still wins over
+the files. A flag set to `true` in a file cannot be switched off on the
+command line, only by `false` in a nearer `quiz.toml`. The `--help` output
+shows the defaults in effect for the options that take a value.
+
 Ctrl-C does the same as Enter: the question is closed and the answers are
 saved, so a mistyped key does not lose the collected data.
 
@@ -496,6 +517,7 @@ change the verbosity. The log is append-only and never read back by the server.
 | `server/src/state.rs` | the in-memory questions, answers and sessions |
 | `server/src/web.rs` | the student pages |
 | `cli/src/cli.rs` | the clap command line, shared with `cli/build.rs` |
+| `cli/src/config.rs` | default option values from `quiz.toml` and `~/.config/quiz/config.toml` |
 | `cli/build.rs` | writes the shell completions during the build |
 | `server/src/display.rs` | the presentation view and the QR code |
 | `server/src/live.rs` | the server-sent event streams |

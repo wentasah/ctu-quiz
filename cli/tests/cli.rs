@@ -257,6 +257,60 @@ async fn parse_checks_a_question_file_without_a_server() {
     assert!(printed.contains("no `---` separator found"), "{printed}");
 }
 
+#[tokio::test]
+async fn a_configuration_file_is_found_in_a_parent_directory() {
+    let dir = scratch("config");
+    let lecture = dir.join("course").join("week1");
+    std::fs::create_dir_all(&lecture).unwrap();
+    std::fs::write(lecture.join("question.md"), EXAMPLE_QUESTION).unwrap();
+    // A misspelt option shows that the file was read, and which file it was.
+    std::fs::write(
+        dir.join("course").join("quiz.toml"),
+        "[ask]\nshufle = true\n",
+    )
+    .unwrap();
+
+    let output = Command::new(QUIZ)
+        .args(["parse", "question.md"])
+        .current_dir(&lecture)
+        .env("XDG_CONFIG_HOME", &dir)
+        .output()
+        .await
+        .unwrap();
+    assert!(!output.status.success());
+    let printed = String::from_utf8_lossy(&output.stderr);
+    assert!(printed.contains("unknown option `ask.shufle`"), "{printed}");
+    assert!(printed.contains("quiz.toml"), "{printed}");
+
+    // The teacher's own file is read as well, and checked the same way.
+    std::fs::write(
+        dir.join("course").join("quiz.toml"),
+        "[ask]\nshuffle = true\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("quiz")).unwrap();
+    std::fs::write(dir.join("quiz").join("config.toml"), "sever = 'x'\n").unwrap();
+    let output = Command::new(QUIZ)
+        .args(["parse", "question.md"])
+        .current_dir(&lecture)
+        .env("XDG_CONFIG_HOME", &dir)
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stderr);
+    assert!(printed.contains("unknown option `sever`"), "{printed}");
+
+    std::fs::remove_file(dir.join("quiz").join("config.toml")).unwrap();
+    let output = Command::new(QUIZ)
+        .args(["parse", "question.md"])
+        .current_dir(&lecture)
+        .env("XDG_CONFIG_HOME", &dir)
+        .output()
+        .await
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn an_executable_question_loses_its_shebang_line() {
