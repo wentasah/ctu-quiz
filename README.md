@@ -19,7 +19,7 @@ the CLI. The student-facing web pages are in Czech, everything else in English.
 ## How one question works
 
 ```
-$ quiz --server https://quiz.osy.fel.cvut.cz ask cviceni/01regex/otazky.md
+$ quiz --server https://quiz.iid.ciirc.cvut.cz ask cviceni/01regex/otazky.md
 Consider the following BASH code: ...
 
   A) In Bash, every stage of a pipeline runs in its own subshell. ...
@@ -27,8 +27,8 @@ Consider the following BASH code: ...
   C) It will work only in BASH 4.0 and newer.
 
 Question code:     428173
-Students answer at: https://quiz.osy.fel.cvut.cz/r/4f3c...c1
-Presentation view:  https://quiz.osy.fel.cvut.cz/d/9a77...b4
+Students answer at: https://quiz.iid.ciirc.cvut.cz/r/4f3c...c1
+Presentation view:  https://quiz.iid.ciirc.cvut.cz/d/9a77...b4
 
 The presentation view was opened in a browser.
 Press Enter to close the question and save the answers (Ctrl-C works too).
@@ -316,7 +316,7 @@ email` or `--login-claim subject` if your provider is different.
 ```sh
 quiz-server \
     --listen 127.0.0.1:8080 \
-    --public-url https://quiz.osy.fel.cvut.cz \
+    --public-url https://quiz.iid.ciirc.cvut.cz \
     --oidc-issuer https://idp.example.org/realms/fel \
     --oidc-client-id quiz \
     --teachers sojkam1,vlasakji
@@ -379,7 +379,7 @@ The keys are the long option names, with the options of a subcommand in a
 table of its name:
 
 ```toml
-server = "https://quiz.osy.fel.cvut.cz"
+server = "https://quiz.iid.ciirc.cvut.cz"
 
 [ask]
 shuffle = true
@@ -428,7 +428,7 @@ TLS. Ready-made pieces:
     imports = [ inputs.quiz.nixosModules.default ];
     services.quiz-server = {
       enable = true;
-      publicUrl = "https://quiz.osy.fel.cvut.cz";
+      publicUrl = "https://quiz.iid.ciirc.cvut.cz";
       issuer = "https://idp.example.org/realms/fel";
       teachers = [ "sojkam1" ];
       environmentFile = "/run/secrets/quiz-server.env";  # the client secret

@@ -80,7 +80,7 @@
 
             publicUrl = lib.mkOption {
               type = lib.types.str;
-              example = "https://quiz.osy.fel.cvut.cz";
+              example = "https://quiz.iid.ciirc.cvut.cz";
               description = ''
                 Public URL of the server. It ends up in the QR code and in the
                 OIDC redirect URI, so it has to match the reverse proxy.

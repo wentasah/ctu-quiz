@@ -6,10 +6,10 @@
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name quiz.osy.fel.cvut.cz;
+    server_name quiz.iid.ciirc.cvut.cz;
 
-    ssl_certificate     /etc/letsencrypt/live/quiz.osy.fel.cvut.cz/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/quiz.osy.fel.cvut.cz/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/quiz.iid.ciirc.cvut.cz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/quiz.iid.ciirc.cvut.cz/privkey.pem;
 
     location / {
         # No trailing slash: the path is forwarded unchanged, which is what
@@ -31,6 +31,6 @@ server {
 server {
     listen 80;
     listen [::]:80;
-    server_name quiz.osy.fel.cvut.cz;
+    server_name quiz.iid.ciirc.cvut.cz;
     return 301 https://$host$request_uri;
 }
