@@ -26,7 +26,7 @@ use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command};
 use client::Api;
 use quiz_common::api::{CreateQuestion, StudentView};
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use url::Url;
 
 #[tokio::main]
@@ -83,6 +83,7 @@ async fn run(cli: &Cli) -> Result<()> {
             Some(id) => close(cli, id, output.clone()).await,
             None => close_room(cli, output.is_some()).await,
         },
+        Command::Reveal { id } => reveal(cli, id).await,
     }
 }
 
@@ -137,7 +138,10 @@ async fn ask(
     println!("Students see:       {}", describe(view));
     show_in_browser(&question.display_url, !cli.no_browser);
 
-    wait_for_close(&api, &question.id, close_after).await?;
+    // One reader for the whole run, so that an Enter typed ahead is not
+    // lost between the two prompts.
+    let mut stdin = Some(BufReader::new(tokio::io::stdin()).lines());
+    wait_for_close(&api, &question.id, close_after, &mut stdin).await?;
 
     let closed = api.close(&question.id).await?;
     let results = api.results(&question.id).await?;
@@ -146,6 +150,38 @@ async fn ask(
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
+
+    if closed.answers.iter().any(|answer| answer.points.is_some()) {
+        wait_for_reveal(&api, &question.id, &mut stdin).await?;
+    }
+    Ok(())
+}
+
+/// Lets the teacher talk about the results before the right answers are
+/// marked in them, on the projector and on the students' screens.
+async fn wait_for_reveal(
+    api: &Api,
+    id: &str,
+    stdin: &mut Option<Lines<BufReader<Stdin>>>,
+) -> Result<()> {
+    let later = format!("`quiz reveal {id}` reveals them later");
+    let Some(lines) = stdin else {
+        println!("The right answers were not revealed; {later}.");
+        return Ok(());
+    };
+    println!("Press Enter to reveal the right answers (Ctrl-C ends without them).");
+
+    tokio::select! {
+        line = lines.next_line() => match line {
+            Ok(Some(_)) => {
+                api.reveal(id).await?;
+                println!("The right answers are revealed.");
+            }
+            // No terminal on the standard input: nobody to press Enter.
+            Ok(None) | Err(_) => println!("The right answers were not revealed; {later}."),
+        },
+        _ = tokio::signal::ctrl_c() => println!("\nThe right answers were not revealed; {later}."),
+    }
     Ok(())
 }
 
@@ -250,6 +286,22 @@ async fn close(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<()> {
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
+    Ok(())
+}
+
+/// Marks the right answers of a question whose `quiz ask` ended before.
+async fn reveal(cli: &Cli, id: &str) -> Result<()> {
+    let api = connect(cli, false).await?;
+    let question = api.reveal(id).await?;
+    if question
+        .answers
+        .iter()
+        .any(|answer| answer.points.is_some())
+    {
+        println!("The right answers are revealed.");
+    } else {
+        println!("The question has no points, so there are no right answers to reveal.");
+    }
     Ok(())
 }
 
@@ -361,11 +413,16 @@ fn show_in_browser(url: &str, open_browser: bool) {
 }
 
 /// Shows the number of answers until the teacher closes the question.
-async fn wait_for_close(api: &Api, id: &str, close_after: Option<u64>) -> Result<()> {
+///
+/// `stdin` becomes `None` once the standard input turns out to be closed.
+async fn wait_for_close(
+    api: &Api,
+    id: &str,
+    close_after: Option<u64>,
+    stdin: &mut Option<Lines<BufReader<Stdin>>>,
+) -> Result<()> {
     println!("Press Enter to close the question and save the answers (Ctrl-C works too).");
 
-    let mut lines = BufReader::new(tokio::io::stdin()).lines();
-    let mut stdin_open = true;
     // Redrawing one line is for a terminal; a log file wants one line per
     // change instead of escape sequences.
     let terminal = std::io::stdout().is_terminal();
@@ -395,11 +452,13 @@ async fn wait_for_close(api: &Api, id: &str, close_after: Option<u64>) -> Result
                     return Ok(());
                 }
             }
-            line = lines.next_line(), if stdin_open => {
+            // The guard keeps the expression from being evaluated at all
+            // once the standard input is gone.
+            line = stdin.as_mut().expect("guarded").next_line(), if stdin.is_some() => {
                 match line {
                     Ok(Some(_)) => return Ok(()),
                     // No terminal on the standard input: wait for Ctrl-C.
-                    Ok(None) | Err(_) => stdin_open = false,
+                    Ok(None) | Err(_) => *stdin = None,
                 }
             }
             _ = tokio::signal::ctrl_c() => {

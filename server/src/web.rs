@@ -82,6 +82,7 @@ pub async fn room(
         show_answers: true,
         waiting: true,
         open: false,
+        revealed: false,
         answer_count: 0,
         chosen_label: String::new(),
         bars: Vec::new(),
@@ -100,6 +101,7 @@ pub async fn room(
         }
         page.waiting = false;
         page.open = question.is_open();
+        page.revealed = question.revealed;
         page.answer_count = question.responses.len();
         page.chosen_label = chosen
             .and_then(|index| question.content.answers.get(index))

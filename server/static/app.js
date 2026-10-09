@@ -15,6 +15,7 @@
   }
 
   var wasOpen = live.dataset.open === "true";
+  var wasRevealed = live.dataset.revealed === "true";
   // Empty on the presentation view, and while a room waits for a question.
   var shownQuestion = live.dataset.question || "";
   var source = new EventSource(live.dataset.events);
@@ -39,10 +40,15 @@
       node.textContent = state.answer_count;
     });
 
-    // The open/closed state and the question itself decide the whole
-    // layout, so let the server re-render it. The guard keeps a page from
-    // reloading forever once it shows what the server sent.
-    if (wasOpen !== state.open || shownQuestion !== (state.question || "")) {
+    // The open/closed state, the revealed answers and the question itself
+    // decide the whole layout, so let the server re-render it. The guard
+    // keeps a page from reloading forever once it shows what the server
+    // sent.
+    if (
+      wasOpen !== state.open ||
+      wasRevealed !== Boolean(state.revealed) ||
+      shownQuestion !== (state.question || "")
+    ) {
       window.location.reload();
     }
   });

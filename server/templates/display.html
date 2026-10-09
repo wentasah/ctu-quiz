@@ -3,6 +3,7 @@
 {% block body_class %}display{% endblock %}
 {% block content %}
 <div id="live" data-events="{{ prefix }}/d/{{ token }}/events" data-open="{{ open }}"
+     data-revealed="{{ revealed }}"
      data-question="{{ question }}">
   <div class="question">
     <div class="prompt">{{ prompt_html|safe }}</div>

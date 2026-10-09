@@ -139,6 +139,9 @@ pub struct Question {
     pub teacher: String,
     pub created_at: DateTime<Utc>,
     pub closed_at: Option<DateTime<Utc>>,
+    /// Whether the teacher has revealed which answers are right; only ever
+    /// after the question is closed.
+    pub revealed: bool,
     /// Answers, keyed by login, so that answering twice replaces the answer.
     pub responses: BTreeMap<String, Response>,
     /// Notifies the server-sent-event streams that something changed.
@@ -191,6 +194,7 @@ impl Question {
             teacher: self.teacher.clone(),
             created_at: self.created_at,
             closed_at: self.closed_at,
+            revealed: self.revealed,
         }
     }
 
@@ -201,6 +205,7 @@ impl Question {
         LiveState {
             question: Some(self.id.clone()),
             open: self.is_open(),
+            revealed: self.revealed,
             answer_count: self.responses.len(),
             counts: closed.then(|| self.counts()),
             labels: closed.then(|| {
@@ -513,6 +518,7 @@ impl AppState {
             teacher: teacher.to_owned(),
             created_at: now,
             closed_at: None,
+            revealed: false,
             responses: BTreeMap::new(),
             updates: broadcast::channel(16).0,
         });

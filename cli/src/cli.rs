@@ -100,4 +100,12 @@ pub enum Command {
         #[arg(long, short)]
         output: Option<PathBuf>,
     },
+    /// Mark the right answers in the results of a closed question.
+    ///
+    /// `quiz ask` offers this itself once the question is closed; this is
+    /// for when it was interrupted before.
+    Reveal {
+        /// Question id, as printed by `quiz ask`.
+        id: String,
+    },
 }

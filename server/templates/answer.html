@@ -3,7 +3,7 @@
 {% block body_class %}answer{% endblock %}
 {% block content %}
 <div class="card" id="live" data-events="{{ prefix }}/r/{{ room }}/events"
-     data-open="{{ open }}" data-question="{{ question }}">
+     data-open="{{ open }}" data-revealed="{{ revealed }}" data-question="{{ question }}">
   <p class="who">{{ user.name }} ({{ user.login }}) &middot;
     <a href="{{ prefix }}/logout">odhlásit</a></p>
 

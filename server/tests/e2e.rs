@@ -709,7 +709,7 @@ async fn shuffled_answers_are_the_same_for_everybody() {
 }
 
 #[tokio::test]
-async fn points_stay_hidden_until_the_question_is_closed() {
+async fn points_stay_hidden_until_the_teacher_reveals_them() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let teacher = User::new("sojkam1", "Michal Sojka");
@@ -762,19 +762,48 @@ async fn points_stay_hidden_until_the_question_is_closed() {
         .send()
         .await
         .unwrap();
+
+    let reveal = || {
+        api.post(format!("{base}/api/v1/questions/{}/reveal", question.id))
+            .bearer_auth(token.clone())
+            .send()
+    };
+    // An open question cannot be revealed: students could still change
+    // their answer.
+    let response = reveal().await.unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert!(response.text().await.unwrap().contains("still open"));
+
     api.post(format!("{base}/api/v1/questions/{}/close", question.id))
         .bearer_auth(token.clone())
         .send()
         .await
         .unwrap();
 
-    // Once it is closed, the results mark the right answer.
+    // Closing shows the results, but not yet which answer is right, so
+    // that the teacher can talk about them first.
     for closed in [
         page(student.clone(), question.answer_url.clone()).await,
         page(reqwest::Client::new(), question.display_url.clone()).await,
     ] {
-        assert_eq!(closed.matches("bar correct").count(), 1, "{closed}");
-        let right = closed.find("bar correct").unwrap();
+        assert!(closed.contains("class=\"bars\""), "{closed}");
+        assert!(closed.contains("data-revealed=\"false\""), "{closed}");
+        assert!(!closed.contains(" correct\""), "{closed}");
+    }
+
+    let response = reveal().await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.json::<QuestionInfo>().await.unwrap().revealed);
+    let events = live_state(&format!("{}/events", question.display_url)).await;
+    assert!(events.contains("\"revealed\":true"), "got: {events}");
+
+    // Once revealed, the results mark the right answer.
+    for closed in [
+        page(student.clone(), question.answer_url.clone()).await,
+        page(reqwest::Client::new(), question.display_url.clone()).await,
+    ] {
+        assert_eq!(closed.matches(" correct\"").count(), 1, "{closed}");
+        let right = closed.find(" correct\"").unwrap();
         assert!(closed[right..].contains("the right one"), "{closed}");
     }
 

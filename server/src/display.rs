@@ -37,6 +37,7 @@ pub async fn display(
         title: question.title().to_owned(),
         prompt_html: question.content.prompt_html.clone(),
         open: question.is_open(),
+        revealed: question.revealed,
         answer_count: question.responses.len(),
         code: question.code.clone(),
         answer_url: question.answer_url.clone(),

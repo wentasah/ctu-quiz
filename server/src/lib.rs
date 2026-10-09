@@ -88,6 +88,7 @@ pub fn router(state: AppState) -> Router {
         .route("/questions", post(api::create_question))
         .route("/questions/{id}", get(api::question))
         .route("/questions/{id}/close", post(api::close_question))
+        .route("/questions/{id}/reveal", post(api::reveal_question))
         .route("/questions/{id}/results", get(api::results));
 
     Router::new()

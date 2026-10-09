@@ -129,6 +129,24 @@ async fn ask_flow() {
     // Requirement 12: Enter closes the question and saves the answers.
     let mut stdin = child.stdin.take().unwrap();
     stdin.write_all(b"\n").await.unwrap();
+
+    // The question is scored, so a second Enter reveals the right answers;
+    // until then the results do not show them.
+    while let Some(line) = lines.next_line().await.unwrap() {
+        printed.push_str(&line);
+        printed.push('\n');
+        if line.starts_with("Press Enter to reveal") {
+            break;
+        }
+    }
+    let results_page = || async {
+        let page = browser.get(&answer_url).send().await.unwrap();
+        page.text().await.unwrap()
+    };
+    let page = results_page().await;
+    assert!(page.contains("class=\"bars\""), "{page}");
+    assert!(!page.contains(" correct\""), "{page}");
+    stdin.write_all(b"\n").await.unwrap();
     drop(stdin);
 
     while let Some(line) = lines.next_line().await.unwrap() {
@@ -140,6 +158,12 @@ async fn ask_flow() {
     assert!(printed.contains("Answers: 1"), "{printed}");
     assert!(printed.contains("Average points: 1.00 of 1"), "{printed}");
     assert!(printed.contains("Answers saved to"), "{printed}");
+    assert!(
+        printed.contains("The right answers are revealed."),
+        "{printed}"
+    );
+    let page = results_page().await;
+    assert!(page.contains(" correct\""), "{page}");
 
     // The CSV is named after the question file plus date and time.
     let csv_files: Vec<PathBuf> = std::fs::read_dir(&dir)

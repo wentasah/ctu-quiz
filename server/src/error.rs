@@ -107,6 +107,10 @@ impl ApiFailure {
         Self::new(StatusCode::BAD_REQUEST, message)
     }
 
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::CONFLICT, message)
+    }
+
     pub fn internal(error: impl std::fmt::Display) -> Self {
         tracing::error!(%error, "API request failed");
         Self::new(

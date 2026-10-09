@@ -153,6 +153,39 @@ pub async fn close_question(
     Ok(Json(info))
 }
 
+/// `POST /api/v1/questions/{id}/reveal` - marks the right answers in the
+/// results, on the projector and on the students' screens.
+///
+/// Only a closed question can be revealed, so that nobody learns the right
+/// answer while they can still change theirs.
+pub async fn reveal_question(
+    State(state): State<AppState>,
+    Teacher(teacher): Teacher,
+    Path(id): Path<String>,
+) -> Result<Json<QuestionInfo>, ApiFailure> {
+    let mut store = state.store.write().await;
+
+    owned(&store, &id, &teacher)?;
+    let question = store
+        .get_mut(&id)
+        .ok_or_else(|| ApiFailure::not_found("no such question"))?;
+
+    if question.is_open() {
+        return Err(ApiFailure::conflict(
+            "the question is still open; close it before revealing the answers",
+        ));
+    }
+    if !question.revealed {
+        question.revealed = true;
+        question.notify();
+        tracing::info!(question = %id, teacher = %teacher.login, "answers revealed");
+    }
+    let info = question.info();
+    store.notify_room_of(&id);
+
+    Ok(Json(info))
+}
+
 /// `GET /api/v1/questions/{id}/results` - the collected answers, which the CLI
 /// writes to a CSV file.
 pub async fn results(

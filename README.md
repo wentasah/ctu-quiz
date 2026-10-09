@@ -170,8 +170,9 @@ Details worth knowing:
 
   Either every answer is marked or none is, so a forgotten mark is an error
   rather than a silent zero. The marks are removed from what students see;
-  once the question is closed, the results mark the answers worth points
-  with a ✓, on the projector and the phones alike. `quiz parse` and `quiz ask`
+  once the question is closed and the teacher presses Enter once more, the
+  results mark the answers worth points with a ✓, on the projector and the
+  phones alike. `quiz parse` and `quiz ask`
   print the points of each answer, the summary adds the average, and the CSV
   gets a `points` column. Braces count only as the last word of an answer
   and only around a plain number, so `a{2}` in a regular expression stays
@@ -382,6 +383,7 @@ quiz whoami                    # who am I, and may I ask questions?
 quiz logout [--all]          # end the lecture: close the room, forget the token
 quiz close <question id>      # if `quiz ask` was interrupted: close and save
 quiz close                    # end the lecture but stay logged in: close the room
+quiz reveal <question id>     # mark the right answers, if `quiz ask` did not
 ```
 
 `--server` (or `QUIZ_SERVER`) selects the server, `--no-browser` never opens a
@@ -413,6 +415,12 @@ shows the defaults in effect for the options that take a value.
 
 Ctrl-C does the same as Enter: the question is closed and the answers are
 saved, so a mistyped key does not lose the collected data.
+
+A scored question then waits for one more Enter before the right answers are
+marked in the results, so that the class can talk about the bar graph first.
+Ctrl-C, or a standard input that is not a terminal, ends `quiz ask` without
+revealing them; `quiz reveal <question id>` does it later. An open question
+cannot be revealed.
 
 ## The CSV file
 

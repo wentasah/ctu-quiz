@@ -44,8 +44,8 @@ pub struct Bar {
     pub best: bool,
     /// Whether this is the answer of the student looking at the page.
     pub chosen: bool,
-    /// Whether the answer earns points. Shown with the results only, once
-    /// the question is closed.
+    /// Whether the answer earns points. Known only once the teacher has
+    /// revealed it, which needs the question to be closed.
     pub correct: bool,
 }
 
@@ -77,7 +77,7 @@ pub fn bars(question: &Question, chosen: Option<usize>) -> Vec<Bar> {
             share: percent(count, total),
             best: count > 0 && count == max,
             chosen: chosen == Some(index),
-            correct: answer.is_correct(),
+            correct: question.revealed && answer.is_correct(),
         })
         .collect()
 }
@@ -124,6 +124,8 @@ pub struct AnswerPage {
     /// Whether the teacher has yet to ask the next question.
     pub waiting: bool,
     pub open: bool,
+    /// Whether the right answers are marked in the results.
+    pub revealed: bool,
     pub answer_count: usize,
     /// Label of the student's own answer, empty if they did not answer.
     pub chosen_label: String,
@@ -147,6 +149,8 @@ pub struct DisplayPage {
     pub title: String,
     pub prompt_html: String,
     pub open: bool,
+    /// Whether the right answers are marked in the results.
+    pub revealed: bool,
     pub answer_count: usize,
     pub code: String,
     pub answer_url: String,

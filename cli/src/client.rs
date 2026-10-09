@@ -59,6 +59,11 @@ impl Api {
             .await
     }
 
+    pub async fn reveal(&self, id: &str) -> Result<QuestionInfo> {
+        self.send(self.post(&format!("questions/{id}/reveal"))?)
+            .await
+    }
+
     pub async fn results(&self, id: &str) -> Result<Results> {
         self.send(self.get(&format!("questions/{id}/results"))?)
             .await
