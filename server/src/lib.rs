@@ -170,13 +170,19 @@ pub async fn serve(cfg: Config, listener: TcpListener) -> Result<()> {
         tracing::info!(%address, "listening");
     }
 
-    axum::serve(listener, router(state))
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("the HTTP server failed")
+    // No graceful shutdown: it would wait for the event streams of open
+    // pages, which never end. Nothing is stored on disc, so there is
+    // nothing to finish either; returning drops every connection, and the
+    // browsers reconnect once the server is back.
+    tokio::select! {
+        result = axum::serve(listener, router(state)) => {
+            result.context("the HTTP server failed")
+        }
+        () = shutdown_signal() => Ok(()),
+    }
 }
 
-/// Resolves on SIGINT or SIGTERM, so that systemd can stop the server cleanly.
+/// Resolves on SIGINT or SIGTERM, so that systemd can stop the server.
 async fn shutdown_signal() {
     let interrupt = async {
         let _ = tokio::signal::ctrl_c().await;
