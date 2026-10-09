@@ -44,6 +44,9 @@ pub struct Bar {
     pub best: bool,
     /// Whether this is the answer of the student looking at the page.
     pub chosen: bool,
+    /// Whether the answer earns points. Shown with the results only, once
+    /// the question is closed.
+    pub correct: bool,
 }
 
 /// Turns the answers of a question into bars.
@@ -74,6 +77,7 @@ pub fn bars(question: &Question, chosen: Option<usize>) -> Vec<Bar> {
             share: percent(count, total),
             best: count > 0 && count == max,
             chosen: chosen == Some(index),
+            correct: answer.is_correct(),
         })
         .collect()
 }

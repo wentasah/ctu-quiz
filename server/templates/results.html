@@ -1,7 +1,7 @@
 <ul class="bars">
   {% for bar in bars %}
-  <li class="bar{% if bar.best %} best{% endif %}">
-    <span class="label">{{ bar.label }}</span>
+  <li class="bar{% if bar.best %} best{% endif %}{% if bar.correct %} correct{% endif %}">
+    <span class="label">{{ bar.label }}{% if bar.correct %}<span class="mark" title="správná odpověď">&#10003;</span>{% endif %}</span>
     <span class="graph"><span class="fill" style="width: {{ bar.width }}%"></span></span>
     <span class="count">{{ bar.count }}</span>
     <span class="share">{{ bar.share }}&nbsp;%</span>

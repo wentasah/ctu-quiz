@@ -708,6 +708,88 @@ async fn shuffled_answers_are_the_same_for_everybody() {
     assert_eq!(results.rows[0].answer_text, shuffled[0]);
 }
 
+#[tokio::test]
+async fn points_stay_hidden_until_the_question_is_closed() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.id_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let question: QuestionInfo = api
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(token.clone())
+        .json(&CreateQuestion {
+            source_name: "otazky.md".to_owned(),
+            markdown: "Which one?\n\n---\n\n- [ ] the wrong one {-1}\n- [x] the right one\n"
+                .to_owned(),
+            view: StudentView::default(),
+            shuffle: false,
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let points: Vec<_> = question.answers.iter().map(|a| a.points).collect();
+    assert_eq!(points, [Some(-1.0), Some(1.0)]);
+
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    student.get(format!("{base}/")).send().await.unwrap();
+    let page = |client: reqwest::Client, url: String| async move {
+        client.get(url).send().await.unwrap().text().await.unwrap()
+    };
+
+    // While the question is open, nothing tells which answer is right.
+    for open in [
+        page(student.clone(), question.answer_url.clone()).await,
+        page(reqwest::Client::new(), question.display_url.clone()).await,
+    ] {
+        assert!(open.contains("the right one"), "{open}");
+        for leak in ["[x]", "[ ]", "{-1}", "checkbox", "correct", "&#10003;"] {
+            assert!(!open.contains(leak), "{leak} in {open}");
+        }
+    }
+
+    student
+        .post(format!("{}/answer", question.answer_url))
+        .form(&[("question", question.id.as_str()), ("answer", "0")])
+        .send()
+        .await
+        .unwrap();
+    api.post(format!("{base}/api/v1/questions/{}/close", question.id))
+        .bearer_auth(token.clone())
+        .send()
+        .await
+        .unwrap();
+
+    // Once it is closed, the results mark the right answer.
+    for closed in [
+        page(student.clone(), question.answer_url.clone()).await,
+        page(reqwest::Client::new(), question.display_url.clone()).await,
+    ] {
+        assert_eq!(closed.matches("bar correct").count(), 1, "{closed}");
+        let right = closed.find("bar correct").unwrap();
+        assert!(closed[right..].contains("the right one"), "{closed}");
+    }
+
+    let results: Results = api
+        .get(format!("{base}/api/v1/questions/{}/results", question.id))
+        .bearer_auth(token.clone())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(results.rows[0].points, Some(-1.0));
+}
+
 /// The answers of `texts` in the order in which they appear in a page.
 fn order_of(page: &str, texts: &[String]) -> Vec<String> {
     let mut found: Vec<(usize, String)> = texts

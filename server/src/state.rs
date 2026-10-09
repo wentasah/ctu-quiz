@@ -182,6 +182,7 @@ impl Question {
                 .map(|a| AnswerInfo {
                     label: a.label.clone(),
                     text: a.plain.clone(),
+                    points: a.points,
                 })
                 .collect(),
             open: self.is_open(),
@@ -223,6 +224,7 @@ impl Question {
                     name: response.name.clone(),
                     answer: answer.map(|a| a.label.clone()).unwrap_or_default(),
                     answer_text: answer.map(|a| a.plain.clone()).unwrap_or_default(),
+                    points: answer.and_then(|a| a.points),
                     answered_at: response.answered_at,
                 }
             })

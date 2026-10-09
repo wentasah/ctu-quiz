@@ -140,13 +140,13 @@ What's wrong with it?
 
 ---
 
-- In Bash, every stage of a pipeline runs in its own subshell.
+- [x] In Bash, every stage of a pipeline runs in its own subshell.
   Modifications to variables inside the `while` loop affect the
   subshell, not the parent shell environment.
 
-- It doesn't handle errors.
+- [ ] It doesn't handle errors.
 
-- It will work only in BASH 4.0 and newer.
+- [ ] It will work only in BASH 4.0 and newer. {-1}
 ````
 
 Details worth knowing:
@@ -158,6 +158,24 @@ Details worth knowing:
 * `---`, `***` and `___` all work as the separator, and a rule inside a fenced
   code block is ignored.
 * If the file starts with a heading, it becomes the page title.
+* Answers may be **scored**. `- [x] …` is a right answer worth 1 point and
+  `- [ ] …` a wrong one worth 0; `{2}`, `{0.5}` or `{-1}` at the very end of
+  an answer sets its points explicitly, with or without a checkbox:
+
+  ```markdown
+  - [x] In Bash, every stage of a pipeline runs in its own subshell.
+  - [ ] It doesn't handle errors.
+  - [ ] It will work only in BASH 4.0 and newer. {-1}
+  ```
+
+  Either every answer is marked or none is, so a forgotten mark is an error
+  rather than a silent zero. The marks are removed from what students see;
+  once the question is closed, the results mark the answers worth points
+  with a ✓, on the projector and the phones alike. `quiz parse` and `quiz ask`
+  print the points of each answer, the summary adds the average, and the CSV
+  gets a `points` column. Braces count only as the last word of an answer
+  and only around a plain number, so `a{2}` in a regular expression stays
+  part of the text.
 * Fenced code blocks are **syntax highlighted**, in the question and in the
   answers alike, from the language of the fence (```` ``` bash ````). The
   highlighter is [syntect](https://crates.io/crates/syntect) with the Sublime
@@ -181,6 +199,7 @@ Details worth knowing:
   This happens only for a file that really is executable: in an ordinary
   Markdown file a first line starting with `#!` stays part of the question.
   `testsupport/executable.md` is the example question in this form.
+  `testsupport/unscored.md` is a question in C without any points.
 
 ## Shell completions
 
@@ -404,6 +423,9 @@ login,name,answer,answer_text,answered_at
 novakja1,Jan Novák,B,It doesn't handle errors.,2026-09-21T12:05:41.881Z
 svobodpe,Petra Svobodová,C,It will work only in BASH 4.0 and newer.,2026-09-21T12:05:44.102Z
 ```
+
+A scored question adds a `points` column after `name`, holding the points
+of the chosen answer.
 
 The file name is the base name of the question file plus the date and time:
 `otazky.md` → `otazky_2026-09-21_14-05-03.csv`, written into the same

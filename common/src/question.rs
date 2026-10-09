@@ -9,6 +9,12 @@
 //! Markdown event stream) so that the rule is recognized even when it directly
 //! follows a paragraph, where CommonMark would read it as a setext heading.
 //! Horizontal rules inside fenced code blocks are ignored.
+//!
+//! An answer may say how many points it is worth: `- [x] ...` is a right
+//! answer worth 1 point, `- [ ] ...` a wrong one worth 0, and `{2}`, `{0.5}`
+//! or `{-1}` at the very end of the answer sets the points explicitly. Either
+//! every answer has such a mark or none does. The marks are removed from the
+//! text, so that students do not see them.
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html};
 use rand::seq::SliceRandom;
@@ -20,7 +26,7 @@ use crate::highlight;
 pub const MAX_ANSWERS: usize = 26;
 
 /// A question with its possible answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Question {
     /// Text of the first Markdown heading, if the question has one.
     pub title: Option<String>,
@@ -33,7 +39,7 @@ pub struct Question {
 }
 
 /// One possible answer, i.e. one top-level list item after the `---` rule.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Answer {
     /// `A`, `B`, `C`, ... as shown to students and stored in the CSV.
     pub label: String,
@@ -43,6 +49,17 @@ pub struct Answer {
     pub html: String,
     /// One-line plain-text rendering, used in the CSV and in the terminal.
     pub plain: String,
+    /// Points for choosing this answer; `None` when the question is not
+    /// scored. Never meant for the students while the question is open.
+    #[serde(default)]
+    pub points: Option<f64>,
+}
+
+impl Answer {
+    /// Whether choosing this answer earns points.
+    pub fn is_correct(&self) -> bool {
+        self.points.is_some_and(|points| points > 0.0)
+    }
 }
 
 /// Reasons why a Markdown file is not a usable question.
@@ -62,6 +79,12 @@ pub enum ParseError {
     TooManyAnswers(usize),
     #[error("the question text above the `---` separator is empty")]
     EmptyPrompt,
+    #[error("answer {0} is empty")]
+    EmptyAnswer(String),
+    #[error(
+        "answer {0} has no `[x]`, `[ ]` or `{{points}}` mark; either every answer is marked or none is"
+    )]
+    UnmarkedAnswer(String),
 }
 
 /// Markdown extensions enabled for questions and answers.
@@ -87,16 +110,31 @@ pub fn parse(source: &str) -> Result<Question, ParseError> {
         _ => {}
     }
 
-    let answers = items
-        .into_iter()
+    let answers: Vec<Answer> = items
+        .iter()
         .enumerate()
-        .map(|(i, markdown)| Answer {
-            label: label(i),
-            html: render_answer(&markdown),
-            plain: plain_text(&markdown),
-            markdown,
+        .map(|(i, item)| {
+            let (markdown, points) = take_points(item);
+            if markdown.is_empty() {
+                return Err(ParseError::EmptyAnswer(label(i)));
+            }
+            Ok(Answer {
+                label: label(i),
+                html: render_answer(markdown),
+                plain: plain_text(markdown),
+                markdown: markdown.to_owned(),
+                points,
+            })
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
+
+    let scored = answers.iter().any(|answer| answer.points.is_some());
+    if let Some(answer) = answers
+        .iter()
+        .find(|answer| scored && answer.points.is_none())
+    {
+        return Err(ParseError::UnmarkedAnswer(answer.label.clone()));
+    }
 
     Ok(Question {
         title: first_heading(prompt_markdown),
@@ -129,6 +167,11 @@ impl Question {
     /// Title to show when the file contains no heading.
     pub fn title_or<'a>(&'a self, fallback: &'a str) -> &'a str {
         self.title.as_deref().unwrap_or(fallback)
+    }
+
+    /// Whether the answers carry points.
+    pub fn is_scored(&self) -> bool {
+        self.answers.iter().any(|answer| answer.points.is_some())
     }
 
     /// Plain-text answers, in order; handy for CSV headers and terminal output.
@@ -230,6 +273,49 @@ fn top_level_items(source: &str) -> Vec<String> {
         }
     }
     items
+}
+
+/// Removes the marks that say how many points an answer is worth: a leading
+/// task-list checkbox and a trailing `{points}`. Returns the rest of the
+/// answer and its points, if it has any marks.
+fn take_points(item: &str) -> (&str, Option<f64>) {
+    let mut points = None;
+    let mut rest = item;
+
+    for (checkbox, value) in [("[x]", 1.0), ("[X]", 1.0), ("[ ]", 0.0)] {
+        if let Some(after) = rest.strip_prefix(checkbox)
+            && (after.is_empty() || after.starts_with(char::is_whitespace))
+        {
+            points = Some(value);
+            rest = after.trim_start();
+            break;
+        }
+    }
+
+    // `{...}` counts only as a separate word at the very end, so that text
+    // such as `a{2}` in a regular expression stays what it is.
+    if let Some(before) = rest.strip_suffix('}')
+        && let Some((text, number)) = before.rsplit_once('{')
+        && (text.is_empty() || text.ends_with(char::is_whitespace))
+        && let Some(value) = parse_points(number)
+    {
+        points = Some(value);
+        rest = text.trim_end();
+    }
+
+    (rest, points)
+}
+
+/// `1`, `+2`, `-0.5`, ...; nothing that `f64` would also accept, such as
+/// `inf` or `1e3`.
+fn parse_points(number: &str) -> Option<f64> {
+    let digits = number.strip_prefix(['+', '-']).unwrap_or(number);
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, "0"));
+    let is_digits = |part: &str| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit());
+    if !is_digits(whole) || !is_digits(fraction) {
+        return None;
+    }
+    number.parse().ok()
 }
 
 /// Removes the list bullet from the first line and the corresponding
@@ -626,6 +712,84 @@ What's wrong with it?
 
         // 8 answers, 50 tries: one single order would not be a shuffle.
         assert!(orders.len() > 1, "the order never changed");
+    }
+
+    #[test]
+    fn checkboxes_and_braces_give_the_points() {
+        let q = parse(
+            "Q?\n\n---\n\n- [x] right\n- [ ] wrong\n- [X] partly {0.5}\n\
+             - [ ] very wrong {-1}\n- also right {+2}\n",
+        )
+        .unwrap();
+        assert!(q.is_scored());
+        let points: Vec<_> = q.answers.iter().map(|a| a.points).collect();
+        assert_eq!(
+            points,
+            [Some(1.0), Some(0.0), Some(0.5), Some(-1.0), Some(2.0)]
+        );
+        let correct: Vec<_> = q.answers.iter().map(Answer::is_correct).collect();
+        assert_eq!(correct, [true, false, true, false, true]);
+
+        // The marks are not part of what students see.
+        for answer in &q.answers {
+            assert!(!answer.markdown.contains(['[', '{']), "{answer:?}");
+            assert!(!answer.html.contains("checkbox"), "{answer:?}");
+        }
+        assert_eq!(q.answers[2].plain, "partly");
+        assert_eq!(q.answers[3].html, "very wrong");
+    }
+
+    #[test]
+    fn points_of_a_multi_line_answer_are_at_its_end() {
+        let q = parse(
+            "Q?\n\n---\n\n- [x] one\n  line more\n  {3}\n\n\
+             - [ ] two\n\n  ```\n  a{2}\n  ```\n",
+        )
+        .unwrap();
+        assert_eq!(q.answers[0].points, Some(3.0));
+        assert_eq!(q.answers[0].plain, "one line more");
+        // The braces in the code block are code.
+        assert_eq!(q.answers[1].points, Some(0.0));
+        assert!(q.answers[1].plain.contains("a{2}"));
+    }
+
+    #[test]
+    fn braces_that_are_no_points_stay_in_the_text() {
+        let q = parse("Q?\n\n---\n\n- a{2}\n- {x}\n- {1e3}\n- `{1}`\n").unwrap();
+        assert!(!q.is_scored());
+        let texts: Vec<_> = q.answers.iter().map(|a| a.plain.as_str()).collect();
+        assert_eq!(texts, ["a{2}", "{x}", "{1e3}", "{1}"]);
+        // A checkbox needs a space after it to be one.
+        assert!(!parse("Q?\n\n---\n\n- [x]y\n- b\n").unwrap().is_scored());
+    }
+
+    #[test]
+    fn either_all_answers_are_marked_or_none() {
+        assert_eq!(
+            parse("Q?\n\n---\n\n- [x] right\n- forgotten\n").unwrap_err(),
+            ParseError::UnmarkedAnswer("B".into())
+        );
+        assert_eq!(
+            parse("Q?\n\n---\n\n- [x] right\n- [ ]\n").unwrap_err(),
+            ParseError::EmptyAnswer("B".into())
+        );
+        assert!(!parse(EXAMPLE).unwrap().is_scored());
+    }
+
+    #[test]
+    fn shuffled_answers_keep_their_points() {
+        let mut q = parse("Q?\n\n---\n\n- [x] right\n- [ ] wrong\n- [ ] bad {-1}\n").unwrap();
+        for _ in 0..10 {
+            shuffle_answers(&mut q);
+            for answer in &q.answers {
+                let expected = match answer.plain.as_str() {
+                    "right" => 1.0,
+                    "wrong" => 0.0,
+                    _ => -1.0,
+                };
+                assert_eq!(answer.points, Some(expected));
+            }
+        }
     }
 
     #[test]

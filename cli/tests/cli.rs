@@ -4,7 +4,8 @@
 use std::{path::PathBuf, process::Stdio, time::Duration};
 
 use quiz_testsupport::{
-    EXAMPLE_QUESTION, EXECUTABLE_QUESTION, MockIdp, User, question_on_page, start_server,
+    EXAMPLE_QUESTION, EXECUTABLE_QUESTION, MockIdp, UNSCORED_QUESTION, User, question_on_page,
+    start_server,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -89,6 +90,7 @@ async fn ask_flow() {
     // The parsed question is shown before anything is published.
     let parsed = quiz_common::parse_question(EXAMPLE_QUESTION).unwrap();
     assert!(printed.contains("A) "), "{printed}");
+    assert!(printed.contains("(-1 points)"), "{printed}");
     assert!(
         printed.contains(&format!("C) {}", parsed.answers[2].plain)),
         "{printed}"
@@ -136,6 +138,7 @@ async fn ask_flow() {
     let status = child.wait().await.unwrap();
     assert!(status.success(), "the CLI failed:\n{printed}");
     assert!(printed.contains("Answers: 1"), "{printed}");
+    assert!(printed.contains("Average points: 1.00 of 1"), "{printed}");
     assert!(printed.contains("Answers saved to"), "{printed}");
 
     // The CSV is named after the question file plus date and time.
@@ -158,10 +161,10 @@ async fn ask_flow() {
     let mut rows = csv.lines();
     assert_eq!(
         rows.next().unwrap(),
-        "login,name,answer,answer_text,answered_at"
+        "login,name,points,answer,answer_text,answered_at"
     );
     let row = rows.next().expect("one answer was collected");
-    assert!(row.starts_with("novakja1,Jan Novák,A,"), "{row}");
+    assert!(row.starts_with("novakja1,Jan Novák,1.0,A,"), "{row}");
     assert!(row.contains(&parsed.answers[0].plain), "{row}");
     assert!(rows.next().is_none());
 
@@ -236,9 +239,26 @@ async fn parse_checks_a_question_file_without_a_server() {
     let printed = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{printed}");
     assert!(
-        printed.contains("valid question with 3 possible answers"),
+        printed.contains("valid scored question with 3 possible answers"),
         "{printed}"
     );
+
+    let unscored = dir.join("division.md");
+    std::fs::write(&unscored, UNSCORED_QUESTION).unwrap();
+    let output = Command::new(QUIZ)
+        .arg("parse")
+        .arg(&unscored)
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(printed.starts_with("Integer division\n"), "{printed}");
+    assert!(
+        printed.contains("valid question with 4 possible answers"),
+        "{printed}"
+    );
+    assert!(!printed.contains("point"), "{printed}");
 
     let bad = dir.join("broken.md");
     std::fs::write(&bad, "Where are the answers?\n").unwrap();
@@ -349,7 +369,7 @@ async fn an_executable_question_loses_its_shebang_line() {
         "{printed}"
     );
     assert!(
-        printed.contains("valid question with 3 possible answers"),
+        printed.contains("valid scored question with 3 possible answers"),
         "{printed}"
     );
 }

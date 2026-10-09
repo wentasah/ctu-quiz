@@ -18,7 +18,12 @@ pub fn print_question(question: &Question) {
     }
     println!("{}\n", question.prompt_markdown.trim());
     for answer in &question.answers {
-        println!("  {}) {}", answer.label, ellipsis(&answer.plain, 100));
+        println!(
+            "  {}) {}{}",
+            answer.label,
+            ellipsis(&answer.plain, 100),
+            points_note(answer.points)
+        );
     }
     println!();
 }
@@ -27,7 +32,12 @@ pub fn print_question(question: &Question) {
 /// them, which after a shuffle is not the order of the Markdown file.
 pub fn print_answers(answers: &[AnswerInfo]) {
     for answer in answers {
-        println!("  {}) {}", answer.label, ellipsis(&answer.text, 100));
+        println!(
+            "  {}) {}{}",
+            answer.label,
+            ellipsis(&answer.text, 100),
+            points_note(answer.points)
+        );
     }
 }
 
@@ -45,11 +55,37 @@ pub fn print_summary(question: &QuestionInfo, results: &Results) {
             count as f64 * 100.0 / total as f64
         };
         println!(
-            "  {} {:<30} {count:>4} {share:>5.1} %  {}",
+            "  {} {:<30} {count:>4} {share:>5.1} %  {}{}",
             answer.label,
             "#".repeat(width),
             ellipsis(&answer.text, 60),
+            points_note(answer.points),
         );
+    }
+
+    if let Some(average) = average_points(results) {
+        let best = question
+            .answers
+            .iter()
+            .filter_map(|answer| answer.points)
+            .fold(f64::NEG_INFINITY, f64::max);
+        println!("Average points: {average:.2} of {best}");
+    }
+}
+
+/// The points students got on average, `None` when the question is not
+/// scored or nobody answered.
+fn average_points(results: &Results) -> Option<f64> {
+    let points: Vec<f64> = results.rows.iter().filter_map(|row| row.points).collect();
+    (!points.is_empty()).then(|| points.iter().sum::<f64>() / points.len() as f64)
+}
+
+/// ` (1 point)` after an answer of a scored question, nothing otherwise.
+fn points_note(points: Option<f64>) -> String {
+    match points {
+        Some(1.0) => " (1 point)".to_owned(),
+        Some(points) => format!(" ({points} points)"),
+        None => String::new(),
     }
 }
 
@@ -93,7 +129,7 @@ fn ellipsis(text: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{csv_path, ellipsis};
+    use super::{csv_path, ellipsis, points_note};
     use chrono::TimeZone;
     use std::path::Path;
 
@@ -116,5 +152,13 @@ mod tests {
     fn long_answers_are_shortened() {
         assert_eq!(ellipsis("short", 10), "short");
         assert_eq!(ellipsis("abcdefghij", 5), "abcd…");
+    }
+
+    #[test]
+    fn points_are_shown_only_for_a_scored_question() {
+        assert_eq!(points_note(None), "");
+        assert_eq!(points_note(Some(1.0)), " (1 point)");
+        assert_eq!(points_note(Some(0.0)), " (0 points)");
+        assert_eq!(points_note(Some(-0.5)), " (-0.5 points)");
     }
 }

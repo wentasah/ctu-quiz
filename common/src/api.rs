@@ -75,6 +75,9 @@ pub struct AnswerInfo {
     pub label: String,
     /// Plain-text form of the answer.
     pub text: String,
+    /// Points for this answer, if the question is scored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub points: Option<f64>,
 }
 
 /// State of a question. Returned when a question is created and by
@@ -158,6 +161,10 @@ pub struct ResultRow {
     pub login: String,
     /// Full name, if the OIDC provider gives one.
     pub name: String,
+    /// Points for the chosen answer; left out, also from the CSV, when the
+    /// question is not scored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub points: Option<f64>,
     /// `A`, `B`, ...
     pub answer: String,
     /// Plain text of the chosen answer.

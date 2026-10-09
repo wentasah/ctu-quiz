@@ -167,8 +167,9 @@ fn parse(file: &Path) -> Result<()> {
         .with_context(|| format!("{} is not a usable question", file.display()))?;
     report::print_question(&question);
     println!(
-        "{} is a valid question with {} possible answers.",
+        "{} is a valid {}question with {} possible answers.",
         file.display(),
+        if question.is_scored() { "scored " } else { "" },
         question.answers.len()
     );
     Ok(())

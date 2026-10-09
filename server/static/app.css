@@ -176,7 +176,7 @@ button.answer p:last-child { margin-bottom: 0; }
 
 .bars .bar {
   display: grid;
-  grid-template-columns: 1.5rem 1fr 3rem 4rem;
+  grid-template-columns: 2.5rem 1fr 3rem 4rem;
   grid-template-areas: "label graph count share" ". text text text";
   gap: .25rem .5rem;
   align-items: center;
@@ -189,6 +189,8 @@ button.answer p:last-child { margin-bottom: 0; }
 .bars .count { grid-area: count; text-align: right; font-weight: 700; }
 .bars .share { grid-area: share; text-align: right; color: var(--muted); }
 .bars .text { grid-area: text; color: var(--fg); }
+.bars .correct .label, .bars .correct .text { color: var(--ok); font-weight: 700; }
+.bars .mark { margin-left: .15rem; }
 
 /* ---- presentation view ---- */
 

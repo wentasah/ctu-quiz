@@ -12,10 +12,10 @@ What's wrong with it?
 
 ---
 
-- In Bash, every stage of a pipeline runs in its own subshell.
+- [x] In Bash, every stage of a pipeline runs in its own subshell.
   Modifications to variables inside the `while` loop affect the
   subshell, not the parent shell environment.
 
-- It doesn't handler errors.
+- [ ] It doesn't handle errors.
 
-- It will work only in BASH 4.0 and newer.
+- [ ] It will work only in BASH 4.0 and newer. {-1}
