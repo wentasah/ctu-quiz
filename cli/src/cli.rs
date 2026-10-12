@@ -28,7 +28,8 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub no_browser: bool,
 
-    /// Port the OIDC login listens on; 0 picks a free one.
+    /// Port the OIDC login listens on; 0 picks a free one. Ignored when the
+    /// server prescribes a redirect URI, whose port is used instead.
     #[arg(long, env = "QUIZ_LOGIN_PORT", default_value_t = 0, global = true)]
     pub login_port: u16,
 

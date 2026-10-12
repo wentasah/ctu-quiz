@@ -209,6 +209,16 @@ async fn interactive_login(
     port: u16,
     open_browser: bool,
 ) -> Result<Token> {
+    // A redirect URI fixed by the server dictates the port; otherwise the
+    // provider would send the browser to a port nobody listens on.
+    let port = match &info.redirect_uri {
+        Some(uri) => Url::parse(uri)
+            .context("the server reported a bad redirect URI")?
+            .port_or_known_default()
+            .context("the server reported a redirect URI without a port")?,
+        None => port,
+    };
+
     // Bind first: with `--login-port 0` the port is only known afterwards.
     let listener = TcpListener::bind(("127.0.0.1", port))
         .await
