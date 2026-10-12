@@ -8,7 +8,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "MIT"
 authors = ["Michal Sojka <sojkam1@cvut.cz>"]
-repository = "https://github.com/CTU-FEE-OSY/quiz"
+repository = "https://gitlab.fel.cvut.cz/sojkam1/quiz"
 
 [workspace.dependencies]
 quiz-common = { path = "common" }
