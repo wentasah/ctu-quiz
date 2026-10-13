@@ -109,6 +109,7 @@ async fn a_question_is_asked_answered_and_closed() {
         .await
         .unwrap();
     assert_eq!(state.answer_count, 3);
+    assert_eq!(state.people, 3, "those who answered were in the room");
     assert_eq!(state.counts, vec![1, 0, 2]);
 
     // Requirement 11: the live update carries the number of answers, but not
@@ -1147,6 +1148,83 @@ async fn a_wrong_code_is_reported_on_the_main_page() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn the_teacher_sees_how_many_students_are_in_the_room() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.access_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let question: QuestionInfo = api
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(&token)
+        .json(&CreateQuestion {
+            source_name: "otazky.md".to_owned(),
+            markdown: "Here?\n\n---\n\n- yes\n- no\n".to_owned(),
+            view: StudentView::default(),
+            shuffle: false,
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(question.people, 0);
+
+    let people = || {
+        let request = api
+            .get(format!("{base}/api/v1/questions/{}", question.id))
+            .bearer_auth(&token);
+        async move {
+            let info: QuestionInfo = request.send().await.unwrap().json().await.unwrap();
+            (info.answer_count, info.people)
+        }
+    };
+
+    // A student opens the room, in two tabs, and has not answered yet.
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    student.get(format!("{base}/")).send().await.unwrap();
+    let mut tabs = Vec::new();
+    for _ in 0..2 {
+        let mut events = student
+            .get(format!("{}/events", question.answer_url))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(events.status(), StatusCode::OK);
+        events.chunk().await.unwrap();
+        tabs.push(events);
+    }
+    assert_eq!(people().await, (0, 1), "one student, not one per tab");
+
+    // The presentation view is not a student.
+    let mut display = api
+        .get(format!("{}/events", question.display_url))
+        .send()
+        .await
+        .unwrap();
+    display.chunk().await.unwrap();
+    assert_eq!(people().await, (0, 1));
+
+    // The student closes the page and is gone once the server notices.
+    drop(tabs);
+    let mut counts = people().await;
+    for _ in 0..50 {
+        if counts == (0, 0) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        counts = people().await;
+    }
+    assert_eq!(counts, (0, 0), "the closed page still counts");
 }
 
 /// Logs a student in and answers the question, exactly as a browser would.

@@ -10,9 +10,9 @@
 //! of that teacher appears on the page they already have open.
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     ops::Deref,
-    sync::Arc,
+    sync::{Arc, Mutex, PoisonError},
 };
 
 use anyhow::Result;
@@ -111,6 +111,8 @@ pub struct Room {
     /// Held by every open event stream of the presentation view, so that
     /// the count of its holders tells whether one is open.
     pub presenters: Arc<()>,
+    /// Students who have the room open in a browser right now.
+    pub students: Presence,
     /// The question being asked right now, if any.
     pub current: Option<String>,
     /// How many questions have been asked here; numbers the next one.
@@ -132,6 +134,58 @@ impl Room {
     /// Whether a browser shows the presentation view of this room.
     pub fn is_presented(&self) -> bool {
         Arc::strong_count(&self.presenters) > 1
+    }
+
+    /// How many people are in the room while `question` is asked: those
+    /// who have the room open, and those who answered and have left since.
+    pub fn people(&self, question: &Question) -> usize {
+        let mut logins = self.students.logins();
+        logins.extend(question.responses.keys().cloned());
+        logins.len()
+    }
+}
+
+/// Logins of the students whose event streams of a room are open, each with
+/// the number of its streams: a student with two tabs is still one student.
+#[derive(Debug, Clone, Default)]
+pub struct Presence(Arc<Mutex<HashMap<String, usize>>>);
+
+impl Presence {
+    /// Counts `login` as present until the returned guard is dropped.
+    pub fn enter(&self, login: &str) -> Present {
+        *self.lock().entry(login.to_owned()).or_default() += 1;
+        Present {
+            presence: self.clone(),
+            login: login.to_owned(),
+        }
+    }
+
+    pub fn logins(&self) -> BTreeSet<String> {
+        self.lock().keys().cloned().collect()
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, usize>> {
+        // The map stays consistent even if a holder panicked.
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// One open event stream of a student, see [`Presence::enter`].
+#[derive(Debug)]
+pub struct Present {
+    presence: Presence,
+    login: String,
+}
+
+impl Drop for Present {
+    fn drop(&mut self) {
+        let mut logins = self.presence.lock();
+        if let Some(streams) = logins.get_mut(&self.login) {
+            *streams -= 1;
+            if *streams == 0 {
+                logins.remove(&self.login);
+            }
+        }
     }
 }
 
@@ -205,6 +259,7 @@ impl Question {
                 .collect(),
             open: self.is_open(),
             answer_count: self.responses.len(),
+            people: self.responses.len(),
             counts: self.counts(),
             teacher: self.teacher.clone(),
             created_at: self.created_at,
@@ -311,6 +366,16 @@ impl Store {
     pub fn current_question(&self, token: &str) -> Option<&Question> {
         let room = self.room(token)?;
         room.current.as_ref().and_then(|id| self.questions.get(id))
+    }
+
+    /// What the teacher learns about a question, including how many people
+    /// are in its room.
+    pub fn question_info(&self, question: &Question) -> QuestionInfo {
+        let mut info = question.info();
+        if let Some(room) = self.room(&question.room) {
+            info.people = room.people(question);
+        }
+        info
     }
 
     /// What the students in a room are shown, for the event stream.
@@ -502,6 +567,7 @@ impl AppState {
                     display_url: self.cfg.url(&format!("d/{display_token}"))?.to_string(),
                     display_token,
                     presenters: Arc::new(()),
+                    students: Presence::default(),
                     token: token.clone(),
                     code,
                     teacher: teacher.to_owned(),

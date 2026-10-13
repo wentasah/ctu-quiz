@@ -105,7 +105,7 @@ pub async fn create_question(
         "question created"
     );
 
-    Ok((StatusCode::CREATED, Json(question.info())))
+    Ok((StatusCode::CREATED, Json(store.question_info(question))))
 }
 
 /// `GET /api/v1/questions/{id}` - state of a question, including how many
@@ -116,7 +116,7 @@ pub async fn question(
     Path(id): Path<String>,
 ) -> Result<Json<QuestionInfo>, ApiFailure> {
     let store = state.store.read().await;
-    Ok(Json(owned(&store, &id, &teacher)?.info()))
+    Ok(Json(store.question_info(owned(&store, &id, &teacher)?)))
 }
 
 /// `POST /api/v1/questions/{id}/close` - stops accepting answers, which also
@@ -145,12 +145,11 @@ pub async fn close_question(
             "question closed"
         );
     }
-    let info = question.info();
 
     // The students in the room switch over to the results.
     store.notify_room_of(&id);
 
-    Ok(Json(info))
+    Ok(Json(store.question_info(owned(&store, &id, &teacher)?)))
 }
 
 /// `POST /api/v1/questions/{id}/reveal` - marks the right answers in the
@@ -180,10 +179,9 @@ pub async fn reveal_question(
         question.notify();
         tracing::info!(question = %id, teacher = %teacher.login, "answers revealed");
     }
-    let info = question.info();
     store.notify_room_of(&id);
 
-    Ok(Json(info))
+    Ok(Json(store.question_info(owned(&store, &id, &teacher)?)))
 }
 
 /// `GET /api/v1/questions/{id}/results` - the collected answers, which the CLI

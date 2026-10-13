@@ -421,7 +421,8 @@ fn show_in_browser(url: &str, open_browser: bool) {
     println!("\nOpen the presentation view manually:\n\n    {url}\n");
 }
 
-/// Shows the number of answers until the teacher closes the question.
+/// Shows how many of the students in the room have answered, until the
+/// teacher closes the question.
 ///
 /// `stdin` becomes `None` once the standard input turns out to be closed.
 async fn wait_for_close(
@@ -435,7 +436,7 @@ async fn wait_for_close(
     // Redrawing one line is for a terminal; a log file wants one line per
     // change instead of escape sequences.
     let terminal = std::io::stdout().is_terminal();
-    let mut last_count = usize::MAX;
+    let mut last_counts = None;
     let mut ticker = tokio::time::interval(Duration::from_secs(1));
     let deadline =
         close_after.map(|seconds| tokio::time::Instant::now() + Duration::from_secs(seconds));
@@ -444,13 +445,15 @@ async fn wait_for_close(
         tokio::select! {
             _ = ticker.tick() => {
                 let question = api.question(id).await?;
+                // Answered out of everybody in the room.
+                let counts = (question.answer_count, question.people);
                 if terminal {
-                    print!("\r  answers: {}\x1b[K", question.answer_count);
+                    print!("\r  answers: {}/{}\x1b[K", counts.0, counts.1);
                     let _ = std::io::stdout().flush();
-                } else if question.answer_count != last_count {
-                    println!("  answers: {}", question.answer_count);
+                } else if last_counts != Some(counts) {
+                    println!("  answers: {}/{}", counts.0, counts.1);
                 }
-                last_count = question.answer_count;
+                last_counts = Some(counts);
 
                 if !question.open {
                     println!("\nThe question has been closed.");

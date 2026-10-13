@@ -112,6 +112,10 @@ pub struct QuestionInfo {
     pub open: bool,
     /// Number of students who have answered.
     pub answer_count: usize,
+    /// Number of students in the room: those who have its page open and
+    /// those who have answered, so never fewer than `answer_count`.
+    #[serde(default)]
+    pub people: usize,
     /// Number of answers per possible answer, in the order of `answers`.
     pub counts: Vec<usize>,
     pub teacher: String,

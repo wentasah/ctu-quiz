@@ -32,8 +32,12 @@ Presentation view:  https://quiz.iid.ciirc.cvut.cz/d/9a77...b4
 
 The presentation view was opened in a browser.
 Press Enter to close the question and save the answers (Ctrl-C works too).
-  answers: 17
+  answers: 17/23
 ```
+
+The count at the bottom is the number of answers out of the number of
+students in the room: those who have its page open, plus those who answered
+and left.
 
 1. The CLI parses the Markdown file and shows what it understood, so a broken
    question is noticed before the students see it.

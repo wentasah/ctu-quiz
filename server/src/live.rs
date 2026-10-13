@@ -15,14 +15,15 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use futures_core::Stream;
 use tokio::sync::broadcast::{self, error::RecvError};
 
-use crate::state::AppState;
+use crate::state::{AppState, Present};
 
 /// What a stream follows.
 #[derive(Debug, Clone)]
 pub enum Source {
     /// A room, for the students in it: the state of whatever question is
-    /// being asked there, and of the next one after that.
-    Room(String),
+    /// being asked there, and of the next one after that. The student with
+    /// this login counts as being in the room for as long as the stream runs.
+    Room { token: String, login: String },
     /// The same for the presentation view of a room, which also counts as
     /// open for as long as the stream runs.
     Presentation(String),
@@ -31,7 +32,7 @@ pub enum Source {
 impl Source {
     fn room(&self) -> &str {
         match self {
-            Source::Room(token) | Source::Presentation(token) => token,
+            Source::Room { token, .. } | Source::Presentation(token) => token,
         }
     }
 }
@@ -42,9 +43,9 @@ pub fn stream(
     source: Source,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>> + use<>> {
     let stream = async_stream::stream! {
-        // `_presenting` is dropped together with the stream, which happens
+        // `_watching` is dropped together with the stream, which happens
         // once the browser window is closed.
-        let Some((mut updates, _presenting)) = subscribe(&state, &source).await else {
+        let Some((mut updates, _watching)) = subscribe(&state, &source).await else {
             yield Ok(gone());
             return;
         };
@@ -83,17 +84,23 @@ fn gone() -> Event {
     Event::default().event("gone").data("1")
 }
 
+/// Who is watching a room, for as long as it is held.
+enum Watching {
+    Student(#[allow(dead_code)] Present),
+    Presentation(#[allow(dead_code)] Arc<()>),
+}
+
 async fn subscribe(
     state: &AppState,
     source: &Source,
-) -> Option<(broadcast::Receiver<()>, Option<Arc<()>>)> {
+) -> Option<(broadcast::Receiver<()>, Watching)> {
     let store = state.store.read().await;
     let room = store.room(source.room())?;
-    let presenting = match source {
-        Source::Room(_) => None,
-        Source::Presentation(_) => Some(room.presenters.clone()),
+    let watching = match source {
+        Source::Room { login, .. } => Watching::Student(room.students.enter(login)),
+        Source::Presentation(_) => Watching::Presentation(room.presenters.clone()),
     };
-    Some((room.updates.subscribe(), presenting))
+    Some((room.updates.subscribe(), watching))
 }
 
 async fn snapshot(state: &AppState, source: &Source) -> Option<Event> {

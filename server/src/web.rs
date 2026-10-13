@@ -190,13 +190,17 @@ pub async fn answer(
 /// and which question is being asked.
 pub async fn events(
     State(state): State<AppState>,
-    User(_user): User,
+    User(user): User,
     Path(token): Path<String>,
 ) -> Result<Response, PageError> {
     if state.store.read().await.room(&token).is_none() {
         return Err(not_found());
     }
-    Ok(live::stream(state, live::Source::Room(token)).into_response())
+    let source = live::Source::Room {
+        token,
+        login: user.login,
+    };
+    Ok(live::stream(state, source).into_response())
 }
 
 fn code_page(user: crate::auth::Identity, error: String) -> Result<String, askama::Error> {
