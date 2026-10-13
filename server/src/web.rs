@@ -17,7 +17,7 @@ use crate::{
     error::PageError,
     live,
     state::{AppState, Response as Answer},
-    views::{self, AnswerPage, IndexPage, bars},
+    views::{self, AnswerPage, IndexPage, bars, page_title},
 };
 use askama::Template;
 
@@ -69,6 +69,7 @@ pub async fn room(
 ) -> Result<Response, PageError> {
     let store = state.store.read().await;
     let room = store.room(&token).ok_or_else(not_found)?;
+    let current = store.current_question(&token);
 
     let mut page = AnswerPage {
         prefix: views::prefix(),
@@ -76,7 +77,7 @@ pub async fn room(
         room: room.token.clone(),
         code: room.code.clone(),
         question: String::new(),
-        title: String::new(),
+        title: page_title(current),
         prompt_html: String::new(),
         show_question: true,
         show_answers: true,
@@ -88,15 +89,12 @@ pub async fn room(
         bars: Vec::new(),
     };
 
-    if let Some(question) = store.current_question(&token) {
+    if let Some(question) = current {
         let chosen = question.responses.get(&page.user.login).map(|r| r.index);
         page.question = question.id.clone();
         page.show_question = question.view.show_question;
         page.show_answers = question.view.show_answers;
-        // The title is the first heading of the question, so it is part of
-        // what a hidden question hides - including in the browser tab.
         if page.show_question {
-            page.title = question.title().to_owned();
             page.prompt_html = question.content.prompt_html.clone();
         }
         page.waiting = false;

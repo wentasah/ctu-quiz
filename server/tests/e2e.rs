@@ -85,6 +85,8 @@ async fn a_question_is_asked_answered_and_closed() {
     assert!(body.contains(&question.code));
     assert!(body.contains("Consider the following BASH code"));
     assert!(body.contains("<code class=\"language-bash\">"));
+    assert!(body.contains("<title>Kvíz – otázka 1</title>"), "{body}");
+    assert!(!body.contains("question.md"), "the file name is shown");
     dump_page("display-open.html", &body);
 
     // Requirements 6, 10 and 11: students log in, type the code and answer.
@@ -408,6 +410,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
         .unwrap();
     assert!(body.contains("Second?"), "{body}");
     assert!(!body.contains("First?"), "{body}");
+    assert!(body.contains("<title>Kvíz – otázka 2</title>"), "{body}");
     assert_eq!(question_on_page(&body).as_deref(), Some(second.id.as_str()));
 
     // An answer sent for the question that was on the page a moment ago is

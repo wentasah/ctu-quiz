@@ -100,6 +100,16 @@ pub fn bars(question: &Question, chosen: Option<usize>) -> Vec<Bar> {
         .collect()
 }
 
+/// Title of the browser tab, for a page showing `question` or, before the
+/// first one, none. It is neither the question's heading, which may be hidden
+/// from students, nor the name of the Markdown file.
+pub fn page_title(question: Option<&Question>) -> String {
+    match question {
+        Some(question) => format!("Kvíz – otázka {}", question.number),
+        None => "Kvíz".to_owned(),
+    }
+}
+
 /// The main page, where students type the question code.
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -132,7 +142,7 @@ pub struct AnswerPage {
     pub code: String,
     /// Id of the question being shown; empty while there is none.
     pub question: String,
-    /// Title of the question, empty when it is not for students to see.
+    /// Title of the browser tab.
     pub title: String,
     pub prompt_html: String,
     /// Whether the question text is for the students' own screens.

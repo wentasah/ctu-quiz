@@ -16,7 +16,7 @@ use crate::{
     error::PageError,
     live,
     state::AppState,
-    views::{self, DisplayPage, bars},
+    views::{self, DisplayPage, bars, page_title},
 };
 use askama::Template;
 
@@ -34,7 +34,7 @@ pub async fn display(
         show_answers: true,
         token: token.clone(),
         question: question.id.clone(),
-        title: question.title().to_owned(),
+        title: page_title(Some(question)),
         prompt_html: question.content.prompt_html.clone(),
         open: question.is_open(),
         revealed: question.revealed,

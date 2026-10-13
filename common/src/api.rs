@@ -53,7 +53,7 @@ impl Default for StudentView {
 /// `POST /api/v1/questions` - publish a question read from a Markdown file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateQuestion {
-    /// File name the question came from, for the log and the page title.
+    /// File name the question came from, for the log.
     pub source_name: String,
     /// The Markdown source; the server parses it with
     /// [`quiz_common::parse_question`](crate::parse_question).

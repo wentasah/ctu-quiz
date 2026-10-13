@@ -157,11 +157,6 @@ impl Question {
         self.closed_at.is_none()
     }
 
-    /// Question title, falling back to the Markdown file name.
-    pub fn title(&self) -> &str {
-        self.content.title_or(&self.source_name)
-    }
-
     /// How many students picked each of the possible answers.
     pub fn counts(&self) -> Vec<usize> {
         let mut counts = vec![0; self.content.answers.len()];

@@ -227,7 +227,7 @@ fn owned<'a>(store: &'a Store, id: &str, teacher: &Identity) -> Result<&'a Quest
 }
 
 /// Keeps only the file name of what the CLI sent, and keeps it short: it ends
-/// up in the log and in the page title.
+/// up in the log.
 fn source_name(name: &str) -> String {
     let name = name
         .rsplit(['/', '\\'])

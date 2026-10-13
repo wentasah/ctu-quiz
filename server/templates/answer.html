@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}{% if title.is_empty() %}Kvíz{% else %}{{ title }}{% endif %}{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 {% block body_class %}answer{% endblock %}
 {% block content %}
 <div class="card" id="live" data-events="{{ prefix }}/r/{{ room }}/events"
