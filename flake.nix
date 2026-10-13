@@ -99,6 +99,16 @@
               description = "OIDC client ID of the server.";
             };
 
+            cliClientId = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              example = "quiz-cli";
+              description = ''
+                OIDC client ID of the teacher CLI, if it is registered as a
+                separate public client. Null means the same as clientId.
+              '';
+            };
+
             teachers = lib.mkOption {
               type = lib.types.listOf lib.types.str;
               default = [ ];
@@ -159,6 +169,8 @@
                 QUIZ_ALLOW_ANY_TEACHER = lib.boolToString cfg.allowAnyTeacher;
                 QUIZ_TRUST_PROXY = lib.boolToString cfg.trustProxy;
                 QUIZ_LOG_FILE = "/var/log/quiz-server/quiz-server.log";
+              } // lib.optionalAttrs (cfg.cliClientId != null) {
+                QUIZ_OIDC_CLI_CLIENT_ID = cfg.cliClientId;
               } // cfg.extraEnvironment;
 
               serviceConfig = {
