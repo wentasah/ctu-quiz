@@ -327,7 +327,7 @@ The CLI can reuse the same client (it is then used as a public client with a
 loopback redirect URI) or get one of its own via `--oidc-cli-client-id`. Its
 redirect URI is `http://127.0.0.1:<port>/callback`. Providers that follow
 RFC 8252 accept any loopback port; for stricter ones, register
-`http://127.0.0.1:8765/callback` and set `--oidc-cli-redirect-uri`. The CLI
+`http://127.0.0.1:28191/callback` and set `--oidc-cli-redirect-uri`. The CLI
 asks the server which client to use, so teachers only ever configure
 `--server`.
 
