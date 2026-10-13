@@ -103,6 +103,14 @@ pub struct Room {
     pub teacher: String,
     /// URL of the room, as printed by the CLI and encoded in the QR code.
     pub url: String,
+    /// Secret part of the presentation URL.
+    pub display_token: String,
+    /// URL of the presentation view, which shows whatever question is being
+    /// asked here, so one browser window serves the whole lecture.
+    pub display_url: String,
+    /// Held by every open event stream of the presentation view, so that
+    /// the count of its holders tells whether one is open.
+    pub presenters: Arc<()>,
     /// The question being asked right now, if any.
     pub current: Option<String>,
     /// How many questions have been asked here; numbers the next one.
@@ -120,6 +128,11 @@ impl Room {
         // An error only means nobody is watching.
         let _ = self.updates.send(());
     }
+
+    /// Whether a browser shows the presentation view of this room.
+    pub fn is_presented(&self) -> bool {
+        Arc::strong_count(&self.presenters) > 1
+    }
 }
 
 /// A question asked by a teacher.
@@ -129,8 +142,6 @@ pub struct Question {
     pub room: String,
     /// Short code students type on the main page; the room's.
     pub code: String,
-    /// Secret part of the presentation URL.
-    pub display_token: String,
     /// Name of the Markdown file the question came from.
     pub source_name: String,
     /// Order of the question in its room, starting from 1.
@@ -139,7 +150,11 @@ pub struct Question {
     /// What of this question students see on their own device.
     pub view: StudentView,
     pub answer_url: String,
+    /// The room's presentation URL.
     pub display_url: String,
+    /// Whether the presentation view was already open in a browser when the
+    /// question was asked, and so switched over to it by itself.
+    pub presented: bool,
     pub teacher: String,
     pub created_at: DateTime<Utc>,
     pub closed_at: Option<DateTime<Utc>>,
@@ -177,6 +192,7 @@ impl Question {
             source_name: self.source_name.clone(),
             answer_url: self.answer_url.clone(),
             display_url: self.display_url.clone(),
+            presented: self.presented,
             answers: self
                 .content
                 .answers
@@ -255,7 +271,7 @@ pub struct Store {
     by_code: HashMap<String, String>,
     /// Login of a teacher to the token of their room.
     by_teacher: HashMap<String, String>,
-    /// Display token of a question to its id.
+    /// Display token of a room to its token.
     by_display: HashMap<String, String>,
 }
 
@@ -314,23 +330,23 @@ impl Store {
         }
     }
 
-    /// Looks up the question from the secret part of its presentation URL.
-    pub fn by_display_token(&self, token: &str) -> Option<&Question> {
+    /// Looks up a room from the secret part of its presentation URL.
+    pub fn room_by_display_token(&self, token: &str) -> Option<&Room> {
         self.by_display
             .get(token)
-            .and_then(|id| self.questions.get(id))
+            .and_then(|token| self.rooms.get(token))
     }
 
     pub fn insert_room(&mut self, room: Room) {
         self.by_code.insert(room.code.clone(), room.token.clone());
+        self.by_display
+            .insert(room.display_token.clone(), room.token.clone());
         self.by_teacher
             .insert(room.teacher.clone(), room.token.clone());
         self.rooms.insert(room.token.clone(), room);
     }
 
     pub fn insert_question(&mut self, question: Question) {
-        self.by_display
-            .insert(question.display_token.clone(), question.id.clone());
         self.questions.insert(question.id.clone(), question);
     }
 
@@ -341,6 +357,7 @@ impl Store {
         let token = self.by_teacher.remove(teacher)?;
         let room = self.rooms.remove(&token)?;
         self.by_code.remove(&room.code);
+        self.by_display.remove(&room.display_token);
 
         let asked: Vec<String> = self
             .questions
@@ -349,15 +366,12 @@ impl Store {
             .map(|question| question.id.clone())
             .collect();
         for id in &asked {
-            if let Some(question) = self.questions.remove(id) {
-                self.by_display.remove(&question.display_token);
-                // A presentation view that is still open notices as well.
-                question.notify();
-            }
+            self.questions.remove(id);
         }
 
-        // The streams find nothing and tell the pages to reload, which then
-        // says that the room is no longer there.
+        // The streams find nothing and tell the pages, the presentation view
+        // included, to reload, which then says that the room is no longer
+        // there.
         room.notify();
         Some(asked.len())
     }
@@ -383,9 +397,7 @@ impl Store {
             .map(|q| q.id.clone())
             .collect();
         for id in &expired {
-            if let Some(question) = self.questions.remove(id) {
-                self.by_display.remove(&question.display_token);
-            }
+            self.questions.remove(id);
         }
 
         let abandoned: Vec<String> = self
@@ -397,6 +409,7 @@ impl Store {
         for token in &abandoned {
             if let Some(room) = self.rooms.remove(token) {
                 self.by_code.remove(&room.code);
+                self.by_display.remove(&room.display_token);
                 // Only if the teacher has not opened a newer room since.
                 if self.by_teacher.get(&room.teacher) == Some(&room.token) {
                     self.by_teacher.remove(&room.teacher);
@@ -476,16 +489,19 @@ impl AppState {
     ) -> Result<String> {
         let now = Utc::now();
         let id = random_token();
-        let display_token = random_token();
         let mut store = self.store.write().await;
 
         let room = match store.room_of_teacher(teacher) {
             Some(room) => room.token.clone(),
             None => {
                 let token = random_token();
+                let display_token = random_token();
                 let code = store.free_code();
                 store.insert_room(Room {
                     url: self.cfg.url(&format!("r/{token}"))?.to_string(),
+                    display_url: self.cfg.url(&format!("d/{display_token}"))?.to_string(),
+                    display_token,
+                    presenters: Arc::new(()),
                     token: token.clone(),
                     code,
                     teacher: teacher.to_owned(),
@@ -498,20 +514,28 @@ impl AppState {
                 token
             }
         };
-        // Both are the room's, and the CLI and the templates show them as the
-        // way to reach this question.
-        let (code, answer_url, number) = {
+        // These are the room's, and the CLI and the templates show them as
+        // the way to reach this question. Whether the presentation view is
+        // open has to be known before the room is told about the question,
+        // because that makes the view reload.
+        let (code, answer_url, display_url, presented, number) = {
             let room = store.room_mut(&room).expect("the room was just created");
             room.asked += 1;
-            (room.code.clone(), room.url.clone(), room.asked)
+            (
+                room.code.clone(),
+                room.url.clone(),
+                room.display_url.clone(),
+                room.is_presented(),
+                room.asked,
+            )
         };
 
         store.insert_question(Question {
-            display_url: self.cfg.url(&format!("d/{display_token}"))?.to_string(),
+            display_url,
+            presented,
             id: id.clone(),
             room: room.clone(),
             code,
-            display_token,
             answer_url,
             source_name,
             number,

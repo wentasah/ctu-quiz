@@ -22,12 +22,16 @@ use askama::Template;
 
 /// `GET /d/{token}` - question, QR code, code to type, live answer count and,
 /// once the question is closed, the bar graph (requirements 9, 11 and 12).
+///
+/// The URL belongs to the teacher's room and shows whichever question is being
+/// asked there, so the window stays open for the whole lecture.
 pub async fn display(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<Response, PageError> {
     let store = state.store.read().await;
-    let question = store.by_display_token(&token).ok_or_else(not_found)?;
+    let room = store.room_by_display_token(&token).ok_or_else(not_found)?;
+    let question = store.current_question(&room.token).ok_or_else(not_found)?;
 
     let page = DisplayPage {
         prefix: views::prefix(),
@@ -54,15 +58,15 @@ pub async fn events(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<Response, PageError> {
-    let id = state
+    let room = state
         .store
         .read()
         .await
-        .by_display_token(&token)
-        .map(|question| question.id.clone())
+        .room_by_display_token(&token)
+        .map(|room| room.token.clone())
         .ok_or_else(not_found)?;
 
-    Ok(live::stream(state, live::Source::Question(id)).into_response())
+    Ok(live::stream(state, live::Source::Presentation(room)).into_response())
 }
 
 /// What students have to type into a browser to reach the main page.

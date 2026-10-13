@@ -6,25 +6,34 @@
 //! reconnecting client always gets the current state instead of a backlog of
 //! stale ones.
 //!
-//! The presentation view follows one question, the students follow the room,
-//! which is what lets their page move on to the next question by itself.
+//! Both the presentation view and the students follow the room, which is what
+//! lets their pages move on to the next question by themselves.
 
-use std::convert::Infallible;
+use std::{convert::Infallible, sync::Arc};
 
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures_core::Stream;
-use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::{self, error::RecvError};
 
 use crate::state::AppState;
 
 /// What a stream follows.
 #[derive(Debug, Clone)]
 pub enum Source {
-    /// One question, for the presentation view.
-    Question(String),
     /// A room, for the students in it: the state of whatever question is
     /// being asked there, and of the next one after that.
     Room(String),
+    /// The same for the presentation view of a room, which also counts as
+    /// open for as long as the stream runs.
+    Presentation(String),
+}
+
+impl Source {
+    fn room(&self) -> &str {
+        match self {
+            Source::Room(token) | Source::Presentation(token) => token,
+        }
+    }
 }
 
 /// Streams the state of a question or of a room until the client goes away.
@@ -33,7 +42,9 @@ pub fn stream(
     source: Source,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>> + use<>> {
     let stream = async_stream::stream! {
-        let Some(mut updates) = subscribe(&state, &source).await else {
+        // `_presenting` is dropped together with the stream, which happens
+        // once the browser window is closed.
+        let Some((mut updates, _presenting)) = subscribe(&state, &source).await else {
             yield Ok(gone());
             return;
         };
@@ -75,20 +86,19 @@ fn gone() -> Event {
 async fn subscribe(
     state: &AppState,
     source: &Source,
-) -> Option<tokio::sync::broadcast::Receiver<()>> {
+) -> Option<(broadcast::Receiver<()>, Option<Arc<()>>)> {
     let store = state.store.read().await;
-    Some(match source {
-        Source::Question(id) => store.get(id)?.updates.subscribe(),
-        Source::Room(token) => store.room(token)?.updates.subscribe(),
-    })
+    let room = store.room(source.room())?;
+    let presenting = match source {
+        Source::Room(_) => None,
+        Source::Presentation(_) => Some(room.presenters.clone()),
+    };
+    Some((room.updates.subscribe(), presenting))
 }
 
 async fn snapshot(state: &AppState, source: &Source) -> Option<Event> {
     let store = state.store.read().await;
-    let live = match source {
-        Source::Question(id) => store.get(id)?.live_state(),
-        Source::Room(token) => store.room_state(token)?,
-    };
+    let live = store.room_state(source.room())?;
     Event::default()
         .event("state")
         .json_data(live)

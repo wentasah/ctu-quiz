@@ -136,7 +136,11 @@ async fn ask(
     println!("Students answer at: {}", question.answer_url);
     println!("Presentation view:  {}", question.display_url);
     println!("Students see:       {}", describe(view));
-    show_in_browser(&question.display_url, !cli.no_browser);
+    if question.presented {
+        println!("\nThe presentation view that is already open shows the question.");
+    } else {
+        show_in_browser(&question.display_url, !cli.no_browser);
+    }
 
     // One reader for the whole run, so that an Enter typed ahead is not
     // lost between the two prompts.

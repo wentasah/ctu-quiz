@@ -390,7 +390,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
     assert_ne!(second.id, first.id);
     assert_eq!(second.code, first.code);
     assert_eq!(second.answer_url, first.answer_url);
-    assert_ne!(second.display_url, first.display_url);
+    assert_eq!(second.display_url, first.display_url);
 
     // The page the student has open is told to render itself again, and it
     // then shows the new question - without any code being typed again.
@@ -459,6 +459,80 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
         .unwrap();
     assert!(body.contains("Otázka je uzavřena"), "{body}");
     assert!(body.contains("Další otázka se zde objeví sama"), "{body}");
+}
+
+#[tokio::test]
+async fn one_presentation_window_serves_the_whole_lecture() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.id_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let ask = |markdown: &str| {
+        let request = api
+            .post(format!("{base}/api/v1/questions"))
+            .bearer_auth(token.clone())
+            .json(&CreateQuestion {
+                source_name: "otazky.md".to_owned(),
+                markdown: markdown.to_owned(),
+                view: StudentView::default(),
+                shuffle: false,
+            });
+        async move {
+            let response = request.send().await.unwrap();
+            assert_eq!(response.status(), StatusCode::CREATED);
+            response.json::<QuestionInfo>().await.unwrap()
+        }
+    };
+
+    // Nothing shows the first question yet, so the CLI opens a window.
+    let first = ask("First?\n\n---\n\n- one\n- two\n").await;
+    assert!(!first.presented);
+
+    // The window follows the room.
+    let mut window = api
+        .get(format!("{}/events", first.display_url))
+        .send()
+        .await
+        .unwrap();
+    let next_event = async |window: &mut reqwest::Response| {
+        let chunk = tokio::time::timeout(Duration::from_secs(5), window.chunk())
+            .await
+            .expect("the event stream sends the state")
+            .unwrap()
+            .expect("the event stream goes on");
+        String::from_utf8_lossy(&chunk).into_owned()
+    };
+    assert!(next_event(&mut window).await.contains(&first.id));
+
+    // The next question goes to the window that is already open, which is
+    // told to render itself again.
+    let second = ask("Second?\n\n---\n\n- one\n- two\n").await;
+    assert!(second.presented, "the open window was not noticed");
+    assert_eq!(second.display_url, first.display_url);
+    assert!(next_event(&mut window).await.contains(&second.id));
+    let page = api
+        .get(&first.display_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(page.contains("Second?"), "{page}");
+    assert!(!page.contains("First?"), "{page}");
+    assert!(page.contains("<title>Kvíz – otázka 2</title>"), "{page}");
+
+    // Once the window is closed, the CLI has to open another one.
+    drop(window);
+    for attempt in 0.. {
+        if !ask("Third?\n\n---\n\n- one\n- two\n").await.presented {
+            break;
+        }
+        assert!(attempt < 50, "the closed window is still counted");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 #[tokio::test]

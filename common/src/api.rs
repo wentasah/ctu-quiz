@@ -100,8 +100,13 @@ pub struct QuestionInfo {
     /// of the teacher's room, so students who are already on it see this
     /// question without scanning anything again.
     pub answer_url: String,
-    /// Capability URL of the presentation view; keep it secret.
+    /// Capability URL of the presentation view; keep it secret. It is the
+    /// same for every question of the room and shows the current one.
     pub display_url: String,
+    /// Whether the presentation view was already open in a browser when the
+    /// question was asked, in which case it shows the question by itself.
+    #[serde(default)]
+    pub presented: bool,
     pub answers: Vec<AnswerInfo>,
     /// Whether the question still accepts answers.
     pub open: bool,

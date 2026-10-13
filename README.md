@@ -42,7 +42,9 @@ Press Enter to close the question and save the answers (Ctrl-C works too).
 3. It opens the **presentation view** in a browser. That page shows the
    question, a QR code with the answer URL, the six-digit question code and a
    live count of the answers. If no browser can be opened, the URL is printed
-   for opening by hand.
+   for opening by hand. The window stays open for the whole lecture: every
+   further question appears in it by itself, and a new window is only opened
+   when the old one has been closed.
 4. Students either scan the QR code or go to the main page, log in and type the
    code — both ways land on the same answer URL. They tap one of the answers and
    may correct it while the question is open.
@@ -82,8 +84,10 @@ question, or until the server is restarted. So a lecture goes like this:
   answer sent just as the teacher moves on is dropped rather than counted for
   the wrong question.
 
-Each question still gets a presentation view of its own (`/d/<token>`), which
-is what `quiz ask` opens on the projector, and its own CSV.
+The presentation view (`/d/<token>`) belongs to the room as well and shows
+the question being asked. The server knows whether one is open, because it
+keeps an event stream to it, and `quiz ask` opens a browser only when none is.
+Each question still gets its own CSV.
 
 Two lectures at the same time under the same login would share the room; use a
 second login (or log out in between) to keep them apart.
