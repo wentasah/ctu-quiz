@@ -2,25 +2,31 @@
 //!
 //! Students log in in the browser with the authorization code flow and get a
 //! signed session cookie. Teachers log in with the CLI, which performs the same
-//! flow on a loopback address and then sends the resulting ID token in the
-//! `Authorization: Bearer` header; [`Oidc::verify_id_token`] validates it
+//! flow on a loopback address and then sends the resulting access token in the
+//! `Authorization: Bearer` header; [`Oidc::verify_access_token`] validates it
 //! against the provider's signing keys.
+//!
+//! The ID token stays with the CLI: it tells the CLI who logged in, and it is
+//! addressed to the CLI. The access token is what the provider issues for
+//! calling an API, and its audience says which API.
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use axum::{
     extract::{FromRequestParts, Query, State},
     http::{header, request::Parts},
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::extract::cookie::{Cookie, Key, SameSite, SignedCookieJar};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::Utc;
 use openidconnect::{
     AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointMaybeSet, EndpointNotSet,
-    EndpointSet, IssuerUrl, Nonce, NonceVerifier, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl,
-    Scope, TokenResponse,
+    EndpointSet, IssuerUrl, JsonWebKey, JsonWebKeyAlgorithm, JsonWebKeyId, JsonWebKeyUse,
+    JwsSigningAlgorithm, Nonce, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
+    TokenResponse,
     core::{
-        CoreAuthenticationFlow, CoreClient, CoreIdToken, CoreIdTokenClaims, CoreIdTokenVerifier,
-        CoreJsonWebKeySet, CoreProviderMetadata,
+        CoreAuthenticationFlow, CoreClient, CoreJsonWebKeySet, CoreJwsSigningAlgorithm,
+        CoreProviderMetadata,
     },
 };
 use serde::Deserialize;
@@ -55,16 +61,53 @@ pub struct Identity {
     pub name: String,
 }
 
-/// Accepts any nonce, or none at all.
-///
-/// The nonce of an ID token presented by the CLI was chosen by the CLI, so the
-/// server cannot check it. The token's signature, issuer, audience and validity
-/// are checked, which is what authenticates the teacher.
-struct AnyNonce;
+/// The JOSE header of a signed JWT.
+#[derive(Debug, Deserialize)]
+struct JwtHeader {
+    alg: CoreJwsSigningAlgorithm,
+    kid: Option<JsonWebKeyId>,
+}
 
-impl NonceVerifier for AnyNonce {
-    fn verify(self, _nonce: Option<&Nonce>) -> Result<(), String> {
-        Ok(())
+/// The claims of an access token that the server looks at.
+///
+/// Access tokens have no standard format; this is what Keycloak puts in them,
+/// which matches RFC 9068 plus the user's profile claims.
+#[derive(Debug, Deserialize)]
+struct AccessTokenClaims {
+    iss: String,
+    #[serde(default)]
+    aud: Audiences,
+    exp: i64,
+    nbf: Option<i64>,
+    /// Keycloak tells its tokens apart by `typ`: `Bearer` for an access
+    /// token, `ID` for an ID token.
+    typ: Option<String>,
+    sub: Option<String>,
+    preferred_username: Option<String>,
+    email: Option<String>,
+    name: Option<String>,
+}
+
+/// The `aud` claim: a single string or an array of them.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum Audiences {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl Default for Audiences {
+    fn default() -> Self {
+        Self::Many(Vec::new())
+    }
+}
+
+impl Audiences {
+    fn as_slice(&self) -> &[String] {
+        match self {
+            Self::One(one) => std::slice::from_ref(one),
+            Self::Many(many) => many,
+        }
     }
 }
 
@@ -74,9 +117,8 @@ pub struct Oidc {
     http: reqwest::Client,
     issuer: IssuerUrl,
     jwks: CoreJsonWebKeySet,
-    /// Client ID the CLI authenticates with.
-    cli_client_id: ClientId,
-    /// Further audiences accepted in ID tokens.
+    /// Audiences that make an access token one for this server: its client
+    /// ID and whatever `--oidc-audiences` adds.
     audiences: Vec<String>,
     scopes: Vec<Scope>,
     login_claim: LoginClaim,
@@ -117,8 +159,9 @@ impl Oidc {
             http,
             issuer,
             jwks,
-            cli_client_id: ClientId::new(cfg.cli_client_id().to_owned()),
-            audiences: cfg.oidc_audiences.clone(),
+            audiences: std::iter::once(cfg.oidc_client_id.clone())
+                .chain(cfg.oidc_audiences.iter().cloned())
+                .collect(),
             // "openid" is always sent by the crate itself.
             scopes: cfg
                 .oidc_scopes
@@ -169,46 +212,128 @@ impl Oidc {
             .claims(&self.client.id_token_verifier(), nonce)
             .context("the ID token is not valid")?;
 
-        Ok(self.identity(claims))
+        Ok(self.identity(
+            Some(claims.subject().as_str()),
+            claims.preferred_username().map(|u| u.as_str()),
+            claims.email().map(|e| e.as_str()),
+            claims
+                .name()
+                .and_then(|name| name.get(None))
+                .map(|n| n.as_str()),
+        ))
     }
 
-    /// Validates an ID token presented by the CLI.
-    pub fn verify_id_token(&self, token: &str) -> Result<Identity> {
-        let token: CoreIdToken = token.parse().context("malformed ID token")?;
-        let audiences = &self.audiences;
-        let verifier = CoreIdTokenVerifier::new_public_client(
-            self.cli_client_id.clone(),
-            self.issuer.clone(),
-            self.jwks.clone(),
-        )
-        .set_other_audience_verifier_fn(|audience| {
-            audiences.iter().any(|a| a == audience.as_str())
-        });
+    /// Validates an access token presented by the CLI.
+    ///
+    /// The token has to be a JWT signed by the provider, still valid, and
+    /// issued for this server: its audience must contain the server's client
+    /// ID, whichever client (the CLI's own) asked for it.
+    pub fn verify_access_token(&self, token: &str) -> Result<Identity> {
+        let mut parts = token.split('.');
+        let (Some(header), Some(payload), Some(signature), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            bail!("the access token is not a signed JWT");
+        };
+        let decode = |part: &str| {
+            URL_SAFE_NO_PAD
+                .decode(part)
+                .context("bad base64 in the JWT")
+        };
 
-        let claims = token
-            .claims(&verifier, AnyNonce)
-            .context("the ID token is not valid")?;
-        Ok(self.identity(claims))
+        let header: JwtHeader =
+            serde_json::from_slice(&decode(header)?).context("malformed JWT header")?;
+        // An HMAC key would be a secret shared with the provider, which this
+        // server does not have; anybody could forge such a token.
+        ensure!(
+            !header.alg.uses_shared_secret() && header.alg.key_type().is_some(),
+            "the access token is not signed with a public key"
+        );
+
+        // The `kid` and `alg` of the header are chosen by whoever made the
+        // token, so they only select among the provider's own keys.
+        let message = &token.as_bytes()[..token.len() - signature.len() - 1];
+        let signature = decode(signature)?;
+        let verified = self
+            .jwks
+            .keys()
+            .iter()
+            .filter(|key| header.kid.is_none() || key.key_id() == header.kid.as_ref())
+            .filter(|key| {
+                key.key_use()
+                    .is_none_or(|key_use| key_use.allows_signature())
+            })
+            .filter(|key| header.alg.key_type().as_ref() == Some(key.key_type()))
+            .filter(|key| match key.signing_alg() {
+                JsonWebKeyAlgorithm::Unspecified => true,
+                JsonWebKeyAlgorithm::Algorithm(alg) => *alg == header.alg,
+                JsonWebKeyAlgorithm::Unsupported => false,
+            })
+            .any(|key| {
+                key.verify_signature(&header.alg, message, &signature)
+                    .is_ok()
+            });
+        ensure!(verified, "the access token is not signed by the provider");
+
+        let claims: AccessTokenClaims =
+            serde_json::from_slice(&decode(payload)?).context("malformed access token claims")?;
+        ensure!(
+            claims.iss == self.issuer.as_str(),
+            "the access token was issued by {}, not by {}",
+            claims.iss,
+            self.issuer.as_str()
+        );
+        ensure!(
+            self.audiences
+                .iter()
+                .any(|a| claims.aud.as_slice().contains(a)),
+            "the access token is not meant for this server: its audience is {:?}, not one of {:?}",
+            claims.aud.as_slice(),
+            self.audiences
+        );
+        let now = Utc::now().timestamp();
+        ensure!(claims.exp > now, "the access token has expired");
+        ensure!(
+            claims.nbf.is_none_or(|nbf| nbf <= now),
+            "the access token is not valid yet"
+        );
+        if let Some(typ) = &claims.typ {
+            ensure!(
+                typ.eq_ignore_ascii_case("Bearer"),
+                "the token is not an access token but `{typ}`"
+            );
+        }
+
+        Ok(self.identity(
+            claims.sub.as_deref(),
+            claims.preferred_username.as_deref(),
+            claims.email.as_deref(),
+            claims.name.as_deref(),
+        ))
     }
 
     /// Maps the token claims to a login and a full name.
-    fn identity(&self, claims: &CoreIdTokenClaims) -> Identity {
+    fn identity(
+        &self,
+        subject: Option<&str>,
+        preferred_username: Option<&str>,
+        email: Option<&str>,
+        name: Option<&str>,
+    ) -> Identity {
+        fn non_empty(value: Option<&str>) -> Option<&str> {
+            value.filter(|value| !value.is_empty())
+        }
         let login = match self.login_claim {
-            LoginClaim::PreferredUsername => claims.preferred_username().map(|u| u.to_string()),
-            LoginClaim::Email => claims.email().map(|e| e.to_string()),
+            LoginClaim::PreferredUsername => non_empty(preferred_username),
+            LoginClaim::Email => non_empty(email),
             LoginClaim::Subject => None,
         }
-        .filter(|login| !login.is_empty())
         // Every provider has a subject, so it is the safe fallback.
-        .unwrap_or_else(|| claims.subject().to_string());
+        .or(non_empty(subject))
+        .unwrap_or_default()
+        .to_owned();
 
-        let name = claims
-            .name()
-            .and_then(|name| name.get(None))
-            .map(|name| name.to_string())
-            .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| login.clone());
-
+        let name = non_empty(name).unwrap_or(&login).to_owned();
         Identity { login, name }
     }
 }
@@ -240,7 +365,7 @@ impl FromRequestParts<AppState> for User {
     }
 }
 
-/// A user authenticated by an ID token in the `Authorization` header.
+/// A user authenticated by an access token in the `Authorization` header.
 pub struct ApiUser(pub Identity);
 
 impl FromRequestParts<AppState> for ApiUser {
@@ -258,10 +383,20 @@ impl FromRequestParts<AppState> for ApiUser {
             .or_else(|| header.strip_prefix("bearer "))
             .ok_or_else(|| ApiFailure::unauthorized("expected an Authorization: Bearer header"))?;
 
-        let identity = state.oidc.verify_id_token(token.trim()).map_err(|error| {
-            tracing::warn!(error = %format!("{error:#}"), "rejected an API token");
-            ApiFailure::unauthorized("the ID token is not valid, run `quiz login`")
-        })?;
+        let identity = state
+            .oidc
+            .verify_access_token(token.trim())
+            .map_err(|error| {
+                tracing::warn!(error = %format!("{error:#}"), "rejected an API token");
+                ApiFailure::unauthorized("the access token is not valid, run `quiz login`")
+            })?;
+        // Without a login there is nobody to check against the teacher list.
+        if identity.login.is_empty() {
+            tracing::warn!("rejected an access token without a subject");
+            return Err(ApiFailure::unauthorized(
+                "the access token does not say who you are",
+            ));
+        }
 
         Ok(Self(identity))
     }

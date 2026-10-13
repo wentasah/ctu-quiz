@@ -72,7 +72,8 @@ pub struct Config {
     )]
     pub oidc_scopes: Vec<String>,
 
-    /// Further audiences accepted in ID tokens presented by the CLI.
+    /// Further audiences that make an access token presented by the CLI one
+    /// for this server, besides `--oidc-client-id`.
     #[arg(long, env = "QUIZ_OIDC_AUDIENCES", value_delimiter = ',')]
     pub oidc_audiences: Vec<String>,
 

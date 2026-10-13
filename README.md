@@ -325,7 +325,12 @@ SSO, …):
 
 The CLI can reuse the same client (it is then used as a public client with a
 loopback redirect URI) or get one of its own via `--oidc-cli-client-id`. Its
-redirect URI is `http://127.0.0.1:<port>/callback`. Providers that follow
+redirect URI is `http://127.0.0.1:<port>/callback`. The CLI calls the API with
+the access token it gets, and the server only accepts access tokens whose
+audience (`aud`) contains the server's client ID, so tokens issued to the CLI
+client have to carry it; in Keycloak, add an audience mapper for the server's
+client to the CLI's client. `--oidc-audiences` names further audiences that
+the server accepts instead. Providers that follow
 RFC 8252 accept any loopback port; for stricter ones, register
 `http://127.0.0.1:28191/callback` and set `--oidc-cli-redirect-uri`. The CLI
 asks the server which client to use, so teachers only ever configure
@@ -513,8 +518,10 @@ change the verbosity. The log is append-only and never read back by the server.
   cannot watch the distribution while they are answering.
 * Session cookies are signed with a key generated at startup, `HttpOnly`,
   `SameSite=Lax` and, when the public URL is HTTPS, `Secure`.
-* ID tokens presented by the CLI are verified against the provider's signing
-  keys, with issuer, audience and expiry checked.
+* Access tokens presented by the CLI are verified against the provider's
+  signing keys, with issuer, audience (the server's client ID) and expiry
+  checked. ID tokens are refused: they are meant for the client that logged
+  in, not for the API.
 * Only logins on the `--teachers` list may ask questions, and a question can
   only be closed or exported by the teacher who asked it. The server refuses to
   start with an empty list unless `--allow-any-teacher` says that everybody who

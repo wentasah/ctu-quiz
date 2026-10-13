@@ -6,8 +6,12 @@
 //! The mock speaks enough of OpenID Connect for the real client code to work:
 //! it serves a discovery document and a JWKS, redirects `/authorize` straight
 //! back to the application (as if the user had just logged in) and signs real
-//! RS256 ID tokens at `/token`. That way the tests exercise the actual OIDC
-//! code paths without needing credentials for a real identity provider.
+//! RS256 ID tokens and access tokens at `/token`. That way the tests exercise
+//! the actual OIDC code paths without needing credentials for a real identity
+//! provider.
+//!
+//! The access tokens are JWTs shaped like those of Keycloak: they carry the
+//! user's profile claims, and both kinds of token say what they are in `typ`.
 
 use std::{
     collections::HashMap,
@@ -25,21 +29,22 @@ use axum::{
 use chrono::{TimeDelta, Utc};
 use clap::Parser;
 use openidconnect::{
-    AccessToken, Audience, AuthUrl, EmptyAdditionalClaims, EmptyAdditionalProviderMetadata,
-    EmptyExtraTokenFields, EndUserEmail, EndUserName, EndUserUsername, IssuerUrl, JsonWebKeyId,
-    JsonWebKeySetUrl, LocalizedClaim, Nonce, PrivateSigningKey, ResponseTypes, Scope,
-    StandardClaims, SubjectIdentifier, TokenUrl,
+    AccessToken, AdditionalClaims, Audience, AuthUrl, EmptyAdditionalProviderMetadata,
+    EmptyExtraTokenFields, EndUserEmail, EndUserName, EndUserUsername, IdToken, IdTokenClaims,
+    IdTokenFields, IssuerUrl, JsonWebKeyId, JsonWebKeySetUrl, LocalizedClaim, Nonce,
+    PrivateSigningKey, ResponseTypes, Scope, StandardClaims, StandardTokenResponse,
+    SubjectIdentifier, TokenUrl,
     core::{
-        CoreClientAuthMethod, CoreIdToken, CoreIdTokenClaims, CoreIdTokenFields, CoreJsonWebKeySet,
-        CoreJwsSigningAlgorithm, CoreProviderMetadata, CoreResponseType, CoreRsaPrivateSigningKey,
-        CoreSubjectIdentifierType, CoreTokenResponse, CoreTokenType,
+        CoreClientAuthMethod, CoreGenderClaim, CoreJsonWebKeySet,
+        CoreJweContentEncryptionAlgorithm, CoreJwsSigningAlgorithm, CoreProviderMetadata,
+        CoreResponseType, CoreRsaPrivateSigningKey, CoreSubjectIdentifierType, CoreTokenType,
     },
 };
 use quiz_server::config::Config;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
-/// Key used to sign the ID tokens of the mock provider. Test fixture only.
+/// Key used to sign the tokens of the mock provider. Test fixture only.
 const SIGNING_KEY: &str = include_str!("test-key.pem");
 
 /// The example question, used by the tests of all the crates.
@@ -89,6 +94,23 @@ impl User {
         }
     }
 }
+
+/// The `typ` claim with which Keycloak tells its tokens apart.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct TokenType {
+    typ: String,
+}
+
+impl AdditionalClaims for TokenType {}
+
+/// A signed token of the mock. Access tokens have the claims of an ID token
+/// too, so one type does for both.
+type Jwt =
+    IdToken<TokenType, CoreGenderClaim, CoreJweContentEncryptionAlgorithm, CoreJwsSigningAlgorithm>;
+
+/// An ID token is `ID`, an access token `Bearer`.
+const ID_TOKEN: &str = "ID";
+const ACCESS_TOKEN: &str = "Bearer";
 
 /// An authorization code waiting to be exchanged.
 struct Pending {
@@ -163,17 +185,18 @@ impl MockIdp {
         *self.inner.next_user.lock().unwrap() = user.clone();
     }
 
-    /// Mints an ID token for `user`, as the CLI would obtain it.
-    pub fn id_token(&self, user: &User, audience: &str) -> String {
-        sign(&self.inner, user, audience, None, None).to_string()
+    /// Mints an access token for `user` with the API `audience`, as the CLI
+    /// would obtain it.
+    pub fn access_token(&self, user: &User, audience: &str) -> String {
+        sign(&self.inner, user, audience, ACCESS_TOKEN, None, None).to_string()
     }
 
-    /// Mints an ID token that expired an hour ago.
-    pub fn expired_id_token(&self, user: &User, audience: &str) -> String {
-        let claims = claims(&self.inner, user, audience)
+    /// Mints an access token that expired an hour ago.
+    pub fn expired_access_token(&self, user: &User, audience: &str) -> String {
+        let claims = claims(&self.inner, user, audience, ACCESS_TOKEN)
             .set_expiration(Utc::now() - TimeDelta::hours(1))
             .set_issue_time(Utc::now() - TimeDelta::hours(2));
-        CoreIdToken::new(
+        Jwt::new(
             claims,
             &self.inner.key,
             CoreJwsSigningAlgorithm::RsaSsaPkcs1V15Sha256,
@@ -182,6 +205,11 @@ impl MockIdp {
         )
         .unwrap()
         .to_string()
+    }
+
+    /// Mints an ID token for `user`, which the CLI keeps to itself.
+    pub fn id_token(&self, user: &User, audience: &str) -> String {
+        sign(&self.inner, user, audience, ID_TOKEN, None, None).to_string()
     }
 }
 
@@ -359,27 +387,37 @@ async fn token(State(inner): State<Arc<Inner>>, Form(form): Form<TokenForm>) -> 
             .into_response();
     };
 
+    // The client and the API are the same in the tests, so the client ID
+    // makes a fine audience for the access token too.
     let audience = form.client_id.unwrap_or_else(|| pending.client_id.clone());
-    let access_token = AccessToken::new(Uuid::new_v4().simple().to_string());
+    let access_token = AccessToken::new(
+        sign(&inner, &pending.user, &audience, ACCESS_TOKEN, None, None).to_string(),
+    );
     let id_token = sign(
         &inner,
         &pending.user,
         &audience,
+        ID_TOKEN,
         pending.nonce.as_deref(),
         Some(&access_token),
     );
 
-    let mut response = CoreTokenResponse::new(
+    let mut response = StandardTokenResponse::new(
         access_token,
         CoreTokenType::Bearer,
-        CoreIdTokenFields::new(Some(id_token), EmptyExtraTokenFields {}),
+        IdTokenFields::new(Some(id_token), EmptyExtraTokenFields {}),
     );
     response.set_expires_in(Some(&std::time::Duration::from_secs(3600)));
     Json(response).into_response()
 }
 
-fn claims(inner: &Inner, user: &User, audience: &str) -> CoreIdTokenClaims {
-    CoreIdTokenClaims::new(
+fn claims(
+    inner: &Inner,
+    user: &User,
+    audience: &str,
+    typ: &str,
+) -> IdTokenClaims<TokenType, CoreGenderClaim> {
+    IdTokenClaims::new(
         IssuerUrl::new(inner.issuer.clone()).unwrap(),
         vec![Audience::new(audience.to_owned())],
         Utc::now() + TimeDelta::hours(1),
@@ -390,7 +428,9 @@ fn claims(inner: &Inner, user: &User, audience: &str) -> CoreIdTokenClaims {
                 user.name.clone(),
             ))))
             .set_email(Some(EndUserEmail::new(user.email.clone()))),
-        EmptyAdditionalClaims {},
+        TokenType {
+            typ: typ.to_owned(),
+        },
     )
 }
 
@@ -398,21 +438,22 @@ fn sign(
     inner: &Inner,
     user: &User,
     audience: &str,
+    typ: &str,
     nonce: Option<&str>,
     access_token: Option<&AccessToken>,
-) -> CoreIdToken {
-    let mut claims = claims(inner, user, audience);
+) -> Jwt {
+    let mut claims = claims(inner, user, audience, typ);
     if let Some(nonce) = nonce {
         claims = claims.set_nonce(Some(Nonce::new(nonce.to_owned())));
     }
-    CoreIdToken::new(
+    Jwt::new(
         claims,
         &inner.key,
         CoreJwsSigningAlgorithm::RsaSsaPkcs1V15Sha256,
         access_token,
         None,
     )
-    .expect("signing the ID token works")
+    .expect("signing a token works")
 }
 
 /// The client ID both the web UI and the CLI use in the tests.

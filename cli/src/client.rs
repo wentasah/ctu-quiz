@@ -12,15 +12,15 @@ use url::Url;
 pub struct Api {
     http: reqwest::Client,
     base: Url,
-    id_token: String,
+    access_token: String,
 }
 
 impl Api {
-    pub fn new(http: reqwest::Client, base: Url, id_token: String) -> Self {
+    pub fn new(http: reqwest::Client, base: Url, access_token: String) -> Self {
         Self {
             http,
             base,
-            id_token,
+            access_token,
         }
     }
 
@@ -73,14 +73,14 @@ impl Api {
         Ok(self
             .http
             .get(endpoint(&self.base, path)?)
-            .bearer_auth(&self.id_token))
+            .bearer_auth(&self.access_token))
     }
 
     fn post(&self, path: &str) -> Result<RequestBuilder> {
         Ok(self
             .http
             .post(endpoint(&self.base, path)?)
-            .bearer_auth(&self.id_token))
+            .bearer_auth(&self.access_token))
     }
 
     async fn send<T: DeserializeOwned>(&self, request: RequestBuilder) -> Result<T> {

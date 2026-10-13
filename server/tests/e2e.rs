@@ -19,7 +19,7 @@ async fn a_question_is_asked_answered_and_closed() {
     let base = start_server(&idp, &["sojkam1"]).await;
 
     let teacher = User::new("sojkam1", "Michal Sojka");
-    let teacher_token = idp.id_token(&teacher, CLIENT_ID);
+    let teacher_token = idp.access_token(&teacher, CLIENT_ID);
     let api = reqwest::Client::new();
 
     // The CLI checks who it is logged in as.
@@ -255,21 +255,37 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        ask(Some(idp.expired_id_token(&teacher, CLIENT_ID))).await,
+        ask(Some(idp.expired_access_token(&teacher, CLIENT_ID))).await,
         StatusCode::UNAUTHORIZED
     );
-    // A token for a different client must not be accepted either.
+    // A token for a different API must not be accepted either.
     assert_eq!(
-        ask(Some(idp.id_token(&teacher, "some-other-client"))).await,
+        ask(Some(idp.access_token(&teacher, "some-other-client"))).await,
+        StatusCode::UNAUTHORIZED
+    );
+    // A student's token with the claims of the teacher: the signature no
+    // longer matches.
+    let forged = {
+        let student = idp.access_token(&student, CLIENT_ID);
+        let teacher = idp.access_token(&teacher, CLIENT_ID);
+        let student: Vec<&str> = student.split('.').collect();
+        let teacher: Vec<&str> = teacher.split('.').collect();
+        format!("{}.{}.{}", student[0], teacher[1], student[2])
+    };
+    assert_eq!(ask(Some(forged)).await, StatusCode::UNAUTHORIZED);
+    // Nor an ID token, which only tells its client who logged in, even when
+    // that client is the server itself.
+    assert_eq!(
+        ask(Some(idp.id_token(&teacher, CLIENT_ID))).await,
         StatusCode::UNAUTHORIZED
     );
     // A valid login that is not on the teacher list.
     assert_eq!(
-        ask(Some(idp.id_token(&student, CLIENT_ID))).await,
+        ask(Some(idp.access_token(&student, CLIENT_ID))).await,
         StatusCode::FORBIDDEN
     );
     assert_eq!(
-        ask(Some(idp.id_token(&teacher, CLIENT_ID))).await,
+        ask(Some(idp.access_token(&teacher, CLIENT_ID))).await,
         StatusCode::CREATED
     );
 
@@ -277,7 +293,7 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
     let other = start_server(&idp, &["sojkam1", "vlasakji"]).await;
     let question: QuestionInfo = api
         .post(format!("{other}/api/v1/questions"))
-        .bearer_auth(idp.id_token(&teacher, CLIENT_ID))
+        .bearer_auth(idp.access_token(&teacher, CLIENT_ID))
         .json(&CreateQuestion {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
@@ -292,7 +308,7 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
         .unwrap();
     let status = api
         .post(format!("{other}/api/v1/questions/{}/close", question.id))
-        .bearer_auth(idp.id_token(&User::new("vlasakji", "Jiří Vlasák"), CLIENT_ID))
+        .bearer_auth(idp.access_token(&User::new("vlasakji", "Jiří Vlasák"), CLIENT_ID))
         .send()
         .await
         .unwrap()
@@ -308,7 +324,7 @@ async fn html_in_a_question_reaches_the_browser_escaped() {
 
     let response = reqwest::Client::new()
         .post(format!("{base}/api/v1/questions"))
-        .bearer_auth(idp.id_token(&teacher, CLIENT_ID))
+        .bearer_auth(idp.access_token(&teacher, CLIENT_ID))
         .json(&CreateQuestion {
             source_name: "xss.md".to_owned(),
             markdown: "<script>alert(1)</script>\n\nQ?\n\n---\n\n\
@@ -346,7 +362,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let teacher = User::new("sojkam1", "Michal Sojka");
-    let token = idp.id_token(&teacher, CLIENT_ID);
+    let token = idp.access_token(&teacher, CLIENT_ID);
     let api = reqwest::Client::new();
 
     let ask = |markdown: String| {
@@ -466,7 +482,7 @@ async fn one_presentation_window_serves_the_whole_lecture() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let teacher = User::new("sojkam1", "Michal Sojka");
-    let token = idp.id_token(&teacher, CLIENT_ID);
+    let token = idp.access_token(&teacher, CLIENT_ID);
     let api = reqwest::Client::new();
 
     let ask = |markdown: &str| {
@@ -540,7 +556,7 @@ async fn a_hidden_question_stays_on_the_projector() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let teacher = User::new("sojkam1", "Michal Sojka");
-    let token = idp.id_token(&teacher, CLIENT_ID);
+    let token = idp.access_token(&teacher, CLIENT_ID);
     let api = reqwest::Client::new();
 
     let markdown = "# Roury\n\nWhat is wrong with the pipeline?\n\n---\n\n\
@@ -675,7 +691,7 @@ async fn shuffled_answers_are_the_same_for_everybody() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let teacher = User::new("sojkam1", "Michal Sojka");
-    let token = idp.id_token(&teacher, CLIENT_ID);
+    let token = idp.access_token(&teacher, CLIENT_ID);
     let api = reqwest::Client::new();
 
     // Eight answers, so an order that comes out unshuffled by chance is a
@@ -790,7 +806,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let teacher = User::new("sojkam1", "Michal Sojka");
-    let token = idp.id_token(&teacher, CLIENT_ID);
+    let token = idp.access_token(&teacher, CLIENT_ID);
     let api = reqwest::Client::new();
 
     let question: QuestionInfo = api
@@ -903,7 +919,7 @@ async fn pages_link_the_stylesheet_and_script_of_this_version() {
     let teacher = User::new("sojkam1", "Michal Sojka");
     let question: QuestionInfo = reqwest::Client::new()
         .post(format!("{base}/api/v1/questions"))
-        .bearer_auth(idp.id_token(&teacher, CLIENT_ID))
+        .bearer_auth(idp.access_token(&teacher, CLIENT_ID))
         .json(&CreateQuestion {
             source_name: "otazky.md".to_owned(),
             markdown: QUESTION.to_owned(),
@@ -952,7 +968,7 @@ async fn logging_out_removes_the_room() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let teacher = User::new("sojkam1", "Michal Sojka");
-    let token = idp.id_token(&teacher, CLIENT_ID);
+    let token = idp.access_token(&teacher, CLIENT_ID);
     let api = reqwest::Client::new();
 
     let response = api
@@ -1074,7 +1090,7 @@ async fn an_unusable_question_is_refused_with_an_explanation() {
 
     let response = reqwest::Client::new()
         .post(format!("{base}/api/v1/questions"))
-        .bearer_auth(idp.id_token(&teacher, CLIENT_ID))
+        .bearer_auth(idp.access_token(&teacher, CLIENT_ID))
         .json(&CreateQuestion {
             source_name: "broken.md".to_owned(),
             markdown: "A question without any answers.\n".to_owned(),

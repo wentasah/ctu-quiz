@@ -245,7 +245,7 @@ async fn logout(cli: &Cli, all: bool) -> Result<()> {
         else {
             continue;
         };
-        match Api::new(http, url, token.id_token).close_room().await {
+        match Api::new(http, url, token.access_token).close_room().await {
             Ok(room) if room.closed => println!(
                 "Room on {server} closed ({} question(s) removed); students can no longer answer.",
                 room.questions
@@ -350,7 +350,7 @@ async fn connect(cli: &Cli, force_login: bool) -> Result<Api> {
     )
     .await?;
 
-    Ok(Api::new(http, cli.server.clone(), token.id_token))
+    Ok(Api::new(http, cli.server.clone(), token.access_token))
 }
 
 /// Reads the Markdown of a question.

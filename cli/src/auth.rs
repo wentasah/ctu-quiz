@@ -2,8 +2,10 @@
 //!
 //! The CLI is a native, public OIDC client: it runs the authorization code flow
 //! with PKCE against a loopback redirect URI (RFC 8252), which needs no client
-//! secret. The resulting ID token is cached in the user's configuration
-//! directory and sent to the quiz server in the `Authorization` header.
+//! secret. The resulting access token is cached in the user's configuration
+//! directory and sent to the quiz server in the `Authorization` header. The ID
+//! token only tells the CLI who logged in; it is meant for the CLI, not for
+//! the server.
 
 use std::{collections::HashMap, path::PathBuf};
 
@@ -12,7 +14,10 @@ use chrono::{DateTime, TimeDelta, Utc};
 use openidconnect::{
     AuthorizationCode, ClientId, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse,
     PkceCodeChallenge, RedirectUrl, RefreshToken, Scope, TokenResponse,
-    core::{CoreAuthenticationFlow, CoreClient, CoreProviderMetadata},
+    core::{
+        CoreAuthenticationFlow, CoreClient, CoreIdTokenClaims, CoreProviderMetadata,
+        CoreTokenResponse,
+    },
 };
 use quiz_common::api::OidcInfo;
 use serde::{Deserialize, Serialize};
@@ -22,10 +27,10 @@ use tokio::{
 };
 use url::Url;
 
-/// An ID token that can still be used for a while.
+/// An access token that can still be used for a while.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Token {
-    pub id_token: String,
+    pub access_token: String,
     pub login: String,
     pub expires_at: DateTime<Utc>,
     /// Issuer and client the token belongs to; a changed server configuration
@@ -136,7 +141,7 @@ pub fn forget(server: Option<&str>) -> Result<bool> {
     Ok(removed)
 }
 
-/// Returns a usable ID token for `server`, logging in if necessary.
+/// Returns a usable access token for `server`, logging in if necessary.
 pub async fn token(
     http: &reqwest::Client,
     server: &str,
@@ -155,7 +160,7 @@ pub async fn token(
             // An expired token may still be refreshable without a browser.
             if token.issuer == info.issuer && token.client_id == info.client_id {
                 if let Some(refresh) = token.refresh_token.clone() {
-                    match refresh_token(http, info, &refresh).await {
+                    match refresh_token(http, info, &refresh, &token.login).await {
                         Ok(token) => {
                             cache.tokens.insert(server.to_owned(), token.clone());
                             store_cache(&cache)?;
@@ -271,20 +276,41 @@ async fn interactive_login(
         .context("the ID token is not valid")?;
 
     Ok(Token {
-        id_token: id_token.to_string(),
-        login: claims
-            .preferred_username()
-            .map(|name| name.to_string())
-            .unwrap_or_else(|| claims.subject().to_string()),
-        expires_at: claims.expiration(),
+        access_token: response.access_token().secret().clone(),
+        login: login_of(claims),
+        expires_at: expires_at(&response, claims.expiration()),
         issuer: info.issuer.clone(),
         client_id: info.client_id.clone(),
         refresh_token: response.refresh_token().map(|token| token.secret().clone()),
     })
 }
 
-/// Uses a refresh token to get a new ID token without opening a browser.
-async fn refresh_token(http: &reqwest::Client, info: &OidcInfo, refresh: &str) -> Result<Token> {
+/// The login the user is known by, for the messages of the CLI.
+fn login_of(claims: &CoreIdTokenClaims) -> String {
+    claims
+        .preferred_username()
+        .map(|name| name.to_string())
+        .unwrap_or_else(|| claims.subject().to_string())
+}
+
+/// When the access token of `response` expires; `fallback` if the provider
+/// does not say.
+fn expires_at(response: &CoreTokenResponse, fallback: DateTime<Utc>) -> DateTime<Utc> {
+    response
+        .expires_in()
+        .and_then(|lifetime| TimeDelta::from_std(lifetime).ok())
+        .map(|lifetime| Utc::now() + lifetime)
+        .unwrap_or(fallback)
+}
+
+/// Uses a refresh token to get a new access token without opening a browser.
+/// `login` is kept if the provider sends no new ID token.
+async fn refresh_token(
+    http: &reqwest::Client,
+    info: &OidcInfo,
+    refresh: &str,
+    login: &str,
+) -> Result<Token> {
     // The redirect URI is not used by the refresh grant, but the client needs
     // a valid one.
     let client = discover(http, info, "http://127.0.0.1:1/callback").await?;
@@ -295,20 +321,21 @@ async fn refresh_token(http: &reqwest::Client, info: &OidcInfo, refresh: &str) -
         .await
         .context("refreshing the token failed")?;
 
-    let id_token = response
+    let claims = response
         .id_token()
-        .ok_or_else(|| anyhow!("the refreshed response contains no ID token"))?;
-    let claims = id_token
-        .claims(&client.id_token_verifier(), no_nonce)
+        .map(|id_token| id_token.claims(&client.id_token_verifier(), no_nonce))
+        .transpose()
         .context("the refreshed ID token is not valid")?;
 
     Ok(Token {
-        id_token: id_token.to_string(),
-        login: claims
-            .preferred_username()
-            .map(|name| name.to_string())
-            .unwrap_or_else(|| claims.subject().to_string()),
-        expires_at: claims.expiration(),
+        access_token: response.access_token().secret().clone(),
+        login: claims.map_or_else(|| login.to_owned(), login_of),
+        // Without any word on the lifetime, use the token once and refresh
+        // it again next time.
+        expires_at: expires_at(
+            &response,
+            claims.map_or_else(Utc::now, |claims| claims.expiration()),
+        ),
         issuer: info.issuer.clone(),
         client_id: info.client_id.clone(),
         refresh_token: response
