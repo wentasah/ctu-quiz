@@ -64,3 +64,54 @@
     setOffline(true);
   });
 })();
+
+// Shrinks the question and the QR code box of the presentation view when they
+// would not fit into the window, so that nothing has to be scrolled on the
+// projector. The stylesheet sizes both boxes from their `--fit`; this finds
+// the largest value, at most 1, with which a box still fits.
+(function () {
+  "use strict";
+
+  if (!document.body.classList.contains("display")) {
+    return;
+  }
+
+  var boxes = document.querySelectorAll("body.display .question, body.display .join");
+  // With one column the boxes are below each other and the page scrolls
+  // anyway.
+  var oneColumn = window.matchMedia("(max-width: 60rem)");
+  var smallest = 0.3;
+
+  function fits(box, fit) {
+    box.style.setProperty("--fit", fit);
+    var bottom = box.getBoundingClientRect().bottom + window.scrollY;
+    var padding = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+    return bottom <= window.innerHeight - padding;
+  }
+
+  function fitAll() {
+    boxes.forEach(function (box) {
+      if (oneColumn.matches || fits(box, 1)) {
+        box.style.setProperty("--fit", 1);
+        return;
+      }
+      var low = smallest;
+      var high = 1;
+      for (var i = 0; i < 10; i++) {
+        var middle = (low + high) / 2;
+        if (fits(box, middle)) {
+          low = middle;
+        } else {
+          high = middle;
+        }
+      }
+      box.style.setProperty("--fit", low);
+    });
+  }
+
+  fitAll();
+  window.addEventListener("resize", fitAll);
+  if (document.fonts) {
+    document.fonts.ready.then(fitAll);
+  }
+})();

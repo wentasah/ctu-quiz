@@ -204,14 +204,22 @@ body.display #live {
   align-items: start;
 }
 
-body.display .prompt { font-size: clamp(1.1rem, 1.7vw, 1.9rem); }
+/* Everything in the two boxes is sized relative to their `--fit`, which
+   app.js lowers below 1 when a box would not fit into the window. Lengths
+   inside are therefore in `em`, and the `vw` parts are scaled explicitly. */
+body.display .question, body.display .join {
+  --fit: 1;
+  font-size: calc(var(--fit) * 1rem);
+}
+
+body.display .prompt { font-size: clamp(1.1em, calc(var(--fit) * 1.7vw), 1.9em); }
 body.display .prompt pre { font-size: .85em; }
 
-body.display .options { list-style: none; padding: 0; font-size: clamp(1rem, 1.5vw, 1.6rem); }
-body.display .options li { display: grid; grid-template-columns: 2.5rem 1fr; margin: .6rem 0; }
+body.display .options { list-style: none; padding: 0; font-size: clamp(1em, calc(var(--fit) * 1.5vw), 1.6em); }
+body.display .options li { display: grid; grid-template-columns: 2.5em 1fr; margin: .6em 0; }
 
-body.display .bars { font-size: clamp(1rem, 1.4vw, 1.5rem); }
-body.display .bars .graph { height: 2rem; }
+body.display .bars { font-size: clamp(1em, calc(var(--fit) * 1.4vw), 1.5em); }
+body.display .bars .graph { height: 1.4em; }
 
 body.display .join {
   background: var(--card);
@@ -221,20 +229,27 @@ body.display .join {
   text-align: center;
 }
 
-body.display .qr svg { width: 100%; height: auto; background: #fff; border-radius: 8px; }
-body.display .url { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+body.display .qr svg {
+  display: block;
+  width: calc(var(--fit) * 100%);
+  height: auto;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 8px;
+}
+body.display .url { font-size: .8em; color: var(--muted); overflow-wrap: anywhere; }
 body.display .url a { color: inherit; text-decoration: none; }
 body.display .code-label { color: var(--muted); margin-bottom: 0; }
 
 /* `.join` keeps this off the `pre.code` blocks of the question. */
 body.display .join .code {
-  font: 700 clamp(2rem, 4vw, 3.4rem)/1 ui-monospace, monospace;
+  font: 700 clamp(2em, calc(var(--fit) * 4vw), 3.4em)/1 ui-monospace, monospace;
   letter-spacing: .25rem;
   margin: .25rem 0 1rem;
 }
 
-body.display .counter { font-size: 1rem; color: var(--muted); }
-body.display .counter strong { font-size: clamp(2rem, 4vw, 3.4rem); color: var(--fg); }
+body.display .counter { font-size: 1em; color: var(--muted); }
+body.display .counter strong { font-size: clamp(2em, calc(var(--fit) * 4vw), 3.4em); color: var(--fg); }
 body.display .closed { font-weight: 700; color: var(--error); }
 
 @media (max-width: 60rem) {
