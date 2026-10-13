@@ -109,6 +109,17 @@
               '';
             };
 
+            cliRedirectUri = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              example = "http://127.0.0.1:28191/callback";
+              description = ''
+                Redirect URI registered for the teacher CLI, for providers
+                that do not accept any loopback port. Null lets the CLI pick
+                any http://127.0.0.1:<port>/callback.
+              '';
+            };
+
             teachers = lib.mkOption {
               type = lib.types.listOf lib.types.str;
               default = [ ];
@@ -171,6 +182,8 @@
                 QUIZ_LOG_FILE = "/var/log/quiz-server/quiz-server.log";
               } // lib.optionalAttrs (cfg.cliClientId != null) {
                 QUIZ_OIDC_CLI_CLIENT_ID = cfg.cliClientId;
+              } // lib.optionalAttrs (cfg.cliRedirectUri != null) {
+                QUIZ_OIDC_CLI_REDIRECT_URI = cfg.cliRedirectUri;
               } // cfg.extraEnvironment;
 
               serviceConfig = {
