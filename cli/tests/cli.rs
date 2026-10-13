@@ -1,7 +1,11 @@
 //! Drives the compiled `quiz` binary against a real server and the mock OIDC
 //! provider, including the loopback login and the CSV export.
 
-use std::{path::PathBuf, process::Stdio, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+    time::Duration,
+};
 
 use quiz_testsupport::{
     EXAMPLE_QUESTION, EXECUTABLE_QUESTION, MockIdp, UNSCORED_QUESTION, User, question_on_page,
@@ -36,7 +40,7 @@ async fn ask_flow() {
 
     idp.login_as(&User::new("sojkam1", "Michal Sojka"));
 
-    let mut child = Command::new(QUIZ)
+    let mut child = quiz(&dir)
         .args([
             "--server",
             &base,
@@ -46,8 +50,6 @@ async fn ask_flow() {
             "ask",
         ])
         .arg(&question)
-        .env("XDG_CONFIG_HOME", &dir)
-        .env_remove("QUIZ_SERVER")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -202,9 +204,8 @@ async fn ask_flow() {
         assert_eq!(mode & 0o777, 0o600, "the cached token is not private");
     }
 
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .args(["--server", &base, "--no-browser", "whoami"])
-        .env("XDG_CONFIG_HOME", &dir)
         .output()
         .await
         .unwrap();
@@ -215,9 +216,8 @@ async fn ask_flow() {
 
     // `quiz close` without a question id ends the lecture: the page the
     // student has open stops working, but the teacher stays logged in.
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .args(["--server", &base, "--no-browser", "close"])
-        .env("XDG_CONFIG_HOME", &dir)
         .output()
         .await
         .unwrap();
@@ -236,9 +236,8 @@ async fn ask_flow() {
     );
 
     // And logging out forgets the token; there is no room left to close.
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .args(["--server", &base, "logout"])
-        .env("XDG_CONFIG_HOME", &dir)
         .output()
         .await
         .unwrap();
@@ -254,12 +253,7 @@ async fn parse_checks_a_question_file_without_a_server() {
 
     let good = dir.join("question.md");
     std::fs::write(&good, EXAMPLE_QUESTION).unwrap();
-    let output = Command::new(QUIZ)
-        .arg("parse")
-        .arg(&good)
-        .output()
-        .await
-        .unwrap();
+    let output = quiz(&dir).arg("parse").arg(&good).output().await.unwrap();
     let printed = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{printed}");
     assert!(
@@ -269,7 +263,7 @@ async fn parse_checks_a_question_file_without_a_server() {
 
     let unscored = dir.join("division.md");
     std::fs::write(&unscored, UNSCORED_QUESTION).unwrap();
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .arg("parse")
         .arg(&unscored)
         .output()
@@ -286,12 +280,7 @@ async fn parse_checks_a_question_file_without_a_server() {
 
     let bad = dir.join("broken.md");
     std::fs::write(&bad, "Where are the answers?\n").unwrap();
-    let output = Command::new(QUIZ)
-        .arg("parse")
-        .arg(&bad)
-        .output()
-        .await
-        .unwrap();
+    let output = quiz(&dir).arg("parse").arg(&bad).output().await.unwrap();
     assert!(!output.status.success());
     let printed = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -314,10 +303,9 @@ async fn a_configuration_file_is_found_in_a_parent_directory() {
     )
     .unwrap();
 
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .args(["parse", "question.md"])
         .current_dir(&lecture)
-        .env("XDG_CONFIG_HOME", &dir)
         .output()
         .await
         .unwrap();
@@ -334,10 +322,9 @@ async fn a_configuration_file_is_found_in_a_parent_directory() {
     .unwrap();
     std::fs::create_dir_all(dir.join("quiz")).unwrap();
     std::fs::write(dir.join("quiz").join("config.toml"), "sever = 'x'\n").unwrap();
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .args(["parse", "question.md"])
         .current_dir(&lecture)
-        .env("XDG_CONFIG_HOME", &dir)
         .output()
         .await
         .unwrap();
@@ -345,10 +332,9 @@ async fn a_configuration_file_is_found_in_a_parent_directory() {
     assert!(printed.contains("unknown option `sever`"), "{printed}");
 
     std::fs::remove_file(dir.join("quiz").join("config.toml")).unwrap();
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .args(["parse", "question.md"])
         .current_dir(&lecture)
-        .env("XDG_CONFIG_HOME", &dir)
         .output()
         .await
         .unwrap();
@@ -367,7 +353,7 @@ async fn an_executable_question_loses_its_shebang_line() {
     assert!(shebang.starts_with("#!"), "the fixture has no shebang line");
 
     // As a plain Markdown file the shebang is text like any other.
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .arg("parse")
         .arg(&question)
         .output()
@@ -379,7 +365,7 @@ async fn an_executable_question_loses_its_shebang_line() {
 
     // Made executable, the file is a script and the shebang belongs to it.
     std::fs::set_permissions(&question, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let output = Command::new(QUIZ)
+    let output = quiz(&dir)
         .arg("parse")
         .arg(&question)
         .output()
@@ -417,6 +403,18 @@ fn the_shell_completions_are_written_while_the_cli_is_compiled() {
     for expected in ["ask", "logout", "--labels-only", "--hide-question"] {
         assert!(bash.contains(expected), "{expected} is not in quiz.bash");
     }
+}
+
+/// The CLI, run in `dir` and with its configuration there too, so that
+/// neither a `quiz.toml` above the checkout nor the user's own
+/// `~/.config/quiz` changes what the tests see.
+fn quiz(dir: &Path) -> Command {
+    let mut command = Command::new(QUIZ);
+    command
+        .current_dir(dir)
+        .env("XDG_CONFIG_HOME", dir)
+        .env_remove("QUIZ_SERVER");
+    command
 }
 
 /// A scratch directory of this test process.
