@@ -6,21 +6,34 @@ use quiz_common::api::{
 };
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
+use tokio::sync::Mutex;
 use url::Url;
+
+use crate::auth::{self, Token};
+
+/// How to log in again once the access token runs out.
+pub struct Login {
+    pub info: OidcInfo,
+    pub port: u16,
+    pub open_browser: bool,
+}
 
 /// An authenticated connection to one quiz server.
 pub struct Api {
     http: reqwest::Client,
     base: Url,
-    access_token: String,
+    token: Mutex<Token>,
+    /// Without it, the token is used as it is, even when it has expired.
+    login: Option<Login>,
 }
 
 impl Api {
-    pub fn new(http: reqwest::Client, base: Url, access_token: String) -> Self {
+    pub fn new(http: reqwest::Client, base: Url, token: Token, login: Option<Login>) -> Self {
         Self {
             http,
             base,
-            access_token,
+            token: Mutex::new(token),
+            login,
         }
     }
 
@@ -37,50 +50,74 @@ impl Api {
     }
 
     pub async fn whoami(&self) -> Result<WhoAmI> {
-        self.send(self.get("whoami")?).await
+        self.send(self.get("whoami").await?).await
     }
 
     /// Asks the server to drop the room this teacher's students are in.
     pub async fn close_room(&self) -> Result<RoomClosed> {
-        self.send(self.post("room/close")?).await
+        self.send(self.post("room/close").await?).await
     }
 
     pub async fn create_question(&self, question: &CreateQuestion) -> Result<QuestionInfo> {
-        let request = self.post("questions")?.json(question);
+        let request = self.post("questions").await?.json(question);
         self.send(request).await
     }
 
     pub async fn question(&self, id: &str) -> Result<QuestionInfo> {
-        self.send(self.get(&format!("questions/{id}"))?).await
+        self.send(self.get(&format!("questions/{id}")).await?).await
     }
 
     pub async fn close(&self, id: &str) -> Result<QuestionInfo> {
-        self.send(self.post(&format!("questions/{id}/close"))?)
+        self.send(self.post(&format!("questions/{id}/close")).await?)
             .await
     }
 
     pub async fn reveal(&self, id: &str) -> Result<QuestionInfo> {
-        self.send(self.post(&format!("questions/{id}/reveal"))?)
+        self.send(self.post(&format!("questions/{id}/reveal")).await?)
             .await
     }
 
     pub async fn results(&self, id: &str) -> Result<Results> {
-        self.send(self.get(&format!("questions/{id}/results"))?)
+        self.send(self.get(&format!("questions/{id}/results")).await?)
             .await
     }
 
-    fn get(&self, path: &str) -> Result<RequestBuilder> {
+    async fn get(&self, path: &str) -> Result<RequestBuilder> {
+        let token = self.access_token().await?;
         Ok(self
             .http
             .get(endpoint(&self.base, path)?)
-            .bearer_auth(&self.access_token))
+            .bearer_auth(token))
     }
 
-    fn post(&self, path: &str) -> Result<RequestBuilder> {
+    async fn post(&self, path: &str) -> Result<RequestBuilder> {
+        let token = self.access_token().await?;
         Ok(self
             .http
             .post(endpoint(&self.base, path)?)
-            .bearer_auth(&self.access_token))
+            .bearer_auth(token))
+    }
+
+    /// The access token, refreshed first when it is about to expire.
+    ///
+    /// Access tokens may live only a few minutes, less than a question stays
+    /// open, so `quiz ask` would otherwise lose its login half way through.
+    async fn access_token(&self) -> Result<String> {
+        let mut token = self.token.lock().await;
+        if let Some(login) = &self.login {
+            if !token.is_usable(&login.info) {
+                *token = auth::token(
+                    &self.http,
+                    self.base.as_str(),
+                    &login.info,
+                    login.port,
+                    login.open_browser,
+                    false,
+                )
+                .await?;
+            }
+        }
+        Ok(token.access_token.clone())
     }
 
     async fn send<T: DeserializeOwned>(&self, request: RequestBuilder) -> Result<T> {

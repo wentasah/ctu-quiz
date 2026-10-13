@@ -42,7 +42,7 @@ pub struct Token {
 
 impl Token {
     /// Tokens are refreshed a minute early, to survive a slow request.
-    fn is_usable(&self, info: &OidcInfo) -> bool {
+    pub fn is_usable(&self, info: &OidcInfo) -> bool {
         self.issuer == info.issuer
             && self.client_id == info.client_id
             && self.expires_at > Utc::now() + TimeDelta::seconds(60)

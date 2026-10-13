@@ -39,6 +39,9 @@ async fn ask_flow() {
     std::fs::write(&question, EXAMPLE_QUESTION).unwrap();
 
     idp.login_as(&User::new("sojkam1", "Michal Sojka"));
+    // Access tokens that are due for a refresh at once, as if the question
+    // stayed open longer than they live.
+    idp.set_token_lifetime(Duration::from_secs(30));
 
     let mut child = quiz(&dir)
         .args([
@@ -157,6 +160,7 @@ async fn ask_flow() {
     }
     let status = child.wait().await.unwrap();
     assert!(status.success(), "the CLI failed:\n{printed}");
+    assert!(idp.refreshes() > 0, "the CLI never refreshed its token");
     assert!(printed.contains("Answers: 1"), "{printed}");
     assert!(printed.contains("Average points: 1.00 of 1"), "{printed}");
     assert!(printed.contains("Answers saved to"), "{printed}");

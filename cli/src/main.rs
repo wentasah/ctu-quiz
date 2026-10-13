@@ -24,7 +24,7 @@ use anyhow::{Context, Result, bail};
 use chrono::Local;
 use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command};
-use client::Api;
+use client::{Api, Login};
 use quiz_common::api::{CreateQuestion, StudentView};
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use url::Url;
@@ -245,7 +245,7 @@ async fn logout(cli: &Cli, all: bool) -> Result<()> {
         else {
             continue;
         };
-        match Api::new(http, url, token.access_token).close_room().await {
+        match Api::new(http, url, token, None).close_room().await {
             Ok(room) if room.closed => println!(
                 "Room on {server} closed ({} question(s) removed); students can no longer answer.",
                 room.questions
@@ -350,7 +350,12 @@ async fn connect(cli: &Cli, force_login: bool) -> Result<Api> {
     )
     .await?;
 
-    Ok(Api::new(http, cli.server.clone(), token.access_token))
+    let login = Login {
+        info,
+        port: cli.login_port,
+        open_browser: !cli.no_browser,
+    };
+    Ok(Api::new(http, cli.server.clone(), token, Some(login)))
 }
 
 /// Reads the Markdown of a question.

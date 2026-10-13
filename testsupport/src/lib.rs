@@ -16,7 +16,11 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
 };
 
 use axum::{
@@ -32,7 +36,7 @@ use openidconnect::{
     AccessToken, AdditionalClaims, Audience, AuthUrl, EmptyAdditionalProviderMetadata,
     EmptyExtraTokenFields, EndUserEmail, EndUserName, EndUserUsername, IdToken, IdTokenClaims,
     IdTokenFields, IssuerUrl, JsonWebKeyId, JsonWebKeySetUrl, LocalizedClaim, Nonce,
-    PrivateSigningKey, ResponseTypes, Scope, StandardClaims, StandardTokenResponse,
+    PrivateSigningKey, RefreshToken, ResponseTypes, Scope, StandardClaims, StandardTokenResponse,
     SubjectIdentifier, TokenUrl,
     core::{
         CoreClientAuthMethod, CoreGenderClaim, CoreJsonWebKeySet,
@@ -112,7 +116,8 @@ type Jwt =
 const ID_TOKEN: &str = "ID";
 const ACCESS_TOKEN: &str = "Bearer";
 
-/// An authorization code waiting to be exchanged.
+/// An authorization code waiting to be exchanged, or a refresh token.
+#[derive(Clone)]
 struct Pending {
     user: User,
     nonce: Option<String>,
@@ -127,6 +132,11 @@ struct Inner {
     /// Who the next visit of `/authorize` logs in as.
     next_user: Mutex<User>,
     pending: Mutex<HashMap<String, Pending>>,
+    /// Refresh tokens handed out, and whom they log in again.
+    refresh_tokens: Mutex<HashMap<String, Pending>>,
+    /// How long the access tokens live, as far as `expires_in` says.
+    token_lifetime: Mutex<Duration>,
+    refreshes: AtomicUsize,
 }
 
 /// A running mock OIDC provider.
@@ -164,6 +174,9 @@ impl MockIdp {
             jwks,
             next_user: Mutex::new(User::new("nobody", "Nobody")),
             pending: Mutex::new(HashMap::new()),
+            refresh_tokens: Mutex::new(HashMap::new()),
+            token_lifetime: Mutex::new(Duration::from_secs(3600)),
+            refreshes: AtomicUsize::new(0),
         });
 
         let app = Router::new()
@@ -183,6 +196,18 @@ impl MockIdp {
     /// Makes the next login in a browser happen as `user`.
     pub fn login_as(&self, user: &User) {
         *self.inner.next_user.lock().unwrap() = user.clone();
+    }
+
+    /// Makes the token responses say that the access tokens expire after
+    /// `lifetime`. The tokens themselves stay valid for an hour, so that the
+    /// server accepts them while the client already wants new ones.
+    pub fn set_token_lifetime(&self, lifetime: Duration) {
+        *self.inner.token_lifetime.lock().unwrap() = lifetime;
+    }
+
+    /// How many times a refresh token has been used.
+    pub fn refreshes(&self) -> usize {
+        self.inner.refreshes.load(Ordering::SeqCst)
     }
 
     /// Mints an access token for `user` with the API `audience`, as the CLI
@@ -371,15 +396,27 @@ fn escape(value: &str) -> String {
 
 #[derive(serde::Deserialize)]
 struct TokenForm {
+    grant_type: Option<String>,
     code: Option<String>,
+    refresh_token: Option<String>,
     client_id: Option<String>,
 }
 
 async fn token(State(inner): State<Arc<Inner>>, Form(form): Form<TokenForm>) -> Response {
-    let Some(pending) = form
-        .code
-        .and_then(|code| inner.pending.lock().unwrap().remove(&code))
-    else {
+    let pending = if form.grant_type.as_deref() == Some("refresh_token") {
+        inner.refreshes.fetch_add(1, Ordering::SeqCst);
+        form.refresh_token
+            .and_then(|token| inner.refresh_tokens.lock().unwrap().remove(&token))
+            // A refreshed ID token carries no nonce.
+            .map(|pending| Pending {
+                nonce: None,
+                ..pending
+            })
+    } else {
+        form.code
+            .and_then(|code| inner.pending.lock().unwrap().remove(&code))
+    };
+    let Some(pending) = pending else {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({"error": "invalid_grant"})),
@@ -407,7 +444,15 @@ async fn token(State(inner): State<Arc<Inner>>, Form(form): Form<TokenForm>) -> 
         CoreTokenType::Bearer,
         IdTokenFields::new(Some(id_token), EmptyExtraTokenFields {}),
     );
-    response.set_expires_in(Some(&std::time::Duration::from_secs(3600)));
+    response.set_expires_in(Some(&inner.token_lifetime.lock().unwrap()));
+
+    let refresh_token = Uuid::new_v4().simple().to_string();
+    inner
+        .refresh_tokens
+        .lock()
+        .unwrap()
+        .insert(refresh_token.clone(), pending);
+    response.set_refresh_token(Some(RefreshToken::new(refresh_token)));
     Json(response).into_response()
 }
 
