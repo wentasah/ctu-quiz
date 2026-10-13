@@ -105,6 +105,8 @@ pub struct Room {
     pub url: String,
     /// The question being asked right now, if any.
     pub current: Option<String>,
+    /// How many questions have been asked here; numbers the next one.
+    pub asked: usize,
     pub created_at: DateTime<Utc>,
     /// When the teacher last asked a question here.
     pub last_used_at: DateTime<Utc>,
@@ -131,6 +133,8 @@ pub struct Question {
     pub display_token: String,
     /// Name of the Markdown file the question came from.
     pub source_name: String,
+    /// Order of the question in its room, starting from 1.
+    pub number: usize,
     pub content: quiz_common::Question,
     /// What of this question students see on their own device.
     pub view: StudentView,
@@ -491,6 +495,7 @@ impl AppState {
                     code,
                     teacher: teacher.to_owned(),
                     current: None,
+                    asked: 0,
                     created_at: now,
                     last_used_at: now,
                     updates: broadcast::channel(16).0,
@@ -500,9 +505,10 @@ impl AppState {
         };
         // Both are the room's, and the CLI and the templates show them as the
         // way to reach this question.
-        let (code, answer_url) = {
-            let room = store.room(&room).expect("the room was just created");
-            (room.code.clone(), room.url.clone())
+        let (code, answer_url, number) = {
+            let room = store.room_mut(&room).expect("the room was just created");
+            room.asked += 1;
+            (room.code.clone(), room.url.clone(), room.asked)
         };
 
         store.insert_question(Question {
@@ -513,6 +519,7 @@ impl AppState {
             display_token,
             answer_url,
             source_name,
+            number,
             content,
             view,
             teacher: teacher.to_owned(),
