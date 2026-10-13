@@ -120,6 +120,17 @@
               '';
             };
 
+            scopes = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ "openid" "profile" "email" ];
+              example = [ "openid" "profile" ];
+              description = ''
+                OIDC scopes requested by the server and the teacher CLI. The
+                provider refuses the whole login if any of them is not
+                allowed for the client.
+              '';
+            };
+
             teachers = lib.mkOption {
               type = lib.types.listOf lib.types.str;
               default = [ ];
@@ -176,6 +187,7 @@
                 QUIZ_PUBLIC_URL = cfg.publicUrl;
                 QUIZ_OIDC_ISSUER = cfg.issuer;
                 QUIZ_OIDC_CLIENT_ID = cfg.clientId;
+                QUIZ_OIDC_SCOPES = lib.concatStringsSep "," cfg.scopes;
                 QUIZ_TEACHERS = lib.concatStringsSep "," cfg.teachers;
                 QUIZ_ALLOW_ANY_TEACHER = lib.boolToString cfg.allowAnyTeacher;
                 QUIZ_TRUST_PROXY = lib.boolToString cfg.trustProxy;
