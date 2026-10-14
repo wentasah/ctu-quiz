@@ -35,12 +35,24 @@ use url::Url;
 use crate::{
     config::{Config, LoginClaim},
     error::{ApiFailure, PageError},
-    state::{AppState, PendingLogin},
+    state::{AppState, LOGIN_TTL_MINUTES, PendingLogin},
     views,
 };
 
 /// Name of the cookie holding the (signed) session id.
 pub const SESSION_COOKIE: &str = "quiz_session";
+
+/// Name of the cookie that ties a login to the browser which started it.
+///
+/// The `state` of the login is part of the name, so that logins started in
+/// several tabs at once do not overwrite each other's cookie. Over HTTPS the
+/// name gets the `__Host-` prefix, with which the browser refuses the cookie
+/// unless this very host set it: a page on a sibling subdomain cannot plant
+/// a login cookie it got for itself.
+fn login_cookie_name(csrf: &str, secure: bool) -> String {
+    let prefix = if secure { "__Host-" } else { "" };
+    format!("{prefix}quiz_login_{csrf}")
+}
 
 /// The OIDC client, with the endpoints discovered from the provider.
 type DiscoveredClient = CoreClient<
@@ -428,7 +440,17 @@ pub struct LoginQuery {
 }
 
 /// `GET /login` - redirects to the OIDC provider.
-pub async fn login(State(state): State<AppState>, Query(query): Query<LoginQuery>) -> Response {
+///
+/// The browser also gets a cookie that the callback insists on. Without it,
+/// anybody could start a login, sign in as themselves, and hand the callback
+/// URL to somebody else, whose browser would then finish the login and be
+/// logged in as the attacker: the victim's answers would be recorded under
+/// the attacker's name.
+pub async fn login(
+    State(state): State<AppState>,
+    Query(query): Query<LoginQuery>,
+    jar: SignedCookieJar,
+) -> Response {
     let (url, csrf, nonce, pkce_verifier) = state.oidc.authorize_url();
     let next = sanitize_next(query.next.as_deref());
 
@@ -454,8 +476,19 @@ pub async fn login(State(state): State<AppState>, Query(query): Query<LoginQuery
         .into_response();
     }
 
+    let secure = state.cfg.secure_cookies();
+    let cookie = Cookie::build((login_cookie_name(csrf.secret(), secure), "1"))
+        .path("/")
+        .http_only(true)
+        // The provider sends the browser back with a top-level GET, which
+        // carries a `Lax` cookie even though it comes from another site.
+        .same_site(SameSite::Lax)
+        .secure(secure)
+        .max_age(time::Duration::minutes(LOGIN_TTL_MINUTES))
+        .build();
+
     tracing::info!(%next, "redirecting a visitor to the OIDC provider");
-    Redirect::to(url.as_str()).into_response()
+    (jar.add(cookie), Redirect::to(url.as_str())).into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -485,6 +518,15 @@ pub async fn callback(
             "Odpověď od poskytovatele identity je neúplná.",
         ));
     };
+
+    // Only the browser that started the login may finish it.
+    let login_cookie = login_cookie_name(&csrf, state.cfg.secure_cookies());
+    if jar.get(&login_cookie).is_none() {
+        tracing::warn!("a login was finished by a browser that did not start it");
+        return Err(PageError::bad_request(
+            "Přihlášení nebylo zahájeno v tomto prohlížeči. Zkuste to prosím znovu.",
+        ));
+    }
 
     let pending = state.logins.write().await.remove(&csrf).ok_or_else(|| {
         tracing::warn!("no pending login for the returned state parameter");
@@ -519,7 +561,10 @@ pub async fn callback(
     );
 
     let target = views::link(&pending.next);
-    Ok((jar.add(cookie), Redirect::to(&target)).into_response())
+    let jar = jar
+        .add(cookie)
+        .remove(Cookie::build(login_cookie).path("/"));
+    Ok((jar, Redirect::to(&target)).into_response())
 }
 
 /// `GET /logout` - forgets the session.

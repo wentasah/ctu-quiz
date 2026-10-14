@@ -30,7 +30,7 @@ use crate::{
 };
 
 /// How long a login that was started may still be finished.
-const LOGIN_TTL_MINUTES: i64 = 15;
+pub const LOGIN_TTL_MINUTES: i64 = 15;
 
 /// How many logins may be in progress at once.
 ///

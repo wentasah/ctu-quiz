@@ -1227,6 +1227,64 @@ async fn the_teacher_sees_how_many_students_are_in_the_room() {
     assert_eq!(counts, (0, 0), "the closed page still counts");
 }
 
+#[tokio::test]
+async fn a_login_cannot_be_finished_in_somebody_elses_browser() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let browser = || {
+        reqwest::Client::builder()
+            .cookie_store(true)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap()
+    };
+    let location = |response: &reqwest::Response| {
+        response.headers()[reqwest::header::LOCATION]
+            .to_str()
+            .unwrap()
+            .to_owned()
+    };
+
+    // The attacker starts a login and signs in as themselves, but stops
+    // before their browser comes back to the server.
+    idp.login_as(&User::new("podvodn1", "Petr Podvodník"));
+    let attacker = browser();
+    let to_provider = attacker.get(format!("{base}/login")).send().await.unwrap();
+    let back = attacker.get(location(&to_provider)).send().await.unwrap();
+    let callback = location(&back);
+    assert!(callback.contains("/auth/callback?"), "{callback}");
+
+    // Somebody else's browser is sent to the callback URL.
+    let victim = browser();
+    let response = victim.get(&callback).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let response = victim.get(format!("{base}/")).send().await.unwrap();
+    assert!(
+        location(&response).contains("/login"),
+        "the victim is not logged in as the attacker"
+    );
+
+    // The browser that started the login finishes it all right, and the
+    // cookie that bound it is gone afterwards.
+    let response = attacker.get(&callback).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    let cookies: Vec<_> = response
+        .headers()
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .map(|value| value.to_str().unwrap().to_owned())
+        .collect();
+    assert!(
+        cookies
+            .iter()
+            .any(|cookie| cookie.starts_with("quiz_login_") && cookie.contains("Max-Age=0")),
+        "{cookies:?}"
+    );
+    let response = attacker.get(format!("{base}/")).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.text().await.unwrap().contains("Petr Podvodník"));
+}
+
 /// Logs a student in and answers the question, exactly as a browser would.
 async fn answer_as(
     base: &str,
