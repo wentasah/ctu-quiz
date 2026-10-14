@@ -386,7 +386,7 @@ fn rendered_events(markdown: &str) -> Vec<Event<'_>> {
     // Language and contents of the code block currently being collected.
     let mut code: Option<(String, String)> = None;
 
-    for event in Parser::new_ext(markdown, options()) {
+    for event in events_without_comments(markdown) {
         match event {
             Event::Start(Tag::CodeBlock(kind)) => {
                 let language = match &kind {
@@ -423,6 +423,61 @@ fn rendered_events(markdown: &str) -> Vec<Event<'_>> {
     events
 }
 
+/// The Markdown event stream without HTML comments (`<!-- ... -->`), which
+/// are notes for the teacher, not for the people in the room.
+///
+/// The parser hands out an HTML block line by line, so a block is put
+/// together first; this way a comment spanning several lines goes away
+/// as a whole. A block that held nothing but comments disappears entirely.
+fn events_without_comments(markdown: &str) -> Vec<Event<'_>> {
+    let mut events = Vec::new();
+    // Contents of the HTML block currently being collected.
+    let mut block: Option<String> = None;
+
+    for event in Parser::new_ext(markdown, options()) {
+        match event {
+            Event::Start(Tag::HtmlBlock) => block = Some(String::new()),
+            Event::Html(html) if block.is_some() => {
+                if let Some(contents) = &mut block {
+                    contents.push_str(&html);
+                }
+            }
+            Event::End(TagEnd::HtmlBlock) => {
+                let html = strip_comments(&block.take().unwrap_or_default());
+                if !html.trim().is_empty() {
+                    events.push(Event::Start(Tag::HtmlBlock));
+                    events.push(Event::Html(html.into()));
+                    events.push(Event::End(TagEnd::HtmlBlock));
+                }
+            }
+            Event::InlineHtml(html) => {
+                let html = strip_comments(&html);
+                if !html.is_empty() {
+                    events.push(Event::InlineHtml(html.into()));
+                }
+            }
+            other => events.push(other),
+        }
+    }
+    events
+}
+
+/// Removes every `<!-- ... -->` from `html`. An unterminated comment runs to
+/// the end, as it does in a browser.
+fn strip_comments(html: &str) -> String {
+    let mut out = String::new();
+    let mut rest = html;
+    while let Some(start) = rest.find("<!--") {
+        out.push_str(&rest[..start]);
+        rest = match rest[start + 4..].find("-->") {
+            Some(end) => &rest[start + 4 + end + 3..],
+            None => "",
+        };
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Renders an answer, unwrapping the paragraph of a single-paragraph answer so
 /// that it can be placed inside a label or a table cell.
 fn render_answer(markdown: &str) -> String {
@@ -441,7 +496,7 @@ fn render_answer(markdown: &str) -> String {
 /// Collapses Markdown to a single line of plain text.
 fn plain_text(markdown: &str) -> String {
     let mut text = String::new();
-    for event in Parser::new_ext(markdown, options()) {
+    for event in events_without_comments(markdown) {
         match event {
             Event::Text(t) | Event::Code(t) | Event::Html(t) | Event::InlineHtml(t) => {
                 text.push_str(&t)
@@ -600,6 +655,26 @@ What's wrong with it?
             answer.html
         );
         assert_eq!(answer.plain, "<b onmouseover=alert(2)>bold</b>");
+    }
+
+    #[test]
+    fn html_comments_are_left_out() {
+        let q = parse(
+            "<!-- a note\n\nfor the teacher -->\n\nQ <!-- inline --> here?\n\n\
+             <!-- x --> <b>kept</b>\n\n---\n\n- one <!-- why -->\n- two\n",
+        )
+        .unwrap();
+
+        assert!(!q.prompt_html.contains("note"), "{}", q.prompt_html);
+        assert!(!q.prompt_html.contains("teacher"), "{}", q.prompt_html);
+        assert!(!q.prompt_html.contains("inline"), "{}", q.prompt_html);
+        assert!(!q.prompt_html.contains("&lt;!--"), "{}", q.prompt_html);
+        assert!(q.prompt_html.contains("<p>Q  here?</p>"), "{}", q.prompt_html);
+        // Other raw HTML next to a comment is still escaped.
+        assert!(q.prompt_html.contains("&lt;b&gt;kept"), "{}", q.prompt_html);
+
+        assert!(!q.answers[0].html.contains("why"), "{}", q.answers[0].html);
+        assert_eq!(q.answers[0].plain, "one");
     }
 
     #[test]
