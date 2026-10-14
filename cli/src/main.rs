@@ -184,7 +184,13 @@ async fn wait_for_reveal(
             // No terminal on the standard input: nobody to press Enter.
             Ok(None) | Err(_) => println!("The right answers were not revealed; {later}."),
         },
-        _ = tokio::signal::ctrl_c() => println!("\nThe right answers were not revealed; {later}."),
+        // A plain `return` would leave the Enter-reading task stuck on
+        // tokio's blocking pool, which the runtime waits for on shutdown, so
+        // the process would not actually exit until Enter is pressed anyway.
+        _ = tokio::signal::ctrl_c() => {
+            println!("\nThe right answers were not revealed; {later}.");
+            std::process::exit(0);
+        }
     }
     Ok(())
 }
