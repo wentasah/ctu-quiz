@@ -59,43 +59,118 @@ and left.
    students scan or type nothing again: the page they still have open shows
    the new question by itself.
 
-## One room per teacher
+## Teacher CLI
 
-The URL behind the QR code (`/r/<token>`) and the six-digit code
-belong to the **teacher**, and they stay the same for as long as the
-teacher keeps asking — up to `--question-ttl-hours` after the last
-question, or until the server is restarted. So a lecture goes like
-this:
+Teacher CLI (the `quiz` command) works are described below. Let's
+start with some examples:
+
+```sh
+quiz ask otazky.md            # publish, present, collect, save (the main one)
+quiz ask otazky.md -o answers.csv --close-after 120
+quiz ask otazky.md --hide-question   # question only on the projector
+quiz ask otazky.md --labels-only     # phones show A, B, C only
+quiz ask otazky.md --shuffle         # answers in a random order
+quiz parse otazky.md          # check the Markdown, no server needed
+quiz login                    # log in ahead of the lecture
+quiz whoami                    # who am I, and may I ask questions?
+quiz logout [--all]          # end the lecture: close the room, forget the token
+quiz close <question id>      # if `quiz ask` was interrupted: close and save
+quiz close                    # end the lecture but stay logged in: close the room
+quiz reveal <question id>     # mark the right answers, if `quiz ask` did not
+```
+
+`--server` (or `QUIZ_SERVER`) selects the server, `--no-browser` never opens a
+browser and only prints URLs, `--login-port` sets the port of the local
+listener used during the login. The ID token is cached in
+`$XDG_CONFIG_HOME/quiz/tokens.json` (mode 0600), so the browser is normally
+only needed once a day.
+
+Default values of the options can be kept in TOML files, so that they need
+not be typed every time. `quiz` reads `$XDG_CONFIG_HOME/quiz/config.toml` and
+`quiz.toml` from the current directory or the nearest of its parents; the
+latter wins, so a course directory can override the teacher's own defaults.
+The keys are the long option names, with the options of a subcommand in a
+table of its name:
+
+```toml
+server = "https://quiz.iid.ciirc.cvut.cz"
+
+[ask]
+shuffle = true
+hide-question = true
+close-after = 120
+```
+
+An environment variable or an option on the command line still wins over
+the files. A flag set to `true` in a file cannot be switched off on the
+command line, only by `false` in a nearer `quiz.toml`. The `--help` output
+shows the defaults in effect for the options that take a value.
+
+Ctrl-C does the same as Enter: the question is closed and the answers are
+saved, so a mistyped key does not lose the collected data.
+
+A scored question then waits for one more Enter before the right answers are
+marked in the results, so that the class can talk about the bar graph first.
+Ctrl-C, or a standard input that is not a terminal, ends `quiz ask` without
+revealing them; `quiz reveal <question id>` does it later. An open question
+cannot be revealed.
+
+## The CSV file with question answers
+
+The answers of every question are stored in a CSV file with one row
+per student, sorted by login:
+
+```csv
+login,name,answer,answer_text,answered_at
+novakja1,Jan Novák,B,It doesn't handle errors.,2026-09-21T12:05:41.881Z
+svobodpe,Petra Svobodová,C,It will work only in BASH 4.0 and newer.,2026-09-21T12:05:44.102Z
+```
+
+A scored question adds a `points` column after `name`, holding the points
+of the chosen answer.
+
+The file name is the base name of the question file plus the date and time:
+`otazky.md` → `otazky_2026-09-21_14-05-03.csv`, written into the same
+directory unless `--output` says otherwise.
+
+## Rooms
+
+The URL behind the QR code (`/r/<token>`) and the six-digit code are
+associated with the **teacher**, not with a single question. Together
+they form the teacher's *room*, which stays open as long as the
+teacher keeps asking questions — until `--question-ttl-hours` after
+the last question, or until the server restarts. A lecture therefore
+goes like this:
 
 * The first `quiz ask` opens the room. Students scan the QR code or type the
-  code once, and stay on that page.
-* Every further `quiz ask` of the same teacher puts a new question into the
-  same room. The pages the students have open notice it over the event stream
-  and render the new question themselves; latecomers can still use the QR code
-  or the code, which have not changed.
-* Between questions the page shows the results of the last one, and then the
-  next question when it arrives.
+  code once and keep that page open.
+* Each further `quiz ask` by the same teacher puts a new question into the
+  same room. The students' pages learn about it over the event stream and
+  render it on their own; latecomers can still use the QR code or the code,
+  since neither has changed.
+* Between questions, the page shows the results of the previous question
+  until the next one arrives.
 * A question that is still open when the next one is asked stays open for its
-  own `quiz ask` — Enter still closes it and writes its CSV — but the students
-  have already moved on to the new one.
-* **`quiz close` (with no question id) closes the room**: its questions are
-  dropped, the pages students have open reload and say that the room is gone,
-  and the URL and the code stop working. The next question opens a room with a
-  new code. This is how a lecture is ended deliberately instead of waiting for
-  the TTL; the teacher stays logged in.
-* **`quiz logout` does the same and forgets the token** as well, which is what
-  ends a lecture for good on a shared machine.
-* An answer carries the id of the question that was on the screen, so an
-  answer sent just as the teacher moves on is dropped rather than counted for
-  the wrong question.
+  own `quiz ask` — pressing Enter there still closes it and writes its CSV —
+  but the students have already moved on to the new one.
+* **`quiz close` without a question id closes the room**: its questions are
+  dropped, the students' pages reload and report that the room is gone, and
+  the URL and the code stop working. The next question opens a new room with
+  a new code. This ends a lecture deliberately instead of waiting for the
+  TTL, and the teacher stays logged in.
+* **`quiz logout` does the same and also forgets the token**, which is the
+  way to end a lecture for good on a shared machine.
+* Each answer carries the id of the question that was on the student's
+  screen, so an answer sent just as the teacher moves on is dropped instead
+  of being counted for the wrong question.
 
-The presentation view (`/d/<token>`) belongs to the room as well and shows
-the question being asked. The server knows whether one is open, because it
-keeps an event stream to it, and `quiz ask` opens a browser only when none is.
-Each question still gets its own CSV.
+The presentation view (`/d/<token>`) belongs to the room too, and always
+shows the current question. The server keeps an event stream to each open
+presentation view, so it knows whether one exists, and `quiz ask` opens a
+browser only when none does. Each question still gets its own CSV.
 
-Two lectures at the same time under the same login would share the room; use a
-second login (or log out in between) to keep them apart.
+Two lectures held at the same time under the same login would share a room;
+use a second login (or log out in between) to keep them apart.
 
 ## Keeping the question off the phones
 
@@ -384,76 +459,6 @@ the container image use (`quiz-server --help` lists them all):
 `--public-url` may contain a path prefix (`https://osy.fel.cvut.cz/quiz`); the
 server then serves all its pages under that prefix, so the reverse proxy has to
 forward the path unchanged — see `deploy/nginx.conf.example`.
-
-## Teacher CLI
-
-```sh
-quiz ask otazky.md            # publish, present, collect, save (the main one)
-quiz ask otazky.md -o answers.csv --close-after 120
-quiz ask otazky.md --hide-question   # question only on the projector
-quiz ask otazky.md --labels-only     # phones show A, B, C only
-quiz ask otazky.md --shuffle         # answers in a random order
-quiz parse otazky.md          # check the Markdown, no server needed
-quiz login                    # log in ahead of the lecture
-quiz whoami                    # who am I, and may I ask questions?
-quiz logout [--all]          # end the lecture: close the room, forget the token
-quiz close <question id>      # if `quiz ask` was interrupted: close and save
-quiz close                    # end the lecture but stay logged in: close the room
-quiz reveal <question id>     # mark the right answers, if `quiz ask` did not
-```
-
-`--server` (or `QUIZ_SERVER`) selects the server, `--no-browser` never opens a
-browser and only prints URLs, `--login-port` sets the port of the local
-listener used during the login. The ID token is cached in
-`$XDG_CONFIG_HOME/quiz/tokens.json` (mode 0600), so the browser is normally
-only needed once a day.
-
-Default values of the options can be kept in TOML files, so that they need
-not be typed every time. `quiz` reads `$XDG_CONFIG_HOME/quiz/config.toml` and
-`quiz.toml` from the current directory or the nearest of its parents; the
-latter wins, so a course directory can override the teacher's own defaults.
-The keys are the long option names, with the options of a subcommand in a
-table of its name:
-
-```toml
-server = "https://quiz.iid.ciirc.cvut.cz"
-
-[ask]
-shuffle = true
-hide-question = true
-close-after = 120
-```
-
-An environment variable or an option on the command line still wins over
-the files. A flag set to `true` in a file cannot be switched off on the
-command line, only by `false` in a nearer `quiz.toml`. The `--help` output
-shows the defaults in effect for the options that take a value.
-
-Ctrl-C does the same as Enter: the question is closed and the answers are
-saved, so a mistyped key does not lose the collected data.
-
-A scored question then waits for one more Enter before the right answers are
-marked in the results, so that the class can talk about the bar graph first.
-Ctrl-C, or a standard input that is not a terminal, ends `quiz ask` without
-revealing them; `quiz reveal <question id>` does it later. An open question
-cannot be revealed.
-
-## The CSV file
-
-One row per student, sorted by login:
-
-```csv
-login,name,answer,answer_text,answered_at
-novakja1,Jan Novák,B,It doesn't handle errors.,2026-09-21T12:05:41.881Z
-svobodpe,Petra Svobodová,C,It will work only in BASH 4.0 and newer.,2026-09-21T12:05:44.102Z
-```
-
-A scored question adds a `points` column after `name`, holding the points
-of the chosen answer.
-
-The file name is the base name of the question file plus the date and time:
-`otazky.md` → `otazky_2026-09-21_14-05-03.csv`, written into the same
-directory unless `--output` says otherwise.
 
 ## Deployment
 
