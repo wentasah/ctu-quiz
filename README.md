@@ -105,14 +105,16 @@ paste into a chatbot:
 
 | `quiz ask`        | On the phone                                                       |
 |-------------------|--------------------------------------------------------------------|
-| (nothing)         | the question and the answers, as before                            |
+| (nothing)         | the question and the answers                                       |
 | `--hide-question` | the answers only; *„Otázka je jen na plátně.“* instead of the text |
+| `--hide-answers`  | the question with bare labels `A`, `B`, `C`, … to choose from      |
 | `--labels-only`   | a keypad of the labels `A`, `B`, `C`, …                            |
+| `--shuffle`       | the answers in a random order, the same one as on the projector    |
 
 `--labels-only` is the short way of writing `--hide-question --hide-answers`.
+`--shuffle` combines with any of them; see [below](#shuffling-the-answers).
 
-`--hide-answers` on its own is allowed too, and leaves the question with bare
-labels to choose from. `quiz ask` prints what it settled on (`Students see:
+`quiz ask` prints what it settled on (`Students see:
 …`), the choice is in the log next to the created question, and it holds for
 the results of that question as well — the bar graph on a phone then shows
 the counts without the answer texts. The presentation view, the CSV and the
