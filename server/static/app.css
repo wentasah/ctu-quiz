@@ -71,6 +71,8 @@ a { color: var(--accent); }
 
 .who { color: var(--muted); font-size: .85rem; margin-top: 0; }
 .status { color: var(--muted); }
+.source { color: var(--muted); font-size: .75rem; text-align: center; margin-top: 1.5rem; }
+.source a { color: inherit; }
 .status.ok { color: var(--ok); }
 .error { color: var(--error); font-weight: 600; }
 
