@@ -61,10 +61,11 @@ and left.
 
 ## One room per teacher
 
-The URL behind the QR code (`/r/<token>`) and the six-digit code belong to the
-**teacher**, not to the single question, and they stay the same for as long as
-the teacher keeps asking — up to `--question-ttl-hours` after the last
-question, or until the server is restarted. So a lecture goes like this:
+The URL behind the QR code (`/r/<token>`) and the six-digit code
+belong to the **teacher**, and they stay the same for as long as the
+teacher keeps asking — up to `--question-ttl-hours` after the last
+question, or until the server is restarted. So a lecture goes like
+this:
 
 * The first `quiz ask` opens the room. Students scan the QR code or type the
   code once, and stay on that page.
@@ -102,11 +103,11 @@ Everything students need is on the projector, so their own screen does not
 have to repeat it — and what is not on their screen is a lot more work to
 paste into a chatbot:
 
-| `quiz ask` | On the phone |
-| --- | --- |
-| (nothing) | the question and the answers, as before |
+| `quiz ask`        | On the phone                                                       |
+|-------------------|--------------------------------------------------------------------|
+| (nothing)         | the question and the answers, as before                            |
 | `--hide-question` | the answers only; *„Otázka je jen na plátně.“* instead of the text |
-| `--labels-only` | a keypad of the labels `A`, `B`, `C`, … |
+| `--labels-only`   | a keypad of the labels `A`, `B`, `C`, …                            |
 
 `--labels-only` is the short way of writing `--hide-question --hide-answers`.
 
@@ -352,7 +353,7 @@ quiz-server \
     --public-url https://quiz.iid.ciirc.cvut.cz \
     --oidc-issuer https://idp.example.org/realms/fel \
     --oidc-client-id quiz \
-    --teachers sojkam1,vlasakji
+    --teachers sojkam1,stepan
 ```
 
 Every option has an environment variable, which is what the systemd unit and
