@@ -125,6 +125,25 @@ pre.code {
   padding: .1em .3em;
 }
 
+/* `display: block` lets a wide table scroll on a phone instead of
+   widening the page. */
+.prompt table {
+  display: block;
+  max-width: 100%;
+  width: max-content;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.prompt th, .prompt td {
+  border: 1px solid var(--border);
+  padding: .35em .75em;
+}
+
+.prompt th { background: var(--bg); font-weight: 600; }
+.prompt tbody tr:nth-child(even) { background: color-mix(in srgb, var(--bg) 50%, transparent); }
+
 /* ---- student answer buttons ---- */
 
 .answers { display: grid; gap: .6rem; margin: 1rem 0; }
