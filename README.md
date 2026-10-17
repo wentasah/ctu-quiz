@@ -82,14 +82,16 @@ quiz reveal <question id>     # mark the right answers, if `quiz ask` did not
 
 `--server` (or `QUIZ_SERVER`) selects the server, `--no-browser` never opens a
 browser and only prints URLs, `--login-port` sets the port of the local
-listener used during the login. The ID token is cached in
-`$XDG_CONFIG_HOME/quiz/tokens.json` (mode 0600), so the browser is normally
-only needed once a day.
+listener used during the login. The ID token is cached in `tokens.json`
+in the configuration directory (mode 0600 on Linux and macOS), so the browser
+is normally only needed once a day. The configuration directory is
+`$XDG_CONFIG_HOME/quiz` (by default `~/.config/quiz`) on Linux and macOS, and
+`%APPDATA%\quiz` on Windows.
 
 Default values of the options can be kept in TOML files, so that they need
-not be typed every time. `quiz` reads `$XDG_CONFIG_HOME/quiz/config.toml` and
-`quiz.toml` from the current directory or the nearest of its parents; the
-latter wins, so a course directory can override the teacher's own defaults.
+not be typed every time. `quiz` reads `config.toml` from the configuration
+directory and `quiz.toml` from the current directory or the nearest of its
+parents; the latter wins, so a course directory can override the teacher's own defaults.
 The keys are the long option names, with the options of a subcommand in a
 table of its name:
 
@@ -591,7 +593,7 @@ The counters start from zero whenever the server restarts.
 | `server/src/state.rs` | the in-memory questions, answers and sessions |
 | `server/src/web.rs` | the student pages |
 | `cli/src/cli.rs` | the clap command line, shared with `cli/build.rs` |
-| `cli/src/config.rs` | default option values from `quiz.toml` and `~/.config/quiz/config.toml` |
+| `cli/src/config.rs` | the configuration directory, and default option values from `quiz.toml` and `config.toml` in it |
 | `cli/build.rs` | writes the shell completions during the build |
 | `server/src/display.rs` | the presentation view and the QR code |
 | `server/src/live.rs` | the server-sent event streams |

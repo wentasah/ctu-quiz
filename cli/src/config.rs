@@ -2,7 +2,7 @@
 //!
 //! Two files are read, both in TOML:
 //!
-//! * `$XDG_CONFIG_HOME/quiz/config.toml`, the teacher's own defaults;
+//! * `config.toml` in the directory of [`dir`], the teacher's own defaults;
 //! * `quiz.toml` in the current directory or the nearest of its parents,
 //!   the defaults of one course, kept next to its questions.
 //!
@@ -24,6 +24,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
+use etcetera::{BaseStrategy, choose_base_strategy};
 use figment::{
     Figment, Profile, Provider,
     providers::{Format, Toml},
@@ -33,16 +34,11 @@ use figment::{
 /// Searched for in the current directory and all its parents.
 const PROJECT_FILE: &str = "quiz.toml";
 
-/// `$XDG_CONFIG_HOME/quiz`, where the tool keeps its files.
+/// Where the tool keeps its files: `$XDG_CONFIG_HOME/quiz` or
+/// `~/.config/quiz` on Linux and macOS, `%APPDATA%\quiz` on Windows.
 pub fn dir() -> Result<PathBuf> {
-    let dir = match std::env::var_os("XDG_CONFIG_HOME") {
-        Some(dir) if !dir.is_empty() => PathBuf::from(dir),
-        _ => PathBuf::from(
-            std::env::var_os("HOME").context("neither XDG_CONFIG_HOME nor HOME is set")?,
-        )
-        .join(".config"),
-    };
-    Ok(dir.join("quiz"))
+    let strategy = choose_base_strategy().context("cannot find the configuration directory")?;
+    Ok(strategy.config_dir().join("quiz"))
 }
 
 /// Gives the options of `command` the defaults found in the configuration

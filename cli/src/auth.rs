@@ -55,7 +55,7 @@ struct Cache {
     tokens: HashMap<String, Token>,
 }
 
-/// `$XDG_CONFIG_HOME/quiz/tokens.json`.
+/// `tokens.json` in the directory of [`crate::config::dir`].
 fn cache_path() -> Result<PathBuf> {
     Ok(crate::config::dir()?.join("tokens.json"))
 }
