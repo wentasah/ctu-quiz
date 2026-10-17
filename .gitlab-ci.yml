@@ -1,0 +1,67 @@
+# Builds the binaries for Linux, macOS and Windows and keeps them as job
+# artifacts, downloadable from the pipeline page or, for the newest build of
+# a branch, from
+#
+#   https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=<job name>
+#
+# Everything is cross-compiled on Linux with cargo-zigbuild, which uses Zig as
+# the C compiler (the TLS library has C code) and the linker for every target.
+# Its image comes with the Rust targets and with a macOS SDK, which the macOS
+# build needs for the CoreFoundation framework (chrono reads the local time
+# zone through it).
+
+stages:
+  - build
+
+.build:
+  stage: build
+  image: ghcr.io/rust-cross/cargo-zigbuild:0.23.4
+  variables:
+    # The packages to build; the server is only ever deployed on Linux.
+    PACKAGES: -p quiz-cli
+  script:
+    - cargo zigbuild --release --locked $PACKAGES --target "$TARGET"
+    # A glibc target carries the oldest glibc to link against after a dot,
+    # which is not part of the output directory.
+    - mkdir -p "dist/$PLATFORM"
+    - cp $(for binary in $BINARIES; do echo "target/${TARGET%%.*}/release/$binary"; done) "dist/$PLATFORM/"
+    - ls -l "dist/$PLATFORM"
+  artifacts:
+    name: quiz-$PLATFORM-$CI_COMMIT_REF_SLUG
+    paths:
+      - dist/
+    expire_in: 3 months
+
+build-linux-gnu:
+  extends: .build
+  variables:
+    # Runs on any distribution with glibc 2.28 or newer (Debian 10, RHEL 8,
+    # Ubuntu 18.10).
+    TARGET: x86_64-unknown-linux-gnu.2.28
+    PLATFORM: linux-x86_64-gnu
+    PACKAGES: -p quiz-cli -p quiz-server
+    BINARIES: quiz quiz-server
+
+build-linux-musl:
+  extends: .build
+  variables:
+    # Statically linked, runs on any Linux, Alpine included.
+    TARGET: x86_64-unknown-linux-musl
+    PLATFORM: linux-x86_64-musl
+    PACKAGES: -p quiz-cli -p quiz-server
+    BINARIES: quiz quiz-server
+
+build-macos:
+  extends: .build
+  variables:
+    # One binary for both Apple Silicon and Intel Macs.
+    TARGET: universal2-apple-darwin
+    PLATFORM: macos-universal
+    BINARIES: quiz
+
+build-windows:
+  extends: .build
+  variables:
+    TARGET: x86_64-pc-windows-gnu
+    PLATFORM: windows-x86_64
+    BINARIES: quiz.exe

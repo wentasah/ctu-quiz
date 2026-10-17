@@ -333,6 +333,23 @@ Syntax highlighting sits behind the `highlight` feature of `quiz-common`, which
 `quiz-server` turns on: only the server renders HTML. Building the CLI on its
 own (`cargo build -p quiz-cli`) therefore leaves the syntax definitions out.
 
+### Prebuilt binaries
+
+The GitLab CI (`.gitlab-ci.yml`) cross-compiles the binaries on every push
+with [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and keeps
+them as job artifacts for three months. The newest ones of `main` can be
+downloaded directly:
+
+| Platform | Binaries | Download |
+|---|---|---|
+| Linux x86-64, glibc 2.28+ | `quiz`, `quiz-server` | [build-linux-gnu](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-gnu) |
+| Linux x86-64, static (musl) | `quiz`, `quiz-server` | [build-linux-musl](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-musl) |
+| macOS, Apple Silicon and Intel | `quiz` | [build-macos](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-macos) |
+| Windows x86-64 | `quiz.exe` | [build-windows](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-windows) |
+
+The macOS binary is not signed, so Gatekeeper refuses to start it when it was
+downloaded with a browser; `xattr -d com.apple.quarantine quiz` lets it run.
+
 ## Trying it out locally
 
 The repository contains a **development identity provider** so that the whole
