@@ -284,6 +284,69 @@ async fn ask_flow() {
 }
 
 #[tokio::test]
+async fn ask_without_standard_input_closes_the_question_after_the_given_time() {
+    tokio::time::timeout(TIMEOUT, ask_without_stdin())
+        .await
+        .expect("the CLI finished in time");
+}
+
+/// As run from a script or a scheduler: nobody can press Enter, and
+/// `--close-after` closes the question instead.
+async fn ask_without_stdin() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let dir = scratch("ask-no-stdin");
+    let question = dir.join("otazky.md");
+    std::fs::write(&question, EXAMPLE_QUESTION).unwrap();
+    idp.login_as(&User::new("sojkam1", "Michal Sojka"));
+
+    let mut child = quiz(&dir)
+        .args([
+            "--server",
+            &base,
+            "--no-browser",
+            "--login-port",
+            "0",
+            "ask",
+            "--close-after",
+            "2",
+        ])
+        .arg(&question)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("the quiz binary is built");
+
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut printed = String::new();
+    while let Some(line) = lines.next_line().await.unwrap() {
+        printed.push_str(&line);
+        printed.push('\n');
+        if line.contains(&idp.issuer) && line.contains("/authorize") {
+            let response = reqwest::Client::new()
+                .get(line.trim())
+                .send()
+                .await
+                .expect("the login URL can be opened");
+            assert!(response.status().is_success());
+        }
+    }
+    let output = child.wait_with_output().await.unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "the CLI failed:\n{printed}{stderr}"
+    );
+    assert!(printed.contains("Answers saved to"), "{printed}");
+    assert!(
+        printed.contains("The right answers were not revealed"),
+        "{printed}"
+    );
+}
+
+#[tokio::test]
 async fn parse_checks_a_question_file_without_a_server() {
     let dir = scratch("parse");
 

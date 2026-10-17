@@ -439,6 +439,17 @@ fn show_in_browser(url: &str, open_browser: bool) {
     println!("\nOpen the presentation view manually:\n\n    {url}\n");
 }
 
+/// The next line of the standard input, or never once it is gone.
+///
+/// A guard on a `select!` branch would not do: it stops the future from being
+/// polled, but the expression that makes it is still evaluated.
+async fn next_line(stdin: &mut Option<Lines<BufReader<Stdin>>>) -> std::io::Result<Option<String>> {
+    match stdin {
+        Some(lines) => lines.next_line().await,
+        None => std::future::pending().await,
+    }
+}
+
 /// Shows how many of the students in the room have answered, until the
 /// teacher closes the question.
 ///
@@ -482,9 +493,7 @@ async fn wait_for_close(
                     return Ok(());
                 }
             }
-            // The guard keeps the expression from being evaluated at all
-            // once the standard input is gone.
-            line = stdin.as_mut().expect("guarded").next_line(), if stdin.is_some() => {
+            line = next_line(stdin) => {
                 match line {
                     Ok(Some(_)) => return Ok(()),
                     // No terminal on the standard input: wait for Ctrl-C.
