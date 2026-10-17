@@ -523,11 +523,25 @@ question, exported results, refused tokens and one line per HTTP request.
 Use `--log-filter` or `RUST_LOG` (e.g. `RUST_LOG=info,quiz_server=debug`) to
 change the verbosity. The log is append-only and never read back by the server.
 
+## Metrics
+
+`GET /metrics` serves Prometheus metrics in the text format:
+
+| Metric | Type | Meaning |
+|---|---|---|
+| `quiz_questions_asked_total` | counter | questions asked since the server started |
+| `quiz_answers_total` | counter | answers recorded, changed answers included |
+| `quiz_rooms_open` | gauge | rooms that are open |
+| `quiz_teachers_connected` | gauge | teachers with the presentation view open or who used the API in the last 30 seconds (`quiz ask` asks every second while it waits) |
+| `quiz_students_connected` | gauge | distinct students with a room open in a browser |
+
+The counters start from zero whenever the server restarts.
+
 ## Security notes
 
 * Every student-facing page and every API endpoint requires an OIDC login. The
-  only exceptions are `/healthz`, the two static files and
-  `/api/v1/oidc`, which just tells the CLI where to log in.
+  only exceptions are `/healthz`, `/metrics` (aggregate numbers only), the two
+  static files and `/api/v1/oidc`, which just tells the CLI where to log in.
 * The **presentation view** is a capability URL: `/d/<32 hex characters>`. It
   is handed to the teacher over the authenticated API and needs no login, so
   nothing has to be typed on the machine driving the projector. Keep it
@@ -581,6 +595,7 @@ change the verbosity. The log is append-only and never read back by the server.
 | `cli/build.rs` | writes the shell completions during the build |
 | `server/src/display.rs` | the presentation view and the QR code |
 | `server/src/live.rs` | the server-sent event streams |
+| `server/src/metrics.rs` | the Prometheus metrics at `/metrics` |
 | `server/src/api.rs` | the API used by the CLI |
 | `server/templates`, `server/static` | HTML, CSS and the live-update script |
 | `cli/src/auth.rs` | the loopback OIDC login and the token cache |

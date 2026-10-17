@@ -181,6 +181,7 @@ pub async fn answer(
         question.notify();
         store.notify_room_of(&id);
     }
+    state.metrics.answer_recorded();
 
     // Redirect so that reloading the page does not answer again.
     Ok(Redirect::to(&views::link(&format!("/r/{token}"))).into_response())

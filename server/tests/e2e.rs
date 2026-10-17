@@ -1486,3 +1486,88 @@ async fn read_log() -> String {
     }
     std::fs::read_to_string(&path).unwrap_or_default()
 }
+
+#[tokio::test]
+async fn metrics_count_questions_answers_and_who_is_connected() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.access_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let metrics = || {
+        let request = api.get(format!("{base}/metrics"));
+        async move {
+            let response = request.send().await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            response.text().await.unwrap()
+        }
+    };
+    let text = metrics().await;
+    for line in [
+        "quiz_questions_asked_total 0",
+        "quiz_answers_total 0",
+        "quiz_rooms_open 0",
+        "quiz_teachers_connected 0",
+        "quiz_students_connected 0",
+    ] {
+        assert!(text.lines().any(|l| l == line), "{line:?} not in\n{text}");
+    }
+
+    let question: QuestionInfo = api
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(&token)
+        .json(&CreateQuestion {
+            source_name: "otazky.md".to_owned(),
+            markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
+            shuffle: false,
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    answer_as(
+        &base,
+        &idp,
+        &User::new("novakja1", "Jan Novák"),
+        &question,
+        0,
+    )
+    .await;
+    answer_as(
+        &base,
+        &idp,
+        &User::new("dvorape2", "Petr Dvořák"),
+        &question,
+        1,
+    )
+    .await;
+
+    // One student keeps the room open.
+    idp.login_as(&User::new("svobomar", "Marie Svobodová"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    student.get(format!("{base}/")).send().await.unwrap();
+    let mut events = student
+        .get(format!("{}/events", question.answer_url))
+        .send()
+        .await
+        .unwrap();
+    events.chunk().await.unwrap();
+
+    let text = metrics().await;
+    for line in [
+        "quiz_questions_asked_total 1",
+        "quiz_answers_total 2",
+        "quiz_rooms_open 1",
+        "quiz_teachers_connected 1",
+        "quiz_students_connected 1",
+    ] {
+        assert!(text.lines().any(|l| l == line), "{line:?} not in\n{text}");
+    }
+}

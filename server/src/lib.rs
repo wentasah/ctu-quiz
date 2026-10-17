@@ -10,6 +10,7 @@ pub mod config;
 pub mod display;
 pub mod error;
 pub mod live;
+pub mod metrics;
 pub mod state;
 pub mod views;
 pub mod web;
@@ -113,6 +114,7 @@ pub fn router(state: AppState) -> Router {
         .route("/static/app.css", get(stylesheet))
         .route("/static/app.js", get(javascript))
         .route("/healthz", get(|| async { "ok\n" }))
+        .route("/metrics", get(metrics::metrics))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(move |request: &Request<Body>| {

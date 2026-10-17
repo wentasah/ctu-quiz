@@ -409,6 +409,9 @@ impl FromRequestParts<AppState> for ApiUser {
                 "the access token does not say who you are",
             ));
         }
+        if state.cfg.is_teacher(&identity.login) {
+            state.metrics.teacher_seen(&identity.login);
+        }
 
         Ok(Self(identity))
     }

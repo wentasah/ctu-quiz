@@ -29,6 +29,7 @@ use uuid::Uuid;
 use crate::{
     auth::{Identity, Oidc},
     config::Config,
+    metrics::Metrics,
 };
 
 /// How long a login that was started may still be finished.
@@ -432,6 +433,29 @@ impl Store {
         }
     }
 
+    pub fn room_count(&self) -> usize {
+        self.rooms.len()
+    }
+
+    /// Teachers whose presentation view is open in a browser.
+    pub fn presenting_teachers(&self) -> BTreeSet<String> {
+        self.rooms
+            .values()
+            .filter(|room| room.is_presented())
+            .map(|room| room.teacher.clone())
+            .collect()
+    }
+
+    /// How many students have a room open in a browser; one who has two
+    /// rooms open is still one student.
+    pub fn connected_students(&self) -> usize {
+        let mut logins = BTreeSet::new();
+        for room in self.rooms.values() {
+            logins.extend(room.students.logins());
+        }
+        logins.len()
+    }
+
     /// Looks up a room from the secret part of its presentation URL.
     pub fn room_by_display_token(&self, token: &str) -> Option<&Room> {
         self.by_display
@@ -576,6 +600,7 @@ pub struct Inner {
     pub store: RwLock<Store>,
     pub sessions: RwLock<HashMap<String, Session>>,
     pub logins: RwLock<HashMap<String, PendingLogin>>,
+    pub metrics: Metrics,
 }
 
 impl Deref for AppState {
@@ -602,6 +627,7 @@ impl AppState {
             store: RwLock::new(Store::default()),
             sessions: RwLock::new(HashMap::new()),
             logins: RwLock::new(HashMap::new()),
+            metrics: Metrics::default(),
         }))
     }
 
@@ -686,6 +712,7 @@ impl AppState {
         room.last_used_at = now;
         // Everybody in the room moves on to the new question.
         room.notify();
+        self.metrics.question_asked();
 
         Ok(id)
     }
