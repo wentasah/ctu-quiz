@@ -218,6 +218,30 @@ async fn ask_flow() {
     assert!(printed.contains("Michal Sojka (sojkam1)"), "{printed}");
     assert!(printed.contains("May ask questions."), "{printed}");
 
+    // `quiz status` shows the room and the question kept in it.
+    let output = quiz(&dir)
+        .args(["--server", &base, "--no-browser", "status"])
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(
+        printed.contains(&format!("Question code:      {code}")),
+        "{printed}"
+    );
+    assert!(
+        printed.contains(&format!("Students answer at: {answer_url}")),
+        "{printed}"
+    );
+    let row = printed
+        .lines()
+        .find(|line| line.contains("otazky.md"))
+        .expect("the question is listed");
+    assert!(row.starts_with("*  1 "), "{row}");
+    assert!(row.contains(" revealed "), "{row}");
+    assert!(row.contains(" 1  "), "{row}");
+
     // `quiz close` without a question id ends the lecture: the page the
     // student has open stops working, but the teacher stays logged in.
     let output = quiz(&dir)
@@ -238,6 +262,14 @@ async fn ask_flow() {
         reqwest::StatusCode::NOT_FOUND,
         "the room outlived `quiz close`"
     );
+    let output = quiz(&dir)
+        .args(["--server", &base, "--no-browser", "status"])
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(printed.contains("No room is open"), "{printed}");
 
     // And logging out forgets the token; there is no room left to close.
     let output = quiz(&dir)

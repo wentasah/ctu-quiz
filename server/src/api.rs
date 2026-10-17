@@ -10,7 +10,9 @@ use axum::{
     http::StatusCode,
 };
 use chrono::Utc;
-use quiz_common::api::{CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, WhoAmI};
+use quiz_common::api::{
+    CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, RoomStatus, WhoAmI,
+};
 
 use crate::{
     auth::{ApiUser, Identity, Teacher},
@@ -55,6 +57,21 @@ pub async fn close_room(State(state): State<AppState>, ApiUser(user): ApiUser) -
         tracing::info!(teacher = %user.login, questions, "room closed");
     }
     Json(RoomClosed { closed, questions })
+}
+
+/// `GET /api/v1/room` - the teacher's room and the questions kept in it, for
+/// `quiz status`.
+pub async fn room_status(
+    State(state): State<AppState>,
+    ApiUser(user): ApiUser,
+) -> Json<RoomStatus> {
+    let room = state.room_status(&user.login).await;
+    tracing::info!(
+        teacher = %user.login,
+        questions = room.as_ref().map_or(0, |room| room.questions.len()),
+        "room status"
+    );
+    Json(RoomStatus { room })
 }
 
 /// `POST /api/v1/questions` - publishes a question read from a Markdown file.

@@ -88,6 +88,8 @@ pub enum Command {
     },
     /// Show who this tool is logged in as.
     Whoami,
+    /// Show the room students are in and the questions kept in it.
+    Status,
     /// Close a question and save its answers, or close the whole room.
     Close {
         /// Question id, as printed by `quiz ask`.

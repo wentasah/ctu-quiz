@@ -20,7 +20,9 @@ use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use chrono::{DateTime, TimeDelta, Utc};
 use openidconnect::{Nonce, PkceCodeVerifier};
-use quiz_common::api::{AnswerInfo, LiveState, QuestionInfo, ResultRow, Results, StudentView};
+use quiz_common::api::{
+    AnswerInfo, LiveState, QuestionInfo, ResultRow, Results, RoomInfo, RoomQuestion, StudentView,
+};
 use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
 
@@ -378,6 +380,37 @@ impl Store {
         info
     }
 
+    /// The room of `teacher` with the questions kept in it, for `quiz
+    /// status`. Both are dropped `ttl` after they were last used, see
+    /// [`Store::prune`].
+    pub fn room_status(&self, teacher: &str, ttl: TimeDelta) -> Option<RoomInfo> {
+        let room = self.room_of_teacher(teacher)?;
+        let mut questions: Vec<RoomQuestion> = self
+            .questions
+            .values()
+            .filter(|question| question.room == room.token)
+            .map(|question| RoomQuestion {
+                number: question.number,
+                expires_at: question.created_at + ttl,
+                info: self.question_info(question),
+            })
+            .collect();
+        questions.sort_by_key(|question| question.number);
+
+        Some(RoomInfo {
+            code: room.code.clone(),
+            answer_url: room.url.clone(),
+            display_url: room.display_url.clone(),
+            presented: room.is_presented(),
+            students: room.students.logins().len(),
+            current: room.current.clone(),
+            created_at: room.created_at,
+            last_used_at: room.last_used_at,
+            expires_at: room.last_used_at + ttl,
+            questions,
+        })
+    }
+
     /// What the students in a room are shown, for the event stream.
     pub fn room_state(&self, token: &str) -> Option<LiveState> {
         self.room(token)?;
@@ -640,6 +673,19 @@ impl AppState {
         }
     }
 
+    /// The room of `teacher` and the questions kept in it, for `quiz status`.
+    pub async fn room_status(&self, teacher: &str) -> Option<RoomInfo> {
+        self.store
+            .read()
+            .await
+            .room_status(teacher, self.question_ttl())
+    }
+
+    /// How long questions, and rooms nobody asks anything in, are kept.
+    fn question_ttl(&self) -> TimeDelta {
+        TimeDelta::try_hours(self.cfg.question_ttl_hours).unwrap_or(TimeDelta::zero())
+    }
+
     /// Creates a session for `identity` and returns the session id.
     pub async fn start_session(&self, identity: Identity) -> String {
         let id = random_token();
@@ -685,11 +731,7 @@ impl AppState {
             logins.retain(|_, l| l.created_at > cutoff);
             before - logins.len()
         };
-        let questions = {
-            let ttl =
-                TimeDelta::try_hours(self.cfg.question_ttl_hours).unwrap_or(TimeDelta::zero());
-            self.store.write().await.prune(now - ttl)
-        };
+        let questions = self.store.write().await.prune(now - self.question_ttl());
         if sessions + logins + questions > 0 {
             tracing::info!(
                 sessions,

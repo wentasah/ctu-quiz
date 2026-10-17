@@ -7,7 +7,9 @@
 
 use std::time::Duration;
 
-use quiz_common::api::{CreateQuestion, QuestionInfo, Results, RoomClosed, StudentView, WhoAmI};
+use quiz_common::api::{
+    CreateQuestion, QuestionInfo, Results, RoomClosed, RoomStatus, StudentView, WhoAmI,
+};
 use quiz_testsupport::{CLIENT_ID, MockIdp, User, question_on_page, start_server};
 use reqwest::StatusCode;
 
@@ -1081,6 +1083,90 @@ async fn logging_out_removes_the_room() {
         .unwrap();
     assert_ne!(next.answer_url, question.answer_url);
     assert_ne!(next.code, question.code);
+}
+
+#[tokio::test]
+async fn the_teacher_sees_the_room_and_the_questions_kept_in_it() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let token = idp.access_token(&User::new("sojkam1", "Michal Sojka"), CLIENT_ID);
+    let api = reqwest::Client::new();
+    let status = || async {
+        api.get(format!("{base}/api/v1/room"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json::<RoomStatus>()
+            .await
+            .unwrap()
+    };
+    let ask = || async {
+        api.post(format!("{base}/api/v1/questions"))
+            .bearer_auth(&token)
+            .json(&CreateQuestion {
+                source_name: "otazky.md".to_owned(),
+                markdown: QUESTION.to_owned(),
+                view: StudentView::default(),
+                shuffle: false,
+            })
+            .send()
+            .await
+            .unwrap()
+            .json::<QuestionInfo>()
+            .await
+            .unwrap()
+    };
+
+    // Nothing asked yet, so there is no room.
+    assert!(status().await.room.is_none());
+
+    let first = ask().await;
+    api.post(format!("{base}/api/v1/questions/{}/close", first.id))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    let second = ask().await;
+
+    let room = status().await.room.expect("asking opened a room");
+    assert_eq!(room.code, first.code);
+    assert_eq!(room.answer_url, first.answer_url);
+    assert_eq!(room.current.as_deref(), Some(second.id.as_str()));
+    assert!(room.expires_at > room.last_used_at);
+
+    // The earlier question is still kept, closed, before the current one.
+    let kept: Vec<_> = room
+        .questions
+        .iter()
+        .map(|q| (q.number, q.info.id.as_str(), q.info.open))
+        .collect();
+    assert_eq!(
+        kept,
+        [(1, first.id.as_str(), false), (2, second.id.as_str(), true)]
+    );
+    assert!(room.questions[0].expires_at > room.questions[0].info.created_at);
+
+    // Another teacher does not see this room.
+    let other = idp.access_token(&User::new("novakja1", "Jan Novák"), CLIENT_ID);
+    let theirs: RoomStatus = api
+        .get(format!("{base}/api/v1/room"))
+        .bearer_auth(&other)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(theirs.room.is_none());
+
+    // Once the room is closed, there is nothing to show.
+    api.post(format!("{base}/api/v1/room/close"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert!(status().await.room.is_none());
 }
 
 #[tokio::test]

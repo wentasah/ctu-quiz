@@ -3,10 +3,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, Utc};
 use quiz_common::{
     Question,
-    api::{AnswerInfo, QuestionInfo, Results},
+    api::{AnswerInfo, QuestionInfo, Results, RoomInfo},
 };
 
 /// Shows the parsed question, so that the teacher can check the Markdown was
@@ -118,6 +118,90 @@ pub fn write_csv(path: &Path, results: &Results) -> Result<()> {
     Ok(())
 }
 
+/// What `quiz status` shows: the room, and a line for every question the
+/// server still keeps in it.
+pub fn print_room(room: &RoomInfo) {
+    let now = Local::now();
+    println!("Question code:      {}", room.code);
+    println!("Students answer at: {}", room.answer_url);
+    println!("Presentation view:  {}", room.display_url);
+    println!(
+        "                    {}",
+        if room.presented {
+            "open in a browser"
+        } else {
+            "not open anywhere"
+        }
+    );
+    println!("Students in room:   {}", room.students);
+    println!(
+        "Opened at {}, last question at {}; dropped in {} unless another is asked.",
+        time(room.created_at, now),
+        time(room.last_used_at, now),
+        remaining(room.expires_at, now)
+    );
+
+    if room.questions.is_empty() {
+        println!("\nNo questions are kept in the room.");
+        return;
+    }
+    println!("\n  #  Asked  Dropped in  State     Answers  Id                                File");
+    for question in &room.questions {
+        let info = &question.info;
+        let state = match (info.open, info.revealed) {
+            (true, _) => "open",
+            (false, false) => "closed",
+            (false, true) => "revealed",
+        };
+        let current = room.current.as_ref() == Some(&info.id);
+        let title = info
+            .title
+            .as_ref()
+            .map(|title| format!(": {}", ellipsis(title, 40)))
+            .unwrap_or_default();
+        println!(
+            "{} {:>2}  {:<5}  {:<10}  {state:<8}  {:>7}  {}  {}{title}",
+            if current { "*" } else { " " },
+            question.number,
+            time(info.created_at, now),
+            remaining(question.expires_at, now),
+            info.answer_count,
+            info.id,
+            info.source_name,
+        );
+    }
+    if room.current.is_some() {
+        println!("(* is the question the students see)");
+    }
+    if room.questions.iter().any(|question| question.info.open) {
+        println!(
+            "\nAn open question whose `quiz ask` is not running any more is closed, \
+             and its answers saved, by `quiz close <id>`."
+        );
+    }
+}
+
+/// How long until `when`, roughly: the server drops things every few
+/// minutes, not to the second.
+fn remaining(when: DateTime<Utc>, now: DateTime<Local>) -> String {
+    let minutes = (when - now.with_timezone(&Utc)).num_minutes().max(0);
+    match (minutes / 60, minutes % 60) {
+        (0, 0) => "a moment".to_owned(),
+        (0, minutes) => format!("{minutes}m"),
+        (hours, minutes) => format!("{hours}h {minutes:02}m"),
+    }
+}
+
+/// A time in the local zone, with the date only when it is not today.
+fn time(when: DateTime<Utc>, now: DateTime<Local>) -> String {
+    let when = when.with_timezone(&Local);
+    if when.date_naive() == now.date_naive() {
+        when.format("%H:%M").to_string()
+    } else {
+        when.format("%Y-%m-%d %H:%M").to_string()
+    }
+}
+
 /// Shortens `text` to `limit` characters, for one-line terminal output.
 fn ellipsis(text: &str, limit: usize) -> String {
     if text.chars().count() <= limit {
@@ -129,9 +213,19 @@ fn ellipsis(text: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{csv_path, ellipsis, points_note};
+    use super::{csv_path, ellipsis, points_note, remaining};
     use chrono::TimeZone;
     use std::path::Path;
+
+    #[test]
+    fn remaining_time_is_in_hours_and_minutes() {
+        let now = chrono::Local::now();
+        let at = |minutes| now.with_timezone(&chrono::Utc) + chrono::TimeDelta::minutes(minutes);
+        assert_eq!(remaining(at(12 * 60), now), "12h 00m");
+        assert_eq!(remaining(at(65), now), "1h 05m");
+        assert_eq!(remaining(at(7), now), "7m");
+        assert_eq!(remaining(at(-3), now), "a moment");
+    }
 
     #[test]
     fn csv_sits_next_to_the_question_with_date_and_time() {

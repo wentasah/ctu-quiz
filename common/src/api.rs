@@ -171,6 +171,50 @@ pub struct RoomClosed {
     pub questions: usize,
 }
 
+/// `GET /api/v1/room` - the teacher's room and what is kept of it, as `quiz
+/// status` shows it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomStatus {
+    /// `None` when the teacher has no room open.
+    pub room: Option<RoomInfo>,
+}
+
+/// A room, see [`RoomStatus`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomInfo {
+    /// Short numeric code students type on the main page.
+    pub code: String,
+    /// URL students are sent to, also encoded in the QR code.
+    pub answer_url: String,
+    /// Capability URL of the presentation view; keep it secret.
+    pub display_url: String,
+    /// Whether a browser shows the presentation view right now.
+    pub presented: bool,
+    /// Number of students who have the room open in a browser right now.
+    pub students: usize,
+    /// Id of the question the students see, `None` when there is none.
+    pub current: Option<String>,
+    pub created_at: DateTime<Utc>,
+    /// When the teacher last asked a question here.
+    pub last_used_at: DateTime<Utc>,
+    /// When the server drops the room unless another question is asked
+    /// before; it checks every few minutes, so it may happen a bit later.
+    pub expires_at: DateTime<Utc>,
+    /// Questions still kept in memory, in the order they were asked.
+    pub questions: Vec<RoomQuestion>,
+}
+
+/// A question kept in a room, see [`RoomInfo`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomQuestion {
+    /// Order of the question in its room, starting from 1.
+    pub number: usize,
+    /// When the server drops the question, like [`RoomInfo::expires_at`].
+    pub expires_at: DateTime<Utc>,
+    #[serde(flatten)]
+    pub info: QuestionInfo,
+}
+
 /// One row of the collected answers, and one row of the exported CSV.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultRow {

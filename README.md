@@ -74,6 +74,7 @@ quiz parse otazky.md          # check the Markdown, no server needed
 quiz login                    # log in ahead of the lecture
 quiz whoami                    # who am I, and may I ask questions?
 quiz logout [--all]          # end the lecture: close the room, forget the token
+quiz status                   # the room, and the questions the server keeps
 quiz close <question id>      # if `quiz ask` was interrupted: close and save
 quiz close                    # end the lecture but stay logged in: close the room
 quiz reveal <question id>     # mark the right answers, if `quiz ask` did not
@@ -153,6 +154,10 @@ goes like this:
 * A question that is still open when the next one is asked stays open for its
   own `quiz ask` — pressing Enter there still closes it and writes its CSV —
   but the students have already moved on to the new one.
+* `quiz status` shows the room — its code, URLs, how many students have it
+  open — and every question still kept in it, with its id, state, number of
+  answers and how long until the server drops it. That is where to find the
+  id for `quiz close <id>` after an interrupted `quiz ask`.
 * **`quiz close` without a question id closes the room**: its questions are
   dropped, the students' pages reload and report that the room is gone, and
   the URL and the code stop working. The next question opens a new room with

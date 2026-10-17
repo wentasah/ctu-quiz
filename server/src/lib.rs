@@ -84,6 +84,7 @@ pub fn router(state: AppState) -> Router {
     let api = Router::new()
         .route("/oidc", get(api::oidc_info))
         .route("/whoami", get(api::whoami))
+        .route("/room", get(api::room_status))
         .route("/room/close", post(api::close_room))
         .route("/questions", post(api::create_question))
         .route("/questions/{id}", get(api::question))

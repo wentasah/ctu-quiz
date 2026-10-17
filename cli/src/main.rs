@@ -79,6 +79,7 @@ async fn run(cli: &Cli) -> Result<()> {
         Command::Login => login(cli).await,
         Command::Logout { all } => logout(cli, *all).await,
         Command::Whoami => whoami(cli).await,
+        Command::Status => status(cli).await,
         Command::Close { id, output } => match id {
             Some(id) => close(cli, id, output.clone()).await,
             None => close_room(cli, output.is_some()).await,
@@ -282,6 +283,17 @@ async fn whoami(cli: &Cli) -> Result<()> {
             "May not ask questions on this server."
         }
     );
+    Ok(())
+}
+
+/// Shows the room and the questions the server still keeps in it, which is
+/// where to find the id of a question whose `quiz ask` was interrupted.
+async fn status(cli: &Cli) -> Result<()> {
+    let api = connect(cli, false).await?;
+    match api.room_status().await?.room {
+        Some(room) => report::print_room(&room),
+        None => println!("No room is open; the next `quiz ask` opens one."),
+    }
     Ok(())
 }
 
