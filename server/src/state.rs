@@ -41,6 +41,10 @@ pub const LOGIN_TTL_MINUTES: i64 = 15;
 /// for logins they never finish.
 pub const MAX_PENDING_LOGINS: usize = 4096;
 
+/// How many questions a room keeps. Asking one more drops the oldest, so that
+/// a teacher asking in a loop cannot fill the server's memory either.
+pub const MAX_ROOM_QUESTIONS: usize = 30;
+
 /// A login started in a browser and not yet finished.
 pub struct PendingLogin {
     pub pkce_verifier: PkceCodeVerifier,
@@ -448,6 +452,34 @@ impl Store {
         self.questions.insert(question.id.clone(), question);
     }
 
+    /// Drops the oldest questions of the room `token` until at most `max`
+    /// are left. Returns how many were dropped.
+    fn trim_room(&mut self, token: &str, max: usize) -> usize {
+        let mut asked: Vec<(usize, String)> = self
+            .questions
+            .values()
+            .filter(|question| question.room == token)
+            .map(|question| (question.number, question.id.clone()))
+            .collect();
+        if asked.len() <= max {
+            return 0;
+        }
+        asked.sort_unstable();
+        let excess = asked.len() - max;
+        for (_, id) in &asked[..excess] {
+            self.questions.remove(id);
+        }
+        if let Some(room) = self.rooms.get_mut(token)
+            && room
+                .current
+                .as_ref()
+                .is_some_and(|id| !self.questions.contains_key(id))
+        {
+            room.current = None;
+        }
+        excess
+    }
+
     /// Removes the room of `teacher` together with its questions, and tells
     /// the students in it to have another look. Returns how many questions
     /// went with it, or `None` when the teacher had no room.
@@ -647,6 +679,7 @@ impl AppState {
             responses: BTreeMap::new(),
             updates: broadcast::channel(16).0,
         });
+        store.trim_room(&room, MAX_ROOM_QUESTIONS);
 
         let room = store.room_mut(&room).expect("the room is there");
         room.current = Some(id.clone());
@@ -790,5 +823,71 @@ mod tests {
             pending(later)
         ));
         assert_eq!(logins.len(), 1);
+    }
+
+    fn room(token: &str, now: DateTime<Utc>) -> Room {
+        Room {
+            token: token.to_owned(),
+            code: "123456".to_owned(),
+            teacher: "teacher".to_owned(),
+            url: String::new(),
+            display_token: random_token(),
+            display_url: String::new(),
+            presenters: Arc::new(()),
+            students: Presence::default(),
+            current: None,
+            asked: 0,
+            created_at: now,
+            last_used_at: now,
+            updates: broadcast::channel(16).0,
+        }
+    }
+
+    fn question(room: &str, number: usize, now: DateTime<Utc>) -> Question {
+        Question {
+            id: format!("q{number}"),
+            room: room.to_owned(),
+            code: "123456".to_owned(),
+            source_name: "q.md".to_owned(),
+            number,
+            content: quiz_common::parse_question("Q?\n\n---\n\n- a\n- b\n").unwrap(),
+            view: StudentView::default(),
+            answer_url: String::new(),
+            display_url: String::new(),
+            presented: false,
+            teacher: "teacher".to_owned(),
+            created_at: now,
+            closed_at: None,
+            revealed: false,
+            responses: BTreeMap::new(),
+            updates: broadcast::channel(16).0,
+        }
+    }
+
+    #[test]
+    fn a_room_keeps_only_its_newest_questions() {
+        let now = Utc::now();
+        let mut store = Store::default();
+        store.insert_room(room("room", now));
+        store.insert_room(room("other", now));
+        store.insert_question(question("other", 1000, now));
+        for number in 1..=MAX_ROOM_QUESTIONS + 5 {
+            store.insert_question(question("room", number, now));
+            store.room_mut("room").unwrap().current = Some(format!("q{number}"));
+            store.trim_room("room", MAX_ROOM_QUESTIONS);
+        }
+
+        let mut kept: Vec<usize> = store
+            .questions
+            .values()
+            .filter(|question| question.room == "room")
+            .map(|question| question.number)
+            .collect();
+        kept.sort_unstable();
+        assert_eq!(kept, (6..=MAX_ROOM_QUESTIONS + 5).collect::<Vec<_>>());
+        let current = format!("q{}", MAX_ROOM_QUESTIONS + 5);
+        assert_eq!(store.room("room").unwrap().current, Some(current));
+        // Other rooms are left alone.
+        assert!(store.get("q1000").is_some());
     }
 }
