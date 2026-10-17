@@ -448,6 +448,20 @@ The login name of a user is taken from the `preferred_username` claim, which is
 the familiar eight-character login (`sojkam1`) at CTU. Use `--login-claim
 email` or `--login-claim subject` if your provider is different.
 
+Who may ask questions is given by `--teachers`, a list of logins, and by
+`--teacher-roles`, a list of roles: anybody whose access token lists one of
+them in the `roles` claim (a string or an array of strings; `--roles-claim`
+names another claim) is a teacher too. Either list suffices. The roles are
+read from the access token the CLI presents, so the claim has to be added to
+the tokens of the CLI's client. At CTU, the `13133-osy-quiz-cli` client puts
+`teacher` into `roles` for employees, so
+
+```sh
+quiz-server ... --teacher-roles teacher
+```
+
+lets every employee ask questions.
+
 ## Running the server
 
 ```sh
@@ -475,7 +489,9 @@ the container image use (`quiz-server --help` lists them all):
 | `--oidc-cli-redirect-uri` | `QUIZ_OIDC_CLI_REDIRECT_URI` | any loopback port |
 | `--oidc-scopes` | `QUIZ_OIDC_SCOPES` | `openid,profile,email` |
 | `--oidc-audiences` | `QUIZ_OIDC_AUDIENCES` | none |
-| `--teachers` | `QUIZ_TEACHERS` | required, unless `--allow-any-teacher` |
+| `--teachers` | `QUIZ_TEACHERS` | required, unless `--teacher-roles` or `--allow-any-teacher` |
+| `--teacher-roles` | `QUIZ_TEACHER_ROLES` | none |
+| `--roles-claim` | `QUIZ_ROLES_CLAIM` | `roles` |
 | `--allow-any-teacher` | `QUIZ_ALLOW_ANY_TEACHER` | off |
 | `--login-claim` | `QUIZ_LOGIN_CLAIM` | `preferred-username` |
 | `--question-ttl-hours` | `QUIZ_QUESTION_TTL_HOURS` | `12` |

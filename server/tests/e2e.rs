@@ -10,7 +10,9 @@ use std::time::Duration;
 use quiz_common::api::{
     CreateQuestion, QuestionInfo, Results, RoomClosed, RoomStatus, StudentView, WhoAmI,
 };
-use quiz_testsupport::{CLIENT_ID, MockIdp, User, question_on_page, start_server};
+use quiz_testsupport::{
+    CLIENT_ID, MockIdp, User, question_on_page, start_server, start_server_with,
+};
 use reqwest::StatusCode;
 
 const QUESTION: &str = quiz_testsupport::EXAMPLE_QUESTION;
@@ -317,6 +319,51 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
         .unwrap()
         .status();
     assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_teacher_role_in_the_access_token_allows_asking_questions() {
+    let idp = MockIdp::start().await;
+    let base = start_server_with(&idp, &["vlasakji"], &["--teacher-roles", "teacher"]).await;
+    let api = reqwest::Client::new();
+
+    let ask = |user: User| {
+        let request = api
+            .post(format!("{base}/api/v1/questions"))
+            .bearer_auth(idp.access_token(&user, CLIENT_ID))
+            .json(&CreateQuestion {
+                source_name: "question.md".to_owned(),
+                markdown: QUESTION.to_owned(),
+                view: StudentView::default(),
+                shuffle: false,
+            });
+        async move { request.send().await.unwrap().status() }
+    };
+    let whoami = |user: User| {
+        let request = api
+            .get(format!("{base}/api/v1/whoami"))
+            .bearer_auth(idp.access_token(&user, CLIENT_ID));
+        async move {
+            request
+                .send()
+                .await
+                .unwrap()
+                .json::<WhoAmI>()
+                .await
+                .unwrap()
+        }
+    };
+
+    let employee = User::new("sojkam1", "Michal Sojka").with_roles(&["employee", "teacher"]);
+    let student = User::new("novakja1", "Jan Novák").with_roles(&["student"]);
+    let listed = User::new("vlasakji", "Jiří Vlasák");
+
+    assert!(whoami(employee.clone()).await.is_teacher);
+    assert!(!whoami(student.clone()).await.is_teacher);
+    assert_eq!(ask(employee).await, StatusCode::CREATED);
+    assert_eq!(ask(student).await, StatusCode::FORBIDDEN);
+    // The list of logins still works next to the roles.
+    assert_eq!(ask(listed).await, StatusCode::CREATED);
 }
 
 #[tokio::test]

@@ -71,6 +71,9 @@ pub struct Identity {
     pub login: String,
     /// Full name, or the login again if the provider does not give one.
     pub name: String,
+    /// Roles from the `--roles-claim` of an access token. Empty for a browser
+    /// session, where the server does not need them.
+    pub roles: Vec<String>,
 }
 
 /// The JOSE header of a signed JWT.
@@ -134,6 +137,7 @@ pub struct Oidc {
     audiences: Vec<String>,
     scopes: Vec<Scope>,
     login_claim: LoginClaim,
+    roles_claim: String,
 }
 
 impl Oidc {
@@ -182,6 +186,7 @@ impl Oidc {
                 .map(|s| Scope::new(s.clone()))
                 .collect(),
             login_claim: cfg.login_claim,
+            roles_claim: cfg.roles_claim.clone(),
         })
     }
 
@@ -287,8 +292,9 @@ impl Oidc {
             });
         ensure!(verified, "the access token is not signed by the provider");
 
+        let payload = decode(payload)?;
         let claims: AccessTokenClaims =
-            serde_json::from_slice(&decode(payload)?).context("malformed access token claims")?;
+            serde_json::from_slice(&payload).context("malformed access token claims")?;
         ensure!(
             claims.iss == self.issuer.as_str(),
             "the access token was issued by {}, not by {}",
@@ -316,12 +322,34 @@ impl Oidc {
             );
         }
 
-        Ok(self.identity(
+        let mut identity = self.identity(
             claims.sub.as_deref(),
             claims.preferred_username.as_deref(),
             claims.email.as_deref(),
             claims.name.as_deref(),
-        ))
+        );
+        identity.roles = self.roles(&payload)?;
+        Ok(identity)
+    }
+
+    /// The roles listed in the `--roles-claim` of a token's payload: a single
+    /// string or an array of them. A missing claim means no roles.
+    fn roles(&self, payload: &[u8]) -> Result<Vec<String>> {
+        let mut claims: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_slice(payload).context("malformed access token claims")?;
+        let Some(roles) = claims.remove(&self.roles_claim) else {
+            return Ok(Vec::new());
+        };
+        let roles = match roles {
+            serde_json::Value::String(role) => vec![role],
+            roles => serde_json::from_value(roles).with_context(|| {
+                format!(
+                    "the `{}` claim is neither a string nor an array of strings",
+                    self.roles_claim
+                )
+            })?,
+        };
+        Ok(roles)
     }
 
     /// Maps the token claims to a login and a full name.
@@ -346,7 +374,11 @@ impl Oidc {
         .to_owned();
 
         let name = non_empty(name).unwrap_or(&login).to_owned();
-        Identity { login, name }
+        Identity {
+            login,
+            name,
+            roles: Vec::new(),
+        }
     }
 }
 
@@ -409,7 +441,7 @@ impl FromRequestParts<AppState> for ApiUser {
                 "the access token does not say who you are",
             ));
         }
-        if state.cfg.is_teacher(&identity.login) {
+        if state.cfg.is_teacher(&identity) {
             state.metrics.teacher_seen(&identity.login);
         }
 
@@ -425,8 +457,12 @@ impl FromRequestParts<AppState> for Teacher {
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiFailure> {
         let ApiUser(identity) = ApiUser::from_request_parts(parts, state).await?;
-        if !state.cfg.is_teacher(&identity.login) {
-            tracing::warn!(login = %identity.login, "refused a question from a non-teacher");
+        if !state.cfg.is_teacher(&identity) {
+            tracing::warn!(
+                login = %identity.login,
+                roles = ?identity.roles,
+                "refused a question from a non-teacher"
+            );
             return Err(ApiFailure::forbidden(format!(
                 "{} is not allowed to ask questions",
                 identity.login
@@ -625,6 +661,9 @@ fn sanitize_next(next: Option<&str>) -> String {
 pub fn check_config(cfg: &Config) -> Result<()> {
     if cfg.oidc_client_id.is_empty() {
         bail!("--oidc-client-id must not be empty");
+    }
+    if cfg.roles_claim.is_empty() {
+        bail!("--roles-claim must not be empty");
     }
     cfg.check_teachers()
 }

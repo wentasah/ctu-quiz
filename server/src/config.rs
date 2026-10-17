@@ -6,6 +6,8 @@ use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use url::Url;
 
+use crate::auth::Identity;
+
 /// Which OIDC claim identifies a user. On the CTU/FEE identity provider
 /// `preferred_username` is the familiar eight-character login (`sojkam1`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -81,11 +83,23 @@ pub struct Config {
     #[arg(long, env = "QUIZ_TEACHERS", value_delimiter = ',')]
     pub teachers: Vec<String>,
 
+    /// Roles allowed to ask questions, besides the logins in `--teachers`.
+    ///
+    /// Somebody whose access token has any of these roles in the
+    /// `--roles-claim` claim is a teacher.
+    #[arg(long, env = "QUIZ_TEACHER_ROLES", value_delimiter = ',')]
+    pub teacher_roles: Vec<String>,
+
+    /// Claim of the access token that lists the user's roles, a string or an
+    /// array of strings.
+    #[arg(long, env = "QUIZ_ROLES_CLAIM", default_value = "roles")]
+    pub roles_claim: String,
+
     /// Let everybody who can log in ask questions.
     ///
-    /// Without it an empty `--teachers` list is a configuration error rather
-    /// than an invitation: on a server open to a whole university, anybody
-    /// could otherwise publish a question.
+    /// Without it empty `--teachers` and `--teacher-roles` lists are a
+    /// configuration error rather than an invitation: on a server open to a
+    /// whole university, anybody could otherwise publish a question.
     #[arg(long, env = "QUIZ_ALLOW_ANY_TEACHER")]
     pub allow_any_teacher: bool,
 
@@ -114,6 +128,7 @@ impl Config {
     /// slash so that relative URLs can be joined onto it.
     pub fn normalize(mut self) -> Result<Self> {
         self.teachers = clean(self.teachers);
+        self.teacher_roles = clean(self.teacher_roles);
         self.oidc_audiences = clean(self.oidc_audiences);
         self.oidc_scopes = clean(self.oidc_scopes);
 
@@ -157,26 +172,34 @@ impl Config {
         self.public_url.scheme() == "https"
     }
 
-    /// Whether `login` is allowed to ask questions.
+    /// Whether `user` is allowed to ask questions.
     ///
-    /// Only the logins on the list, unless `--allow-any-teacher` opens the
-    /// server to everybody who can log in.
-    pub fn is_teacher(&self, login: &str) -> bool {
-        self.allow_any_teacher || self.teachers.iter().any(|t| t == login)
+    /// Only the logins on the list and those with a teacher role, unless
+    /// `--allow-any-teacher` opens the server to everybody who can log in.
+    pub fn is_teacher(&self, user: &Identity) -> bool {
+        self.allow_any_teacher
+            || self.teachers.contains(&user.login)
+            || user
+                .roles
+                .iter()
+                .any(|role| self.teacher_roles.contains(role))
     }
 
     /// Fails when nobody could ask a question, or when the server would
     /// accept one from anybody without having been told to.
     pub fn check_teachers(&self) -> Result<()> {
-        if self.teachers.is_empty() && !self.allow_any_teacher {
+        let listed = !self.teachers.is_empty() || !self.teacher_roles.is_empty();
+        if !listed && !self.allow_any_teacher {
             anyhow::bail!(
-                "no --teachers given: list the logins that may ask questions, \
-                 or pass --allow-any-teacher to let everybody who can log in ask"
+                "neither --teachers nor --teacher-roles given: list the logins or roles \
+                 that may ask questions, or pass --allow-any-teacher to let everybody \
+                 who can log in ask"
             );
         }
-        if !self.teachers.is_empty() && self.allow_any_teacher {
+        if listed && self.allow_any_teacher {
             tracing::warn!(
-                "--allow-any-teacher overrides the --teachers list: everybody may ask questions"
+                "--allow-any-teacher overrides --teachers and --teacher-roles: \
+                 everybody may ask questions"
             );
         }
         Ok(())
@@ -195,7 +218,16 @@ fn clean(values: Vec<String>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::Config;
+    use crate::auth::Identity;
     use clap::Parser;
+
+    fn user(login: &str, roles: &[&str]) -> Identity {
+        Identity {
+            login: login.to_owned(),
+            name: login.to_owned(),
+            roles: roles.iter().map(|&role| role.to_owned()).collect(),
+        }
+    }
 
     fn config(args: &[&str]) -> Config {
         let mut argv = vec![
@@ -213,7 +245,7 @@ mod tests {
     fn an_empty_teacher_list_is_refused() {
         let cfg = config(&["--teachers", ""]);
         assert!(cfg.teachers.is_empty());
-        assert!(!cfg.is_teacher("anybody"));
+        assert!(!cfg.is_teacher(&user("anybody", &[])));
         let error = cfg.check_teachers().unwrap_err().to_string();
         assert!(error.contains("--allow-any-teacher"), "{error}");
     }
@@ -221,7 +253,7 @@ mod tests {
     #[test]
     fn everybody_may_ask_only_when_that_is_asked_for() {
         let cfg = config(&["--allow-any-teacher"]);
-        assert!(cfg.is_teacher("anybody"));
+        assert!(cfg.is_teacher(&user("anybody", &[])));
         assert!(cfg.check_teachers().is_ok());
     }
 
@@ -229,8 +261,19 @@ mod tests {
     fn a_teacher_list_is_split_and_trimmed() {
         let cfg = config(&["--teachers", "sojkam1, vlasakji"]);
         assert_eq!(cfg.teachers, ["sojkam1", "vlasakji"]);
-        assert!(cfg.is_teacher("vlasakji"));
-        assert!(!cfg.is_teacher("novakja1"));
+        assert!(cfg.is_teacher(&user("vlasakji", &[])));
+        assert!(!cfg.is_teacher(&user("novakja1", &["student"])));
+    }
+
+    #[test]
+    fn a_teacher_role_makes_a_teacher() {
+        let cfg = config(&["--teacher-roles", "teacher, "]);
+        assert_eq!(cfg.teacher_roles, ["teacher"]);
+        assert_eq!(cfg.roles_claim, "roles");
+        assert!(cfg.check_teachers().is_ok());
+        assert!(cfg.is_teacher(&user("sojkam1", &["employee", "teacher"])));
+        assert!(!cfg.is_teacher(&user("novakja1", &["student"])));
+        assert!(!cfg.is_teacher(&user("teacher", &[])));
     }
 
     #[test]

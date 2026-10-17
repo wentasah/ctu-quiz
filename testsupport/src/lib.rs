@@ -86,6 +86,8 @@ pub struct User {
     pub login: String,
     pub name: String,
     pub email: String,
+    /// What the tokens carry in the `roles` claim.
+    pub roles: Vec<String>,
 }
 
 impl User {
@@ -95,14 +97,24 @@ impl User {
             login: login.to_owned(),
             name: name.to_owned(),
             email: format!("{login}@example.org"),
+            roles: Vec::new(),
         }
+    }
+
+    /// The same user with `roles` in the tokens.
+    pub fn with_roles(mut self, roles: &[&str]) -> Self {
+        self.roles = roles.iter().map(|&role| role.to_owned()).collect();
+        self
     }
 }
 
-/// The `typ` claim with which Keycloak tells its tokens apart.
+/// The claims beyond the standard ones: `typ`, with which Keycloak tells its
+/// tokens apart, and the user's `roles`.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct TokenType {
     typ: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    roles: Vec<String>,
 }
 
 impl AdditionalClaims for TokenType {}
@@ -278,6 +290,7 @@ struct AuthorizeQuery {
     /// Filled in by the login form below, in interactive mode.
     login: Option<String>,
     name: Option<String>,
+    roles: Option<String>,
 }
 
 /// Logs the configured user in without asking anything.
@@ -295,7 +308,15 @@ async fn authorize(
                     .map(str::trim)
                     .filter(|name| !name.is_empty())
                     .unwrap_or(login);
-                User::new(login, name)
+                let roles: Vec<&str> = query
+                    .roles
+                    .as_deref()
+                    .unwrap_or_default()
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|role| !role.is_empty())
+                    .collect();
+                User::new(login, name).with_roles(&roles)
             }
             // Nobody said who they are yet, so ask.
             _ => return Html(login_form(&query)).into_response(),
@@ -369,10 +390,14 @@ fn login_form(query: &AuthorizeQuery) -> String {
              autocapitalize="off" autocomplete="off"></label>
     <label>Full name
       <input type="text" name="name" value="Michal Sojka"></label>
+    <label>Roles (comma-separated)
+      <input type="text" name="roles" value="" autocapitalize="off"
+             autocomplete="off"></label>
     <button type="submit">Log in</button>
   </form>
   <p class="hint">Log in as the teacher (the login passed to
-    <code>--teachers</code>) to ask questions, or as anybody else, for example
+    <code>--teachers</code>), or with a role passed to
+    <code>--teacher-roles</code>, to ask questions, or as anybody else, for example
     <code>novakja1</code>, to answer them as a student.</p>
   <p class="hint">Client: <code>{client}</code></p>
 </body>
@@ -475,6 +500,7 @@ fn claims(
             .set_email(Some(EndUserEmail::new(user.email.clone()))),
         TokenType {
             typ: typ.to_owned(),
+            roles: user.roles.clone(),
         },
     )
 }
@@ -524,6 +550,11 @@ fn init_logging_once(cfg: &Config) {
 /// An empty `teachers` list means every login may ask questions, which the
 /// server only does when it is told to explicitly.
 pub async fn start_server(idp: &MockIdp, teachers: &[&str]) -> String {
+    start_server_with(idp, teachers, &[]).await
+}
+
+/// Like [`start_server`], with further command line arguments.
+pub async fn start_server_with(idp: &MockIdp, teachers: &[&str], extra: &[&str]) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
 
@@ -541,7 +572,8 @@ pub async fn start_server(idp: &MockIdp, teachers: &[&str]) -> String {
         "--log-file".to_owned(),
         log_file().display().to_string(),
     ];
-    if teachers.is_empty() {
+    args.extend(extra.iter().map(|&arg| arg.to_owned()));
+    if teachers.is_empty() && !extra.contains(&"--teacher-roles") {
         args.push("--allow-any-teacher".to_owned());
     }
     let cfg = Config::parse_from(args).normalize().unwrap();

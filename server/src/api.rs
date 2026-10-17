@@ -2,7 +2,7 @@
 //!
 //! Every endpoint except [`oidc_info`] requires an OIDC ID token in the
 //! `Authorization: Bearer` header; asking questions additionally requires the
-//! login to be on the teacher list.
+//! login to be on the teacher list or the token to carry a teacher role.
 
 use axum::{
     Json,
@@ -37,8 +37,8 @@ pub async fn oidc_info(State(state): State<AppState>) -> Json<OidcInfo> {
 
 /// `GET /api/v1/whoami` - who the CLI is logged in as.
 pub async fn whoami(State(state): State<AppState>, ApiUser(user): ApiUser) -> Json<WhoAmI> {
-    let is_teacher = state.cfg.is_teacher(&user.login);
-    tracing::info!(login = %user.login, is_teacher, "whoami");
+    let is_teacher = state.cfg.is_teacher(&user);
+    tracing::info!(login = %user.login, roles = ?user.roles, is_teacher, "whoami");
     Json(WhoAmI {
         login: user.login,
         name: user.name,

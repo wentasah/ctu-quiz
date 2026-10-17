@@ -32,6 +32,8 @@ async fn run() -> anyhow::Result<()> {
         issuer = %cfg.oidc_issuer,
         client_id = %cfg.oidc_client_id,
         teachers = ?cfg.teachers,
+        teacher_roles = ?cfg.teacher_roles,
+        roles_claim = %cfg.roles_claim,
         allow_any_teacher = cfg.allow_any_teacher,
         log_file = ?cfg.log_file,
         "starting the quiz server"

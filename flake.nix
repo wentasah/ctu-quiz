@@ -137,7 +137,27 @@
               example = [ "sojkam1" ];
               description = ''
                 Logins allowed to ask questions. The server refuses to start
-                with an empty list unless allowAnyTeacher is set.
+                with an empty list and no teacherRoles unless allowAnyTeacher
+                is set.
+              '';
+            };
+
+            teacherRoles = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [ ];
+              example = [ "teacher" ];
+              description = ''
+                Roles allowed to ask questions: anybody whose access token
+                lists one of them in the rolesClaim claim is a teacher.
+              '';
+            };
+
+            rolesClaim = lib.mkOption {
+              type = lib.types.str;
+              default = "roles";
+              description = ''
+                Claim of the access token with the user's roles, a string or
+                an array of strings.
               '';
             };
 
@@ -146,7 +166,8 @@
               default = false;
               description = ''
                 Let everybody who can log in with the identity provider ask
-                questions, instead of only the logins in teachers.
+                questions, instead of only the logins in teachers and the
+                roles in teacherRoles.
               '';
             };
 
@@ -189,6 +210,8 @@
                 QUIZ_OIDC_CLIENT_ID = cfg.clientId;
                 QUIZ_OIDC_SCOPES = lib.concatStringsSep "," cfg.scopes;
                 QUIZ_TEACHERS = lib.concatStringsSep "," cfg.teachers;
+                QUIZ_TEACHER_ROLES = lib.concatStringsSep "," cfg.teacherRoles;
+                QUIZ_ROLES_CLAIM = cfg.rolesClaim;
                 QUIZ_ALLOW_ANY_TEACHER = lib.boolToString cfg.allowAnyTeacher;
                 QUIZ_TRUST_PROXY = lib.boolToString cfg.trustProxy;
                 QUIZ_LOG_FILE = "/var/log/quiz-server/quiz-server.log";
