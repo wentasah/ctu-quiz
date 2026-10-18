@@ -182,7 +182,7 @@ goes like this:
 * A question that is still open when the next one is asked stays open for its
   own `quiz ask` — pressing Enter there still closes it and writes its CSV —
   but the students have already moved on to the new one.
-* A room keeps at most 30 questions. Asking another one drops the oldest,
+* A room keeps at most 100 questions. Asking another one drops the oldest,
   together with its answers.
 * `quiz status` shows the room — its code, URLs, how many students have it
   open — and every question still kept in it, with its id, state, number of

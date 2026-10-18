@@ -44,7 +44,7 @@ pub const MAX_PENDING_LOGINS: usize = 4096;
 
 /// How many questions a room keeps. Asking one more drops the oldest, so that
 /// a teacher asking in a loop cannot fill the server's memory either.
-pub const MAX_ROOM_QUESTIONS: usize = 30;
+pub const MAX_ROOM_QUESTIONS: usize = 100;
 
 /// A login started in a browser and not yet finished.
 pub struct PendingLogin {
