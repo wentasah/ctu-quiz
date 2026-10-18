@@ -7,7 +7,8 @@
 //! stale ones.
 //!
 //! Both the presentation view and the students follow the room, which is what
-//! lets their pages move on to the next question by themselves.
+//! lets their pages move on to the next question by themselves. The teacher's
+//! CLI follows the one question it asked instead, see [`question_stream`].
 
 use std::{convert::Infallible, sync::Arc};
 
@@ -78,6 +79,51 @@ pub fn stream(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
+/// Streams what the teacher learns about a question, as `GET
+/// /api/v1/questions/{id}` would tell it, whenever that changes: somebody
+/// answers, comes into the room or leaves it, or the question is closed.
+///
+/// The caller checks that the question belongs to the teacher.
+pub fn question_stream(
+    state: AppState,
+    id: String,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>> + use<>> {
+    let stream = async_stream::stream! {
+        let Some((mut answers, mut people)) = subscribe_question(&state, &id).await else {
+            yield Ok(gone());
+            return;
+        };
+
+        if let Some(event) = question_snapshot(&state, &id).await {
+            yield Ok(event);
+        }
+
+        loop {
+            let ping = tokio::select! {
+                ping = answers.recv() => ping,
+                ping = people.recv() => ping,
+            };
+            match ping {
+                // Only the newest state matters, so dropped pings are fine.
+                Ok(()) | Err(RecvError::Lagged(_)) => match question_snapshot(&state, &id).await {
+                    Some(event) => yield Ok(event),
+                    None => {
+                        yield Ok(gone());
+                        break;
+                    }
+                },
+                // The question or its room has been dropped.
+                Err(RecvError::Closed) => {
+                    yield Ok(gone());
+                    break;
+                }
+            }
+        }
+    };
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
 /// Tells the page that what it was showing is no longer on the server, so
 /// that it reloads and says so instead of waiting for updates forever.
 fn gone() -> Event {
@@ -110,5 +156,26 @@ async fn snapshot(state: &AppState, source: &Source) -> Option<Event> {
         .event("state")
         .json_data(live)
         .inspect_err(|error| tracing::error!(%error, "serializing the live state failed"))
+        .ok()
+}
+
+/// The pings of a question and of the people in its room.
+async fn subscribe_question(
+    state: &AppState,
+    id: &str,
+) -> Option<(broadcast::Receiver<()>, broadcast::Receiver<()>)> {
+    let store = state.store.read().await;
+    let question = store.get(id)?;
+    let room = store.room(&question.room)?;
+    Some((question.updates.subscribe(), room.students.subscribe()))
+}
+
+async fn question_snapshot(state: &AppState, id: &str) -> Option<Event> {
+    let store = state.store.read().await;
+    let info = store.question_info(store.get(id)?);
+    Event::default()
+        .event("state")
+        .json_data(info)
+        .inspect_err(|error| tracing::error!(%error, "serializing the question failed"))
         .ok()
 }

@@ -154,13 +154,32 @@ impl Room {
 
 /// Logins of the students whose event streams of a room are open, each with
 /// the number of its streams: a student with two tabs is still one student.
-#[derive(Debug, Clone, Default)]
-pub struct Presence(Arc<Mutex<HashMap<String, usize>>>);
+#[derive(Debug, Clone)]
+pub struct Presence {
+    logins: Arc<Mutex<HashMap<String, usize>>>,
+    /// Pinged whenever a student comes or goes, for the teacher's count of
+    /// the people in the room.
+    changes: broadcast::Sender<()>,
+}
+
+impl Default for Presence {
+    fn default() -> Self {
+        Self {
+            logins: Arc::default(),
+            changes: broadcast::channel(16).0,
+        }
+    }
+}
 
 impl Presence {
     /// Counts `login` as present until the returned guard is dropped.
     pub fn enter(&self, login: &str) -> Present {
-        *self.lock().entry(login.to_owned()).or_default() += 1;
+        let mut logins = self.lock();
+        let streams = logins.entry(login.to_owned()).or_default();
+        *streams += 1;
+        if *streams == 1 {
+            self.changed();
+        }
         Present {
             presence: self.clone(),
             login: login.to_owned(),
@@ -171,9 +190,19 @@ impl Presence {
         self.lock().keys().cloned().collect()
     }
 
+    /// Wakes up whoever follows who is in the room.
+    pub fn subscribe(&self) -> broadcast::Receiver<()> {
+        self.changes.subscribe()
+    }
+
+    fn changed(&self) {
+        // An error only means nobody is watching.
+        let _ = self.changes.send(());
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, usize>> {
         // The map stays consistent even if a holder panicked.
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        self.logins.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -191,6 +220,7 @@ impl Drop for Present {
             *streams -= 1;
             if *streams == 0 {
                 logins.remove(&self.login);
+                self.presence.changed();
             }
         }
     }

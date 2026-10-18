@@ -1361,6 +1361,84 @@ async fn the_teacher_sees_how_many_students_are_in_the_room() {
 }
 
 #[tokio::test]
+async fn the_teacher_follows_a_question_without_asking_again() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1", "novotny"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.access_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let question: QuestionInfo = api
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(&token)
+        .json(&CreateQuestion {
+            source_name: "question.md".to_owned(),
+            markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
+            shuffle: false,
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let url = format!("{base}/api/v1/questions/{}/events", question.id);
+
+    // Only the teacher who asked the question may follow it.
+    let other = idp.access_token(&User::new("novotny", "Jan Novotný"), CLIENT_ID);
+    let response = api.get(&url).bearer_auth(&other).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let response = api.get(&url).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let mut events = api.get(&url).bearer_auth(&token).send().await.unwrap();
+    assert_eq!(events.status(), StatusCode::OK);
+    let mut buffer = String::new();
+
+    // The current state comes right away.
+    let first = next_question_event(&mut events, &mut buffer, |_| true).await;
+    assert_eq!((first.answer_count, first.people, first.open), (0, 0, true));
+
+    // A student opens the room...
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let student = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    student.get(format!("{base}/")).send().await.unwrap();
+    let mut room = student
+        .get(format!("{}/events", question.answer_url))
+        .send()
+        .await
+        .unwrap();
+    room.chunk().await.unwrap();
+    next_question_event(&mut events, &mut buffer, |q| q.people == 1).await;
+
+    // ...another one answers...
+    answer_as(&base, &idp, &User::new("dvorakpe", "Petr Dvořák"), &question, 1).await;
+    next_question_event(&mut events, &mut buffer, |q| {
+        (q.answer_count, q.people) == (1, 2)
+    })
+    .await;
+
+    // ...the first one leaves...
+    drop(room);
+    next_question_event(&mut events, &mut buffer, |q| q.people == 1).await;
+
+    // ...and the question is closed.
+    let response = api
+        .post(format!("{base}/api/v1/questions/{}/close", question.id))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let closed = next_question_event(&mut events, &mut buffer, |q| !q.open).await;
+    assert_eq!(closed.answer_count, 1);
+}
+
+#[tokio::test]
 async fn a_login_cannot_be_finished_in_somebody_elses_browser() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
@@ -1519,6 +1597,35 @@ async fn live_state_as(client: &reqwest::Client, url: &str) -> String {
         .unwrap()
         .expect("the event stream is not empty");
     String::from_utf8_lossy(&chunk).into_owned()
+}
+
+/// Reads the teacher's event stream of a question until a state satisfies
+/// `wanted`.
+async fn next_question_event(
+    events: &mut reqwest::Response,
+    buffer: &mut String,
+    wanted: impl Fn(&QuestionInfo) -> bool,
+) -> QuestionInfo {
+    let read = async {
+        loop {
+            while let Some(end) = buffer.find("\n\n") {
+                let block: String = buffer.drain(..end + 2).collect();
+                let Some(data) = block.lines().find_map(|line| line.strip_prefix("data: ")) else {
+                    continue;
+                };
+                assert!(block.contains("event: state"), "{block}");
+                let question: QuestionInfo = serde_json::from_str(data).unwrap();
+                if wanted(&question) {
+                    return question;
+                }
+            }
+            let chunk = events.chunk().await.unwrap().expect("the stream goes on");
+            buffer.push_str(std::str::from_utf8(&chunk).unwrap());
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(5), read)
+        .await
+        .expect("the expected state arrives")
 }
 
 /// Waits for the asynchronous log writer to catch up and returns the log.

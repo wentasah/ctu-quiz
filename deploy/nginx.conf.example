@@ -1,6 +1,6 @@
 # Reverse proxy for the quiz server, with TLS terminated by nginx.
 #
-# The two `events` endpoints are server-sent event streams: they must not be
+# The `events` endpoints are server-sent event streams: they must not be
 # buffered, and they stay open for as long as a question is shown.
 
 server {

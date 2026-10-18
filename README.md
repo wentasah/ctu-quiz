@@ -611,7 +611,7 @@ The counters start from zero whenever the server restarts.
 | 8 | Answers are the top-level list items after `---` | `common/src/question.rs` (`parse`, and `shuffle_answers` for `--shuffle`) |
 | 9 | QR code with the answer URL and a random question code | `server/src/display.rs` (`qr_svg`), room URL and code generated in `state.rs` |
 | 10 | Main page asks for the code and redirects to the QR URL | `server/src/web.rs`: `index`, `join` and `room` |
-| 11 | Live update of the number of answers | `server/src/live.rs` (server-sent events) and `server/static/app.js` |
+| 11 | Live update of the number of answers | `server/src/live.rs` (server-sent events), followed by `server/static/app.js` and by `quiz ask` (`/api/v1/questions/{id}/events`) |
 | 12 | Closing shows a bar graph and writes a CSV of logins and answers | `api::close_question`, `templates/results.html`, `cli/src/report.rs` |
 
 ## How the code is organized

@@ -8,6 +8,7 @@ use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
 };
 use chrono::Utc;
 use quiz_common::api::{
@@ -17,6 +18,7 @@ use quiz_common::api::{
 use crate::{
     auth::{ApiUser, Identity, Teacher},
     error::ApiFailure,
+    live,
     state::{AppState, Question, Store},
 };
 
@@ -134,6 +136,18 @@ pub async fn question(
 ) -> Result<Json<QuestionInfo>, ApiFailure> {
     let store = state.store.read().await;
     Ok(Json(store.question_info(owned(&store, &id, &teacher)?)))
+}
+
+/// `GET /api/v1/questions/{id}/events` - the same as [`question`], sent
+/// again over server-sent events whenever it changes, so that the CLI can
+/// show how many students have answered without asking over and over.
+pub async fn question_events(
+    State(state): State<AppState>,
+    Teacher(teacher): Teacher,
+    Path(id): Path<String>,
+) -> Result<Response, ApiFailure> {
+    owned(&*state.store.read().await, &id, &teacher)?;
+    Ok(live::question_stream(state, id).into_response())
 }
 
 /// `POST /api/v1/questions/{id}/close` - stops accepting answers, which also

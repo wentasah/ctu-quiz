@@ -25,7 +25,7 @@ use chrono::Local;
 use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command};
 use client::{Api, Login};
-use quiz_common::api::{CreateQuestion, StudentView};
+use quiz_common::api::{CreateQuestion, QuestionInfo, StudentView};
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use url::Url;
 
@@ -450,8 +450,15 @@ async fn next_line(stdin: &mut Option<Lines<BufReader<Stdin>>>) -> std::io::Resu
     }
 }
 
+/// How long the event stream may stay silent before it is taken for broken.
+/// The server sends a keep-alive comment every 15 seconds.
+const STREAM_SILENCE: Duration = Duration::from_secs(45);
+
 /// Shows how many of the students in the room have answered, until the
 /// teacher closes the question.
+///
+/// The counts come over server-sent events, so they show up as soon as
+/// somebody answers and nothing is sent while nothing happens.
 ///
 /// `stdin` becomes `None` once the standard input turns out to be closed.
 async fn wait_for_close(
@@ -466,14 +473,35 @@ async fn wait_for_close(
     // change instead of escape sequences.
     let terminal = std::io::stdout().is_terminal();
     let mut last_counts = None;
-    let mut ticker = tokio::time::interval(Duration::from_secs(1));
-    let deadline =
-        close_after.map(|seconds| tokio::time::Instant::now() + Duration::from_secs(seconds));
+    let deadline = async {
+        match close_after {
+            Some(seconds) => tokio::time::sleep(Duration::from_secs(seconds)).await,
+            None => std::future::pending().await,
+        }
+    };
+    tokio::pin!(deadline);
+    let mut events = api.question_events(id).await?;
 
     loop {
         tokio::select! {
-            _ = ticker.tick() => {
-                let question = api.question(id).await?;
+            event = tokio::time::timeout(STREAM_SILENCE, events.next()) => {
+                let event = match event {
+                    Ok(Ok(Some(event))) => event,
+                    // The stream ended or broke off, for instance because a
+                    // proxy dropped it. Connecting again also brings the
+                    // current state, so nothing is missed.
+                    Ok(Ok(None) | Err(_)) | Err(_) => {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        events = api.question_events(id).await?;
+                        continue;
+                    }
+                };
+                if event.name == "gone" {
+                    bail!("the question is no longer on the server");
+                }
+                let question: QuestionInfo = serde_json::from_str(&event.data)
+                    .with_context(|| format!("the server sent an unexpected event: {}", event.data))?;
+
                 // Answered out of everybody in the room.
                 let counts = (question.answer_count, question.people);
                 if terminal {
@@ -488,10 +516,10 @@ async fn wait_for_close(
                     println!("\nThe question has been closed.");
                     return Ok(());
                 }
-                if deadline.is_some_and(|deadline| tokio::time::Instant::now() >= deadline) {
-                    println!();
-                    return Ok(());
-                }
+            }
+            () = &mut deadline => {
+                println!();
+                return Ok(());
             }
             line = next_line(stdin) => {
                 match line {

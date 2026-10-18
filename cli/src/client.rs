@@ -1,6 +1,6 @@
 //! Client for the quiz server's HTTP API.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow};
 use quiz_common::api::{
     API_PREFIX, ApiError, CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, RoomStatus,
     WhoAmI,
@@ -69,8 +69,23 @@ impl Api {
         self.send(request).await
     }
 
-    pub async fn question(&self, id: &str) -> Result<QuestionInfo> {
-        self.send(self.get(&format!("questions/{id}")).await?).await
+    /// Follows a question: the server sends its state right away and then
+    /// again whenever it changes.
+    pub async fn question_events(&self, id: &str) -> Result<Events> {
+        let request = self.get(&format!("questions/{id}/events")).await?;
+        let response = request
+            .send()
+            .await
+            .with_context(|| format!("cannot reach the quiz server at {}", self.base))?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(failure(status, &body));
+        }
+        Ok(Events {
+            response,
+            buffer: Vec::new(),
+        })
     }
 
     pub async fn close(&self, id: &str) -> Result<QuestionInfo> {
@@ -158,14 +173,105 @@ async fn parse<T: DeserializeOwned>(response: Response) -> Result<T> {
         return serde_json::from_str(&body)
             .with_context(|| format!("the server sent an unexpected response: {body}"));
     }
+    Err(failure(status, &body))
+}
 
-    let message = serde_json::from_str::<ApiError>(&body)
+/// A useful error message for a response that is not a success.
+fn failure(status: StatusCode, body: &str) -> anyhow::Error {
+    let message = serde_json::from_str::<ApiError>(body)
         .map(|error| error.error)
         .unwrap_or_else(|_| body.trim().to_owned());
 
     match status {
-        StatusCode::UNAUTHORIZED => bail!("not logged in: {message}"),
-        StatusCode::FORBIDDEN => bail!("not allowed: {message}"),
-        status => bail!("the server refused the request ({status}): {message}"),
+        StatusCode::UNAUTHORIZED => anyhow!("not logged in: {message}"),
+        StatusCode::FORBIDDEN => anyhow!("not allowed: {message}"),
+        status => anyhow!("the server refused the request ({status}): {message}"),
+    }
+}
+
+/// A stream of server-sent events.
+pub struct Events {
+    response: Response,
+    /// What has arrived of the events not returned yet. Bytes rather than a
+    /// string, because a chunk may end in the middle of a character.
+    buffer: Vec<u8>,
+}
+
+/// One server-sent event.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Event {
+    pub name: String,
+    pub data: String,
+}
+
+impl Events {
+    /// The next event, or `None` once the server ends the stream.
+    pub async fn next(&mut self) -> Result<Option<Event>> {
+        loop {
+            // Events are separated by an empty line.
+            if let Some(end) = self.buffer.windows(2).position(|pair| pair == b"\n\n") {
+                let block: Vec<u8> = self.buffer.drain(..end + 2).collect();
+                // Keep-alive comments carry no event.
+                if let Some(event) = parse_event(&String::from_utf8_lossy(&block)) {
+                    return Ok(Some(event));
+                }
+                continue;
+            }
+            match self.response.chunk().await.context("the event stream broke off")? {
+                Some(chunk) => self.buffer.extend_from_slice(&chunk),
+                None => return Ok(None),
+            }
+        }
+    }
+}
+
+/// Parses the lines of one event, or returns `None` when it has no data.
+fn parse_event(block: &str) -> Option<Event> {
+    let mut name = None;
+    let mut data: Option<String> = None;
+    for line in block.lines() {
+        let (field, value) = line.split_once(':').unwrap_or((line, ""));
+        let value = value.strip_prefix(' ').unwrap_or(value);
+        match field {
+            "event" => name = Some(value.to_owned()),
+            "data" => match &mut data {
+                Some(data) => {
+                    data.push('\n');
+                    data.push_str(value);
+                }
+                None => data = Some(value.to_owned()),
+            },
+            // Comments, which start with a colon, and fields not used here.
+            _ => {}
+        }
+    }
+    Some(Event {
+        name: name.unwrap_or_else(|| "message".to_owned()),
+        data: data?,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Event, parse_event};
+
+    #[test]
+    fn server_sent_events_are_parsed() {
+        assert_eq!(
+            parse_event("event: state\ndata: {\"a\":1}\n\n"),
+            Some(Event {
+                name: "state".to_owned(),
+                data: "{\"a\":1}".to_owned()
+            })
+        );
+        assert_eq!(
+            parse_event("data:one\ndata: two\n\n"),
+            Some(Event {
+                name: "message".to_owned(),
+                data: "one\ntwo".to_owned()
+            })
+        );
+        // A keep-alive comment.
+        assert_eq!(parse_event(":\n\n"), None);
     }
 }
