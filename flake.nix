@@ -177,6 +177,17 @@
               description = "Log the client address from X-Forwarded-For.";
             };
 
+            saveState = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = ''
+                Save the rooms, questions and answers to
+                /var/lib/quiz-server/state.json when the service stops, and
+                read them back when it starts, so that a restart in the middle
+                of a lecture loses nothing.
+              '';
+            };
+
             environmentFile = lib.mkOption {
               type = lib.types.nullOr lib.types.path;
               default = null;
@@ -217,6 +228,8 @@
                 QUIZ_LOG_FILE = "/var/log/quiz-server/quiz-server.log";
               } // lib.optionalAttrs (cfg.cliClientId != null) {
                 QUIZ_OIDC_CLI_CLIENT_ID = cfg.cliClientId;
+              } // lib.optionalAttrs cfg.saveState {
+                QUIZ_STATE_FILE = "/var/lib/quiz-server/state.json";
               } // lib.optionalAttrs (cfg.cliRedirectUri != null) {
                 QUIZ_OIDC_CLI_REDIRECT_URI = cfg.cliRedirectUri;
               } // cfg.extraEnvironment;
@@ -228,10 +241,12 @@
                 Restart = "on-failure";
                 RestartSec = "5s";
 
-                # The server keeps nothing on disc except its log.
+                # The server keeps nothing on disc except its log, and the
+                # state file if saveState is on.
                 DynamicUser = true;
                 LogsDirectory = "quiz-server";
                 LogsDirectoryMode = "0750";
+                StateDirectory = lib.mkIf cfg.saveState "quiz-server";
 
                 NoNewPrivileges = true;
                 CapabilityBoundingSet = "";

@@ -2,7 +2,9 @@
 //! serves the API used by the teacher CLI.
 //!
 //! All state lives in memory (see [`state`]); the only file the server writes
-//! is the log file, and it never reads it back.
+//! is the log file, and it never reads it back. Unless `--state-file` is
+//! given: then the rooms, questions and answers are saved there on shutdown
+//! and read back on start (see [`persist`]).
 
 pub mod api;
 pub mod auth;
@@ -11,6 +13,7 @@ pub mod display;
 pub mod error;
 pub mod live;
 pub mod metrics;
+pub mod persist;
 pub mod state;
 pub mod views;
 pub mod web;
@@ -160,6 +163,7 @@ pub async fn serve(cfg: Config, listener: TcpListener) -> Result<()> {
     });
 
     let state = AppState::new(cfg, oidc);
+    state.load_state().await;
 
     let pruner = state.clone();
     tokio::spawn(async move {
@@ -175,15 +179,19 @@ pub async fn serve(cfg: Config, listener: TcpListener) -> Result<()> {
     }
 
     // No graceful shutdown: it would wait for the event streams of open
-    // pages, which never end. Nothing is stored on disc, so there is
-    // nothing to finish either; returning drops every connection, and the
-    // browsers reconnect once the server is back.
-    tokio::select! {
-        result = axum::serve(listener, router(state)) => {
+    // pages, which never end. Apart from the optional state file there is
+    // nothing to finish; returning drops every connection, and the browsers
+    // reconnect once the server is back.
+    let result = tokio::select! {
+        result = axum::serve(listener, router(state.clone())) => {
             result.context("the HTTP server failed")
         }
         () = shutdown_signal() => Ok(()),
-    }
+    };
+    // Saved however the server stops, so that nothing is lost even when it
+    // failed.
+    let saved = state.save_state().await;
+    result.and(saved)
 }
 
 /// Resolves on SIGINT or SIGTERM, so that systemd can stop the server.

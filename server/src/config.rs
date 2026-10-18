@@ -115,6 +115,15 @@ pub struct Config {
     #[arg(long, env = "QUIZ_SESSION_TTL_HOURS", default_value_t = 12)]
     pub session_ttl_hours: i64,
 
+    /// File the rooms, questions and answers are saved to when the server
+    /// stops, and read back from when it starts again.
+    ///
+    /// Lets the server be restarted, e.g. for an update, in the middle of a
+    /// lecture without the students losing their room. Without it, all state
+    /// lives in memory only.
+    #[arg(long, env = "QUIZ_STATE_FILE")]
+    pub state_file: Option<PathBuf>,
+
     /// Take the client address from `X-Forwarded-For` when logging.
     ///
     /// Only enable this behind a reverse proxy that sets the header itself.

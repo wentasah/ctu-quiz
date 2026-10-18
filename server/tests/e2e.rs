@@ -1728,3 +1728,138 @@ async fn metrics_count_questions_answers_and_who_is_connected() {
         assert!(text.lines().any(|l| l == line), "{line:?} not in\n{text}");
     }
 }
+
+/// Starts the server binary with `--state-file`, on `port`, and waits until it
+/// answers.
+#[cfg(unix)]
+async fn spawn_server_process(
+    idp: &MockIdp,
+    port: u16,
+    state_file: &std::path::Path,
+) -> std::process::Child {
+    let base = format!("http://127.0.0.1:{port}");
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_quiz-server"))
+        .args(["--listen", &format!("127.0.0.1:{port}")])
+        .args(["--public-url", &base])
+        .args(["--oidc-issuer", &idp.issuer])
+        .args(["--oidc-client-id", CLIENT_ID])
+        .args(["--teachers", "sojkam1"])
+        .arg("--state-file")
+        .arg(state_file)
+        .arg("--log-file")
+        .arg(state_file.with_extension("log"))
+        .spawn()
+        .expect("the server binary starts");
+    for _ in 0..100 {
+        if reqwest::get(format!("{base}/healthz"))
+            .await
+            .is_ok_and(|response| response.status().is_success())
+        {
+            return child;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    panic!("the quiz server did not start");
+}
+
+#[cfg(unix)]
+fn terminate(mut child: std::process::Child) {
+    let status = std::process::Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    assert!(child.wait().unwrap().success(), "the server stops cleanly");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn rooms_and_answers_survive_a_restart_with_a_state_file() {
+    let idp = MockIdp::start().await;
+    let directory = std::env::temp_dir().join(format!("quiz-state-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let state_file = directory.join("state.json");
+    let _ = std::fs::remove_file(&state_file);
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let base = format!("http://127.0.0.1:{port}");
+    let token = idp.access_token(&User::new("sojkam1", "Michal Sojka"), CLIENT_ID);
+    let api = reqwest::Client::new();
+
+    let server = spawn_server_process(&idp, port, &state_file).await;
+    let question: QuestionInfo = api
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(&token)
+        .json(&CreateQuestion {
+            source_name: "otazky.md".to_owned(),
+            markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
+            shuffle: false,
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    answer_as(&base, &idp, &User::new("novakja1", "Jan Novák"), &question, 1).await;
+    terminate(server);
+    assert!(state_file.exists(), "the state is saved on termination");
+
+    let server = spawn_server_process(&idp, port, &state_file).await;
+    let room = api
+        .get(format!("{base}/api/v1/room"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json::<RoomStatus>()
+        .await
+        .unwrap()
+        .room
+        .expect("the room is back");
+    assert_eq!(room.code, question.code);
+    assert_eq!(room.answer_url, question.answer_url);
+    assert_eq!(room.current.as_deref(), Some(question.id.as_str()));
+
+    let results: Results = api
+        .get(format!("{base}/api/v1/questions/{}/results", question.id))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(results.rows.len(), 1);
+    assert_eq!(results.rows[0].login, "novakja1");
+    assert!(results.question.open);
+
+    // Another student can still join with the code from before the restart.
+    answer_as(&base, &idp, &User::new("dvorakpe", "Petr Dvořák"), &question, 0).await;
+    terminate(server);
+
+    // A state file that cannot be read does not keep the server from
+    // starting, it just starts from scratch.
+    std::fs::write(&state_file, "not json").unwrap();
+    let server = spawn_server_process(&idp, port, &state_file).await;
+    let status: RoomStatus = api
+        .get(format!("{base}/api/v1/room"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(status.room.is_none());
+    terminate(server);
+    let log = std::fs::read_to_string(state_file.with_extension("log")).unwrap();
+    assert!(log.contains("starting from scratch"), "{log}");
+    let _ = std::fs::remove_dir_all(&directory);
+}

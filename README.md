@@ -194,7 +194,8 @@ The URL behind the QR code (`/r/<token>`) and the six-digit code are
 associated with the **teacher**, not with a single question. Together
 they form the teacher's *room*, which stays open as long as the
 teacher keeps asking questions — until `--question-ttl-hours` after
-the last question, or until the server restarts. A lecture therefore
+the last question, or until the server restarts (unless it is run with
+`--state-file`, see [Deployment](#deployment)). A lecture therefore
 goes like this:
 
 * The first `quiz ask` opens the room. Students scan the QR code or type the
@@ -560,6 +561,7 @@ the container image use (`quiz-server --help` lists them all):
 | `--login-claim` | `QUIZ_LOGIN_CLAIM` | `preferred-username` |
 | `--question-ttl-hours` | `QUIZ_QUESTION_TTL_HOURS` | `12` |
 | `--session-ttl-hours` | `QUIZ_SESSION_TTL_HOURS` | `12` |
+| `--state-file` | `QUIZ_STATE_FILE` | none (state in memory only) |
 | `--trust-proxy` | `QUIZ_TRUST_PROXY` | off |
 
 `--public-url` may contain a path prefix (`https://osy.fel.cvut.cz/quiz`); the
@@ -596,6 +598,18 @@ TLS. Ready-made pieces:
 Restarting the server is cheap: nothing is stored on disc, so only questions
 that are open at that moment are lost, and browser sessions have to log in
 again (the cookie signing key is new).
+
+To restart it, e.g. for an update, in the middle of a lecture without losing
+anything, give it `--state-file` (`QUIZ_STATE_FILE`). On SIGTERM or SIGINT the
+server then writes the rooms, questions and answers to that file, and reads
+them back the next time it starts, dropping what has outlived
+`--question-ttl-hours` in the meantime. Students keep their room URL and code
+and only have to log in again, as sessions are not saved. A state file that
+cannot be read is only warned about in the log, and the server starts from
+scratch, overwriting the file when it stops next time. The
+systemd unit in `deploy/` has the lines for this commented out, and the NixOS
+module has `services.quiz-server.saveState`. This departs from requirement 4,
+so it is off by default.
 
 ## Changing the colours
 
@@ -668,7 +682,7 @@ The counters start from zero whenever the server restarts.
 | 1 | HTTP server plus a CLI for teachers | `quiz-server` (`server/`) and `quiz` (`cli/`) |
 | 2 | Server reachable under a public URL | `--public-url`, plus `deploy/` for the reverse proxy, systemd, Docker and NixOS |
 | 3 | The CLI talks to the server over an HTTP API | `common/src/api.rs`, `cli/src/client.rs`, routes under `/api/v1` |
-| 4 | No state on disc | `server/src/state.rs` keeps questions, answers and sessions in memory only |
+| 4 | No state on disc | `server/src/state.rs` keeps questions, answers and sessions in memory only; `--state-file` (off by default, `server/src/persist.rs`) opts out |
 | 5 | All operations logged to a file by a logging framework | `tracing` with a file and a stderr layer, set up in `init_logging` (`server/src/lib.rs`) |
 | 6 | Authorization via OIDC | `server/src/auth.rs` (browser sessions, ID-token checks), `cli/src/auth.rs` (loopback login) |
 | 7 | Question read from Markdown, shown in a browser, URL printed otherwise | `cli/src/main.rs`: `ask` and `show_in_browser` |
@@ -688,6 +702,7 @@ The counters start from zero whenever the server restarts.
 | `server/src/config.rs` | command line and environment options |
 | `server/src/auth.rs` | OIDC: login in the browser, token checks for the CLI |
 | `server/src/state.rs` | the in-memory questions, answers and sessions |
+| `server/src/persist.rs` | saving them over a restart with `--state-file` |
 | `server/src/web.rs` | the student pages |
 | `cli/src/cli.rs` | the clap command line, shared with `cli/build.rs` |
 | `cli/src/config.rs` | the configuration directory, and default option values from `quiz.toml` and `config.toml` in it |

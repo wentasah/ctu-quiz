@@ -2,7 +2,9 @@
 //!
 //! The assignment forbids on-disc state, so questions, collected answers and
 //! browser sessions live in this process only and are lost on restart. The log
-//! file is written but never read back.
+//! file is written but never read back. Only when asked to with
+//! `--state-file` are the rooms, questions and answers carried over a restart,
+//! see [`crate::persist`].
 //!
 //! Questions are grouped into [`Room`]s, one per teacher. A room is what the
 //! QR code and the numeric code point at, and it outlives the single question:
@@ -23,6 +25,7 @@ use openidconnect::{Nonce, PkceCodeVerifier};
 use quiz_common::api::{
     AnswerInfo, LiveState, QuestionInfo, ResultRow, Results, RoomInfo, RoomQuestion, StudentView,
 };
+use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
 
@@ -88,7 +91,7 @@ pub struct Session {
 }
 
 /// One student's answer.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
     pub name: String,
     pub index: usize,
@@ -502,6 +505,14 @@ impl Store {
         self.rooms.insert(room.token.clone(), room);
     }
 
+    pub fn rooms(&self) -> impl Iterator<Item = &Room> {
+        self.rooms.values()
+    }
+
+    pub fn questions(&self) -> impl Iterator<Item = &Question> {
+        self.questions.values()
+    }
+
     pub fn insert_question(&mut self, question: Question) {
         self.questions.insert(question.id.clone(), question);
     }
@@ -573,7 +584,7 @@ impl Store {
 
     /// Drops questions created before `cutoff`, and the rooms that have not
     /// been used since then. Returns how many questions were dropped.
-    fn prune(&mut self, cutoff: DateTime<Utc>) -> usize {
+    pub(crate) fn prune(&mut self, cutoff: DateTime<Utc>) -> usize {
         let expired: Vec<String> = self
             .questions
             .values()
@@ -772,7 +783,7 @@ impl AppState {
     }
 
     /// How long questions, and rooms nobody asks anything in, are kept.
-    fn question_ttl(&self) -> TimeDelta {
+    pub(crate) fn question_ttl(&self) -> TimeDelta {
         TimeDelta::try_hours(self.cfg.question_ttl_hours).unwrap_or(TimeDelta::zero())
     }
 

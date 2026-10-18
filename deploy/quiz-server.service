@@ -5,7 +5,8 @@
 #   systemctl daemon-reload && systemctl enable --now quiz-server
 #
 # The server keeps no state on disc, so it may be restarted at any time; only
-# questions that are currently open are lost.
+# questions that are currently open are lost. Uncomment the StateDirectory and
+# QUIZ_STATE_FILE lines below to carry rooms and answers over a restart.
 
 [Unit]
 Description=Quiz server (questions for students during a lecture)
@@ -25,6 +26,8 @@ DynamicUser=yes
 LogsDirectory=quiz-server
 LogsDirectoryMode=0750
 Environment=QUIZ_LOG_FILE=/var/log/quiz-server/quiz-server.log
+#StateDirectory=quiz-server
+#Environment=QUIZ_STATE_FILE=/var/lib/quiz-server/state.json
 
 # The process only needs to listen on a TCP port and talk to the OIDC provider.
 NoNewPrivileges=yes
