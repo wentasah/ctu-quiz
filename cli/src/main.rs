@@ -24,7 +24,7 @@ use anyhow::{Context, Result, bail};
 use chrono::Local;
 use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command};
-use client::{Api, Login};
+use client::{Api, Events, Login};
 use quiz_common::api::{CreateQuestion, QuestionInfo, StudentView};
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use url::Url;
@@ -521,27 +521,12 @@ async fn wait_for_close(
         }
     };
     tokio::pin!(deadline);
-    let mut events = api.question_events(id).await?;
+    let mut events = None;
 
     loop {
         tokio::select! {
-            event = tokio::time::timeout(STREAM_SILENCE, events.next()) => {
-                let event = match event {
-                    Ok(Ok(Some(event))) => event,
-                    // The stream ended or broke off, for instance because a
-                    // proxy dropped it. Connecting again also brings the
-                    // current state, so nothing is missed.
-                    Ok(Ok(None) | Err(_)) | Err(_) => {
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                        events = api.question_events(id).await?;
-                        continue;
-                    }
-                };
-                if event.name == "gone" {
-                    bail!("the question is no longer on the server");
-                }
-                let question: QuestionInfo = serde_json::from_str(&event.data)
-                    .with_context(|| format!("the server sent an unexpected event: {}", event.data))?;
+            question = next_state(api, id, &mut events) => {
+                let question = question?;
 
                 // Answered out of everybody in the room.
                 let counts = (question.answer_count, question.people);
@@ -574,6 +559,42 @@ async fn wait_for_close(
                 return Ok(());
             }
         }
+    }
+}
+
+/// The next state of the question, from its event stream, which is connected
+/// first if `events` holds none.
+///
+/// A stream that ends, breaks off or stays silent for too long, for instance
+/// because a proxy dropped or held it back, is connected again. That also
+/// brings the current state, so nothing is missed.
+///
+/// This is a `select!` branch, so it may be dropped at any `await`: whatever
+/// has to outlive it is in `events`. In particular, waiting for the stream
+/// never keeps the teacher's Enter from being read.
+async fn next_state(api: &Api, id: &str, events: &mut Option<Events>) -> Result<QuestionInfo> {
+    loop {
+        let stream = match events {
+            Some(stream) => stream,
+            None => match tokio::time::timeout(STREAM_SILENCE, api.question_events(id)).await {
+                Ok(stream) => events.insert(stream?),
+                // Not even the headers of the response came.
+                Err(_) => continue,
+            },
+        };
+        let event = match tokio::time::timeout(STREAM_SILENCE, stream.next()).await {
+            Ok(Ok(Some(event))) => event,
+            Ok(Ok(None) | Err(_)) | Err(_) => {
+                *events = None;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        };
+        if event.name == "gone" {
+            bail!("the question is no longer on the server");
+        }
+        return serde_json::from_str(&event.data)
+            .with_context(|| format!("the server sent an unexpected event: {}", event.data));
     }
 }
 
