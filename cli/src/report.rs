@@ -1,6 +1,9 @@
 //! Terminal output and the CSV export.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
@@ -96,7 +99,25 @@ pub fn csv_path(source: &Path, when: DateTime<Local>) -> PathBuf {
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_else(|| "question".to_owned());
-    let name = format!("{stem}_{}.csv", when.format("%Y-%m-%d_%H-%M-%S"));
+    next_to(
+        source,
+        format!("{stem}_{}.csv", when.format("%Y-%m-%d_%H-%M-%S")),
+    )
+}
+
+/// Where the points of the whole room are kept: the date and time the room
+/// was opened followed by the room code, so that every question of one
+/// lecture lands in the same file. It sits next to the question file, like
+/// the answers of the question.
+pub fn room_csv_path(source: &Path, code: &str, opened: DateTime<Local>) -> PathBuf {
+    next_to(
+        source,
+        format!("room_{}_{code}.csv", opened.format("%Y-%m-%d_%H-%M-%S")),
+    )
+}
+
+/// `name` in the directory of `source`.
+fn next_to(source: &Path, name: String) -> PathBuf {
     match source.parent() {
         Some(dir) if !dir.as_os_str().is_empty() => dir.join(name),
         _ => PathBuf::from(name),
@@ -116,6 +137,74 @@ pub fn write_csv(path: &Path, results: &Results) -> Result<()> {
         .flush()
         .with_context(|| format!("cannot write {}", path.display()))?;
     Ok(())
+}
+
+/// Writes the points of every student in the room: one column per scored
+/// question, in the order they were asked, and the total in the last one.
+pub fn write_room_csv(path: &Path, questions: &[Results]) -> Result<()> {
+    let mut writer =
+        csv::Writer::from_path(path).with_context(|| format!("cannot write {}", path.display()))?;
+    for record in room_table(questions) {
+        writer
+            .write_record(&record)
+            .with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    writer
+        .flush()
+        .with_context(|| format!("cannot write {}", path.display()))?;
+    Ok(())
+}
+
+/// The records of the room CSV, the header first. Students are sorted by
+/// login; a question a student did not answer is left empty and counts as
+/// nothing towards the total.
+fn room_table(questions: &[Results]) -> Vec<Vec<String>> {
+    let mut header = vec!["login".to_owned(), "name".to_owned()];
+    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+    for results in questions {
+        // The same file asked twice still gets two columns that can be
+        // told apart.
+        let name = results.question.source_name.as_str();
+        let count = seen.entry(name).or_default();
+        *count += 1;
+        header.push(match *count {
+            1 => name.to_owned(),
+            n => format!("{name} ({n})"),
+        });
+    }
+    header.push("total".to_owned());
+
+    let mut students: BTreeMap<&str, (&str, Vec<Option<f64>>)> = BTreeMap::new();
+    for (column, results) in questions.iter().enumerate() {
+        for row in &results.rows {
+            let student = students
+                .entry(&row.login)
+                .or_insert_with(|| ("", vec![None; questions.len()]));
+            student.0 = &row.name;
+            student.1[column] = row.points;
+        }
+    }
+
+    let mut table = vec![header];
+    for (login, (name, points)) in students {
+        let mut record = vec![login.to_owned(), name.to_owned()];
+        record.extend(
+            points
+                .iter()
+                .map(|points| points.map(number).unwrap_or_default()),
+        );
+        // Rounded, so that 0.1 + 0.2 does not end up as 0.30000000000000004.
+        let total: f64 = points.iter().flatten().sum();
+        record.push(number((total * 1e6).round() / 1e6));
+        table.push(record);
+    }
+    table
+}
+
+/// A number written the way the question CSV writes its points: `1.0`,
+/// `-0.5`.
+fn number(value: f64) -> String {
+    format!("{value:?}")
 }
 
 /// What `quiz status` shows: the room, and a line for every question the
@@ -213,8 +302,9 @@ fn ellipsis(text: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{csv_path, ellipsis, points_note, remaining};
+    use super::{csv_path, ellipsis, points_note, remaining, room_csv_path, room_table};
     use chrono::TimeZone;
+    use quiz_common::api::{QuestionInfo, ResultRow, Results, StudentView};
     use std::path::Path;
 
     #[test]
@@ -240,6 +330,78 @@ mod tests {
             csv_path(Path::new("question.md"), when),
             Path::new("question_2026-09-21_14-05-03.csv")
         );
+    }
+
+    #[test]
+    fn room_csv_is_named_after_the_room_and_when_it_was_opened() {
+        let opened = chrono::Local
+            .with_ymd_and_hms(2026, 9, 21, 14, 0, 7)
+            .unwrap();
+        assert_eq!(
+            room_csv_path(Path::new("cviceni/01regex/otazky.md"), "428173", opened),
+            Path::new("cviceni/01regex/room_2026-09-21_14-00-07_428173.csv")
+        );
+        assert_eq!(
+            room_csv_path(Path::new("otazky.md"), "428173", opened),
+            Path::new("room_2026-09-21_14-00-07_428173.csv")
+        );
+    }
+
+    fn results(source_name: &str, rows: &[(&str, &str, f64)]) -> Results {
+        let now = chrono::Utc::now();
+        Results {
+            question: QuestionInfo {
+                id: "id".to_owned(),
+                view: StudentView::default(),
+                code: "428173".to_owned(),
+                title: None,
+                source_name: source_name.to_owned(),
+                answer_url: String::new(),
+                display_url: String::new(),
+                presented: false,
+                answers: Vec::new(),
+                open: false,
+                answer_count: rows.len(),
+                people: rows.len(),
+                counts: Vec::new(),
+                teacher: "sojkam1".to_owned(),
+                created_at: now,
+                closed_at: Some(now),
+                revealed: false,
+            },
+            rows: rows
+                .iter()
+                .map(|&(login, name, points)| ResultRow {
+                    login: login.to_owned(),
+                    name: name.to_owned(),
+                    points: Some(points),
+                    answer: "A".to_owned(),
+                    answer_text: String::new(),
+                    answered_at: now,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn room_table_has_a_column_per_question_and_the_total() {
+        let table = room_table(&[
+            results(
+                "q1.md",
+                &[("svobodpe", "Petra", 1.0), ("novakja1", "Jan", 0.1)],
+            ),
+            results("q2.md", &[("novakja1", "Jan", 0.2)]),
+            results("q1.md", &[("svobodpe", "Petra", -0.5)]),
+        ]);
+        assert_eq!(
+            table,
+            [
+                vec!["login", "name", "q1.md", "q2.md", "q1.md (2)", "total"],
+                vec!["novakja1", "Jan", "0.1", "0.2", "", "0.3"],
+                vec!["svobodpe", "Petra", "1.0", "", "-0.5", "0.5"],
+            ]
+        );
+        assert_eq!(room_table(&[]), [vec!["login", "name", "total"]]);
     }
 
     #[test]

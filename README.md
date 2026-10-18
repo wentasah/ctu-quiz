@@ -32,7 +32,8 @@ the CLI. The student-facing web pages are in Czech, everything else in English.
 5. Ask the question with `quiz ask otazka.md` — see
    [How one question works](#how-one-question-works) for what happens next.
 6. Find the answers in the [CSV file](#the-csv-file-with-question-answers)
-   next to the question.
+   next to the question, and the points of the whole lecture in the
+   [room CSV](#the-csv-file-with-the-points-of-a-room).
 7. Optionally end the lecture with `quiz logout` (or `quiz close`), which
    closes the [room](#rooms). Rooms left open are closed automatically after
    a few hours.
@@ -161,6 +162,31 @@ of the chosen answer.
 The file name is the base name of the question file plus the date and time:
 `otazka.md` → `otazka_2026-09-21_14-05-03.csv`, written into the same
 directory unless `--output` says otherwise.
+
+## The CSV file with the points of a room
+
+Besides the answers of the question, every scored question closed by `quiz
+ask` or `quiz close <id>` updates a CSV with the points of the whole
+[room](#rooms): one row per student, sorted by login, one column per scored
+question in the order they were asked, headed by its file name, and the
+total in the last column:
+
+```csv
+login,name,otazka1.md,otazka2.md,total
+novakja1,Jan Novák,1.0,-0.5,0.5
+svobodpe,Petra Svobodová,1.0,,1.0
+```
+
+An empty cell means the student did not answer that question; it counts as
+nothing towards the total. A file asked twice gets a second column headed
+`otazka1.md (2)`. Questions without points are left out.
+
+The file is named after the date and time the room was opened and the room
+code, `room_2026-09-21_14-00-07_428173.csv`, and written next to the
+question file, so all questions of one lecture end up in the same file as
+long as they live in one directory. It is written anew each time from the
+questions the server still keeps in the room, so a question dropped from the
+room (see below) drops out of the file as well.
 
 ## Rooms
 

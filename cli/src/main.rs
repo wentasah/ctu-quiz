@@ -155,6 +155,7 @@ async fn ask(
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
+    save_room(&api, file).await;
 
     if closed.answers.iter().any(|answer| answer.points.is_some()) {
         wait_for_reveal(&api, &question.id, &mut stdin).await?;
@@ -308,7 +309,47 @@ async fn close(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<()> {
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
+    save_room(&api, Path::new(&closed.source_name)).await;
     Ok(())
+}
+
+/// Rewrites the CSV with the points of the whole room, next to `source`, so
+/// that it is up to date after every question.
+///
+/// It is built anew from the closed scored questions the server keeps in the
+/// room, so closing a question again or out of order does no harm. Failing
+/// to write it is only reported: the answers of the question are saved by
+/// then, and the teacher may still want to reveal the right ones.
+async fn save_room(api: &Api, source: &Path) {
+    match write_room(api, source).await {
+        Ok(Some(path)) => println!("Points of the room saved to {}", path.display()),
+        Ok(None) => {}
+        Err(error) => println!("Cannot save the points of the room ({error:#})."),
+    }
+}
+
+/// Writes the room CSV and says where, or `None` when there is nothing to
+/// write: no room, or no closed scored question in it.
+async fn write_room(api: &Api, source: &Path) -> Result<Option<PathBuf>> {
+    let Some(room) = api.room_status().await?.room else {
+        return Ok(None);
+    };
+    let mut questions = Vec::new();
+    for question in &room.questions {
+        let info = &question.info;
+        if info.open || info.answers.iter().all(|answer| answer.points.is_none()) {
+            continue;
+        }
+        questions.push(api.results(&info.id).await?);
+    }
+    if questions.is_empty() {
+        return Ok(None);
+    }
+
+    let opened = room.created_at.with_timezone(&Local);
+    let path = report::room_csv_path(source, &room.code, opened);
+    report::write_room_csv(&path, &questions)?;
+    Ok(Some(path))
 }
 
 /// Marks the right answers of a question whose `quiz ask` ended before.

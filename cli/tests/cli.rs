@@ -177,6 +177,13 @@ async fn ask_flow() {
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| path.extension().is_some_and(|extension| extension == "csv"))
+        .filter(|path| {
+            !path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("room_")
+        })
         .collect();
     assert_eq!(csv_files.len(), 1, "expected exactly one CSV in {dir:?}");
     let name = csv_files[0]
@@ -197,6 +204,28 @@ async fn ask_flow() {
     assert!(row.starts_with("novakja1,Jan Novák,1.0,A,"), "{row}");
     assert!(row.contains(&parsed.answers[0].plain), "{row}");
     assert!(rows.next().is_none());
+
+    // The points of the whole room go to a CSV named after the room code
+    // and the time the room was opened.
+    let room_csv = dir.join(
+        printed
+            .lines()
+            .find_map(|line| line.strip_prefix("Points of the room saved to "))
+            .expect("the CLI saves the points of the room"),
+    );
+    let name = room_csv.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(name.starts_with("room_"), "{name}");
+    assert!(name.ends_with(&format!("_{code}.csv")), "{name}");
+    assert_eq!(
+        name.len(),
+        "room_2026-09-21_22-05-03_428173.csv".len(),
+        "{name}"
+    );
+    let csv = std::fs::read_to_string(&room_csv).unwrap();
+    assert_eq!(
+        csv,
+        "login,name,otazky.md,total\nnovakja1,Jan Novák,1.0,1.0\n"
+    );
 
     // The token was cached, so the next command needs no browser at all.
     let cache = dir.join("quiz").join("tokens.json");
