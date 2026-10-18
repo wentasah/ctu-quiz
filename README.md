@@ -580,7 +580,8 @@ TLS. Ready-made pieces:
   `/var/log/quiz-server`.
 * `Dockerfile` and `docker-compose.yml` — a two-stage build producing an image
   with both binaries.
-* `flake.nix` — `nix build`, `nix develop`, and a NixOS module:
+* `flake.nix` — `nix build`, `nix develop`, and a NixOS module; the package
+  and the module themselves are in `nix/package.nix` and `nix/module.nix`:
 
   ```nix
   {
