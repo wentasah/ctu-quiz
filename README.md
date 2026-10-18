@@ -16,10 +16,36 @@ It has two parts:
 Everybody authenticates with **OIDC**: students in the browser, the teacher in
 the CLI. The student-facing web pages are in Czech, everything else in English.
 
+## Getting started
+
+1. Install `quiz`: download a [prebuilt binary](#prebuilt-binaries) or
+   [build it](#building) from source. Optionally set up
+   [shell completions](#shell-completions).
+2. Tell it which server to use, either with `--server` or once and for all in
+   a [configuration file](#teacher-cli):
+   `server = "https://quiz.iid.ciirc.cvut.cz"` in `quiz.toml`.
+3. Write a question in Markdown as described in
+   [The question format](#the-question-format) and check it with
+   `quiz parse otazka.md`.
+4. Optionally run `quiz login` before the lecture, so that the browser login
+   is out of the way.
+5. Ask the question with `quiz ask otazka.md` — see
+   [How one question works](#how-one-question-works) for what happens next.
+6. Find the answers in the [CSV file](#the-csv-file-with-question-answers)
+   next to the question.
+7. Optionally end the lecture with `quiz logout` (or `quiz close`), which
+   closes the [room](#rooms). Rooms left open are closed automatically after
+   a few hours.
+
+To try everything on one machine without a real identity provider, see
+[Trying it out locally](#trying-it-out-locally); to run your own server, see
+[Registering the OIDC client](#registering-the-oidc-client),
+[Running the server](#running-the-server) and [Deployment](#deployment).
+
 ## How one question works
 
 ```
-$ quiz --server https://quiz.iid.ciirc.cvut.cz ask cviceni/01regex/otazky.md
+$ quiz --server https://quiz.iid.ciirc.cvut.cz ask cviceni/01regex/otazka1.md
 Consider the following BASH code: ...
 
   A) In Bash, every stage of a pipeline runs in its own subshell. ...
@@ -54,7 +80,7 @@ and left.
    may correct it while the question is open.
 5. Pressing Enter closes the question. Every open browser switches over to a
    bar graph with the results, and the CLI writes
-   `otazky_2026-09-21_14-05-03.csv` next to `otazky.md`.
+   `otazka1_2026-09-21_14-05-03.csv` next to `otazka1.md`.
 6. The **next question of the same teacher goes to the same URL**, so the
    students scan or type nothing again: the page they still have open shows
    the new question by itself.
@@ -65,12 +91,12 @@ Teacher CLI (the `quiz` command) works are described below. Let's
 start with some examples:
 
 ```sh
-quiz ask otazky.md            # publish, present, collect, save (the main one)
-quiz ask otazky.md -o answers.csv --close-after 120
-quiz ask otazky.md --hide-question   # question only on the projector
-quiz ask otazky.md --labels-only     # phones show A, B, C only
-quiz ask otazky.md --shuffle         # answers in a random order
-quiz parse otazky.md          # check the Markdown, no server needed
+quiz ask otazka.md            # publish, present, collect, save (the main one)
+quiz ask otazka.md -o answers.csv --close-after 120
+quiz ask otazka.md --hide-question   # question only on the projector
+quiz ask otazka.md --labels-only     # phones show A, B, C only
+quiz ask otazka.md --shuffle         # answers in a random order
+quiz parse otazka.md          # check the Markdown, no server needed
 quiz login                    # log in ahead of the lecture
 quiz whoami                    # who am I, and may I ask questions?
 quiz logout [--all]          # end the lecture: close the room, forget the token
@@ -133,7 +159,7 @@ A scored question adds a `points` column after `name`, holding the points
 of the chosen answer.
 
 The file name is the base name of the question file plus the date and time:
-`otazky.md` → `otazky_2026-09-21_14-05-03.csv`, written into the same
+`otazka.md` → `otazka_2026-09-21_14-05-03.csv`, written into the same
 directory unless `--output` says otherwise.
 
 ## Rooms
@@ -279,7 +305,7 @@ Details worth knowing:
   JavaScript: bash, C, C++, Rust, Python, Make, asm, diff, JSON, YAML, SQL and
   about a hundred more work out of the box. An unknown or missing language
   just means unhighlighted code.
-* `quiz parse otazky.md` shows how a file is parsed without contacting the
+* `quiz parse otazka.md` shows how a file is parsed without contacting the
   server.
 * HTML written in the Markdown is **escaped**, not rendered: the question is
   shown to a whole lecture hall, so `<script>` in it must not run in their
@@ -332,6 +358,18 @@ the toolchain.
 Syntax highlighting sits behind the `highlight` feature of `quiz-common`, which
 `quiz-server` turns on: only the server renders HTML. Building the CLI on its
 own (`cargo build -p quiz-cli`) therefore leaves the syntax definitions out.
+
+To install just the CLI without cloning the repository first:
+
+```sh
+sudo apt install cargo         # Debian/Ubuntu, if Cargo is not installed yet
+cargo install --git https://gitlab.fel.cvut.cz/sojkam1/quiz.git quiz-cli
+```
+
+This puts `quiz` into `~/.cargo/bin`. The distribution's Cargo has to be at
+least 1.85 (`cargo --version`), which is Debian 13 or Ubuntu 25.04 and newer;
+on older releases install the toolchain with [rustup](https://rustup.rs)
+instead.
 
 ### Prebuilt binaries
 
@@ -550,7 +588,7 @@ question, exported results, refused tokens and one line per HTTP request.
 
 ```
 2026-09-21T12:04:58.402Z  INFO http{method=POST uri=/api/v1/questions}: quiz_server::api:
-    question created question=4f3c…c1 code=428173 teacher=sojkam1 source=otazky.md answers=3
+    question created question=4f3c…c1 code=428173 teacher=sojkam1 source=otazka.md answers=3
 2026-09-21T12:05:41.881Z  INFO http{method=POST uri=/r/7b21…9f/answer}: quiz_server::web:
     answer recorded question=4f3c…c1 login=novakja1 answer=B changed=false total=12
 ```
