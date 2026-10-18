@@ -1394,6 +1394,8 @@ async fn the_teacher_follows_a_question_without_asking_again() {
 
     let mut events = api.get(&url).bearer_auth(&token).send().await.unwrap();
     assert_eq!(events.status(), StatusCode::OK);
+    // Or nginx would hold the stream back.
+    assert_eq!(events.headers()["x-accel-buffering"], "no");
     let mut buffer = String::new();
 
     // The current state comes right away.
@@ -1591,6 +1593,7 @@ async fn live_state(url: &str) -> String {
 async fn live_state_as(client: &reqwest::Client, url: &str) -> String {
     let mut response = client.get(url).send().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["x-accel-buffering"], "no");
     let chunk = tokio::time::timeout(Duration::from_secs(5), response.chunk())
         .await
         .expect("the event stream sends the state right away")

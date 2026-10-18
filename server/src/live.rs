@@ -12,7 +12,10 @@
 
 use std::{convert::Infallible, sync::Arc};
 
-use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::{
+    IntoResponse,
+    sse::{Event, KeepAlive, Sse},
+};
 use futures_core::Stream;
 use tokio::sync::broadcast::{self, error::RecvError};
 
@@ -39,10 +42,7 @@ impl Source {
 }
 
 /// Streams the state of a question or of a room until the client goes away.
-pub fn stream(
-    state: AppState,
-    source: Source,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>> + use<>> {
+pub fn stream(state: AppState, source: Source) -> impl IntoResponse + use<> {
     let stream = async_stream::stream! {
         // `_watching` is dropped together with the stream, which happens
         // once the browser window is closed.
@@ -76,7 +76,7 @@ pub fn stream(
         }
     };
 
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    unbuffered(stream)
 }
 
 /// Streams what the teacher learns about a question, as `GET
@@ -84,10 +84,7 @@ pub fn stream(
 /// answers, comes into the room or leaves it, or the question is closed.
 ///
 /// The caller checks that the question belongs to the teacher.
-pub fn question_stream(
-    state: AppState,
-    id: String,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>> + use<>> {
+pub fn question_stream(state: AppState, id: String) -> impl IntoResponse + use<> {
     let stream = async_stream::stream! {
         let Some((mut answers, mut people)) = subscribe_question(&state, &id).await else {
             yield Ok(gone());
@@ -121,7 +118,21 @@ pub fn question_stream(
         }
     };
 
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    unbuffered(stream)
+}
+
+/// Sends the events as they come, keep-alive comments included.
+///
+/// A proxy in front of the server may buffer responses, which would hold back
+/// the events, and with nginx even the headers of the response, for good.
+/// `X-Accel-Buffering` turns that off in nginx whatever its configuration says.
+fn unbuffered(
+    stream: impl Stream<Item = Result<Event, Infallible>> + Send + 'static,
+) -> impl IntoResponse {
+    (
+        [("x-accel-buffering", "no")],
+        Sse::new(stream).keep_alive(KeepAlive::default()),
+    )
 }
 
 /// Tells the page that what it was showing is no longer on the server, so
