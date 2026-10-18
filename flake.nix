@@ -29,6 +29,21 @@
         };
       });
 
+      # `nix flake check` builds the package (running its tests), the
+      # development shell and, on Linux, a VM with the NixOS module.
+      checks = forAllSystems (pkgs:
+        let
+          system = pkgs.stdenv.hostPlatform.system;
+        in
+        {
+          package = self.packages.${system}.quiz;
+          devShell = self.devShells.${system}.default;
+        } // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          module = pkgs.testers.runNixOSTest (import ./nix/test.nix {
+            module = self.nixosModules.default;
+          });
+        });
+
       # The module on its own builds the package from the system's nixpkgs;
       # from the flake it gets the one built from the flake's.
       nixosModules.default = { lib, pkgs, ... }: {

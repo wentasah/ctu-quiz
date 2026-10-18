@@ -731,6 +731,11 @@ provider that serves a discovery document and a JWKS and signs real RS256 ID
 tokens, so the actual OIDC code paths are exercised. `cargo test -p quiz-cli`
 runs the real `quiz` binary, including the loopback login and the CSV export.
 
+`nix flake check` builds the package, which runs all of the above, and the
+development shell. On Linux it also boots a NixOS VM with the module
+(`nix/test.nix`), which needs KVM: the server logs in against `mock-idp` and
+saves its state over a restart.
+
 `QUIZ_DUMP_PAGES=/tmp/pages cargo test -p quiz-server --test e2e` additionally
 saves the rendered pages with the stylesheet inlined, so they can be opened
 straight from disc to check the styling and the highlighting.
