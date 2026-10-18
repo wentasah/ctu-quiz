@@ -23,13 +23,19 @@ stages:
     - cargo zigbuild --release --locked $PACKAGES --target "$TARGET"
     # A glibc target carries the oldest glibc to link against after a dot,
     # which is not part of the output directory.
-    - mkdir -p "dist/$PLATFORM"
-    - cp $(for binary in $BINARIES; do echo "target/${TARGET%%.*}/release/$binary"; done) "dist/$PLATFORM/"
-    - ls -l "dist/$PLATFORM"
+    #
+    # The archive keeps the paths the files have in the project, so the
+    # binaries are copied to its root to end up at the root of the archive.
+    - cp $(for binary in $BINARIES; do echo "target/${TARGET%%.*}/release/$binary"; done) .
+    - ls -l $BINARIES
   artifacts:
     name: quiz-$PLATFORM-$CI_COMMIT_REF_SLUG
+    # Every binary any of the jobs builds; each job only has some of them,
+    # and GitLab merely warns about the others.
     paths:
-      - dist/
+      - quiz
+      - quiz.exe
+      - quiz-server
     expire_in: 3 months
 
 build-linux-gnu:
