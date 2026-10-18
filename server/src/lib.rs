@@ -59,8 +59,13 @@ pub fn init_logging(cfg: &Config) -> Result<WorkerGuard> {
     let (writer, guard) =
         tracing_appender::non_blocking(tracing_appender::rolling::never(directory, file_name));
 
-    let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new(&cfg.log_filter))
+    // An empty `RUST_LOG`, as the Nix build sets, would silence all but the
+    // errors, so it counts as unset.
+    let filter = std::env::var(EnvFilter::DEFAULT_ENV)
+        .ok()
+        .filter(|directives| !directives.trim().is_empty())
+        .and_then(|directives| EnvFilter::try_new(directives).ok())
+        .map_or_else(|| EnvFilter::try_new(&cfg.log_filter), Ok)
         .with_context(|| format!("invalid --log-filter {:?}", cfg.log_filter))?;
 
     // `try_init` rather than `init`: the integration tests start several
