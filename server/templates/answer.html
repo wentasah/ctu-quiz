@@ -35,7 +35,7 @@
   <p class="status">Možnosti jsou na plátně; vyberte písmeno své odpovědi.</p>
   {% endif %}
   {% if !chosen_label.is_empty() %}
-  <p class="status ok">Vaše odpověď <strong>{{ chosen_label }}</strong> byla zaznamenána.
+  <p class="status">Vaše odpověď <strong>{{ chosen_label }}</strong> byla zaznamenána.
     Dokud je otázka otevřená, můžete ji změnit.</p>
   {% else %}
   <p class="status">Vyberte jednu z možností.</p>
@@ -55,7 +55,7 @@
   <p class="status wrong">Vaše odpověď <strong>{{ chosen_label }}</strong> byla špatná.</p>
   {% endmatch %}
   {% else if !chosen_label.is_empty() %}
-  <p class="status ok">Vaše odpověď byla <strong>{{ chosen_label }}</strong>.</p>
+  <p class="status">Vaše odpověď byla <strong>{{ chosen_label }}</strong>.</p>
   {% else %}
   <p class="status">Na tuto otázku jste neodpověděl(a).</p>
   {% endif %}
