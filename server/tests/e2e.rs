@@ -933,6 +933,8 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
         assert!(closed.contains("data-revealed=\"false\""), "{closed}");
         assert!(!closed.contains(" correct\""), "{closed}");
     }
+    let closed = page(student.clone(), question.answer_url.clone()).await;
+    assert!(closed.contains("Vaše odpověď byla <strong>A</strong>"), "{closed}");
 
     let response = reveal().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -949,6 +951,10 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
         let right = closed.find(" correct\"").unwrap();
         assert!(closed[right..].contains("the right one"), "{closed}");
     }
+    // The student learns that their answer was wrong.
+    let closed = page(student.clone(), question.answer_url.clone()).await;
+    let wrong = "<p class=\"status wrong\">Vaše odpověď <strong>A</strong> byla špatná.";
+    assert!(closed.contains(wrong), "{closed}");
 
     let results: Results = api
         .get(format!("{base}/api/v1/questions/{}/results", question.id))

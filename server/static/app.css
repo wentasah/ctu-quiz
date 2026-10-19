@@ -11,6 +11,7 @@
   --border: #d7dae2;
   --ok: #0a7d32;
   --error: #b3261e;
+  --partial: #8a6d00;
   --bar: #9db8ff;
   --bar-best: #0b5fff;
   /* Inline code; differs from both --bg and --card. */
@@ -37,6 +38,7 @@
     --border: #333844;
     --ok: #4ec97a;
     --error: #ff8a80;
+    --partial: #f2c94c;
     --bar: #2f4a8a;
     --bar-best: #5b8cff;
     --code-bg: #2e333d;
@@ -77,6 +79,8 @@ a { color: var(--accent); }
 .source { color: var(--muted); font-size: .75rem; text-align: center; margin-top: 1.5rem; }
 .source a { color: inherit; }
 .status.ok { color: var(--ok); }
+.status.partial { color: var(--partial); }
+.status.wrong { color: var(--error); }
 .error { color: var(--error); font-weight: 600; }
 
 button, .button {

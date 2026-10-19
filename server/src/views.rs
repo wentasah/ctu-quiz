@@ -157,7 +157,36 @@ pub struct AnswerPage {
     pub answer_count: usize,
     /// Label of the student's own answer, empty if they did not answer.
     pub chosen_label: String,
+    /// How the student's answer scored, known once the answers are revealed.
+    pub verdict: Option<Verdict>,
     pub bars: Vec<Bar>,
+}
+
+/// How a student's answer scored, compared to the best answer of the question.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    Correct,
+    Partial,
+    Wrong,
+}
+
+impl Verdict {
+    /// Judges the answer at `index`; `None` for an unscored question.
+    pub fn of(question: &quiz_common::Question, index: usize) -> Option<Verdict> {
+        let answers = &question.answers;
+        let max = answers
+            .iter()
+            .filter_map(|a| a.points)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let points = answers.get(index)?.points?;
+        Some(if points <= 0.0 {
+            Verdict::Wrong
+        } else if points < max {
+            Verdict::Partial
+        } else {
+            Verdict::Correct
+        })
+    }
 }
 
 /// The presentation view, shown by the teacher on a projector.
@@ -186,4 +215,33 @@ pub struct DisplayPage {
     pub host: String,
     pub qr_svg: String,
     pub bars: Vec<Bar>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Verdict;
+
+    #[test]
+    fn verdict_compares_the_points_with_the_best_answer() {
+        let question = quiz_common::question::parse(
+            "Which one?\n\n---\n\n- best {2}\n- half {1}\n- none {0}\n- bad {-1}\n",
+        )
+        .unwrap();
+        let verdicts: Vec<_> = (0..4).map(|i| Verdict::of(&question, i)).collect();
+        assert_eq!(
+            verdicts,
+            [
+                Some(Verdict::Correct),
+                Some(Verdict::Partial),
+                Some(Verdict::Wrong),
+                Some(Verdict::Wrong),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unscored_question_has_no_verdict() {
+        let question = quiz_common::question::parse("Which one?\n\n---\n\n- one\n- two\n").unwrap();
+        assert_eq!(Verdict::of(&question, 0), None);
+    }
 }

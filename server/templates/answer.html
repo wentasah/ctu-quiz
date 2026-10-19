@@ -45,7 +45,16 @@
   {% else %}
   <h2>Otázka je uzavřena</h2>
   {% include "results.html" %}
-  {% if !chosen_label.is_empty() %}
+  {% if let Some(verdict) = verdict %}
+  {% match verdict %}
+  {% when crate::views::Verdict::Correct %}
+  <p class="status ok">Vaše odpověď <strong>{{ chosen_label }}</strong> byla správná.</p>
+  {% when crate::views::Verdict::Partial %}
+  <p class="status partial">Vaše odpověď <strong>{{ chosen_label }}</strong> byla částečně správná.</p>
+  {% when crate::views::Verdict::Wrong %}
+  <p class="status wrong">Vaše odpověď <strong>{{ chosen_label }}</strong> byla špatná.</p>
+  {% endmatch %}
+  {% else if !chosen_label.is_empty() %}
   <p class="status ok">Vaše odpověď byla <strong>{{ chosen_label }}</strong>.</p>
   {% else %}
   <p class="status">Na tuto otázku jste neodpověděl(a).</p>

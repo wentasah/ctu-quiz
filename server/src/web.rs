@@ -17,7 +17,7 @@ use crate::{
     error::PageError,
     live,
     state::{AppState, Response as Answer},
-    views::{self, AnswerPage, IndexPage, bars, page_title},
+    views::{self, AnswerPage, IndexPage, Verdict, bars, page_title},
 };
 use askama::Template;
 
@@ -86,6 +86,7 @@ pub async fn room(
         revealed: false,
         answer_count: 0,
         chosen_label: String::new(),
+        verdict: None,
         bars: Vec::new(),
     };
 
@@ -105,6 +106,9 @@ pub async fn room(
             .and_then(|index| question.content.answers.get(index))
             .map(|answer| answer.label.clone())
             .unwrap_or_default();
+        if question.revealed {
+            page.verdict = chosen.and_then(|index| Verdict::of(&question.content, index));
+        }
         page.bars = bars(question, chosen);
     }
 
