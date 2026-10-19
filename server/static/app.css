@@ -13,6 +13,8 @@
   --error: #b3261e;
   --bar: #9db8ff;
   --bar-best: #0b5fff;
+  /* Inline code; differs from both --bg and --card. */
+  --code-bg: #e1e4ea;
 
   /* Syntax highlighting. */
   --hl-comment: #6a737d;
@@ -37,6 +39,7 @@
     --error: #ff8a80;
     --bar: #2f4a8a;
     --bar-best: #5b8cff;
+    --code-bg: #2e333d;
 
     --hl-comment: #8b949e;
     --hl-keyword: #ff7b72;
@@ -120,7 +123,7 @@ pre.code {
 }
 
 .prompt :not(pre) > code, .options code, .answers code, .bars code {
-  background: var(--bg);
+  background: var(--code-bg);
   border-radius: 4px;
   padding: .1em .3em;
 }
