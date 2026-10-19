@@ -108,7 +108,7 @@ pub struct Config {
     pub login_claim: LoginClaim,
 
     /// How long a question is kept in memory after it was created.
-    #[arg(long, env = "QUIZ_QUESTION_TTL_HOURS", default_value_t = 12)]
+    #[arg(long, env = "QUIZ_QUESTION_TTL_HOURS", default_value_t = 4)]
     pub question_ttl_hours: i64,
 
     /// How long a browser session stays valid.

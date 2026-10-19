@@ -559,7 +559,7 @@ the container image use (`quiz-server --help` lists them all):
 | `--roles-claim` | `QUIZ_ROLES_CLAIM` | `roles` |
 | `--allow-any-teacher` | `QUIZ_ALLOW_ANY_TEACHER` | off |
 | `--login-claim` | `QUIZ_LOGIN_CLAIM` | `preferred-username` |
-| `--question-ttl-hours` | `QUIZ_QUESTION_TTL_HOURS` | `12` |
+| `--question-ttl-hours` | `QUIZ_QUESTION_TTL_HOURS` | `4` |
 | `--session-ttl-hours` | `QUIZ_SESSION_TTL_HOURS` | `12` |
 | `--state-file` | `QUIZ_STATE_FILE` | none (state in memory only) |
 | `--trust-proxy` | `QUIZ_TRUST_PROXY` | off |
