@@ -934,7 +934,10 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
         assert!(!closed.contains(" correct\""), "{closed}");
     }
     let closed = page(student.clone(), question.answer_url.clone()).await;
-    assert!(closed.contains("Vaše odpověď byla <strong>A</strong>"), "{closed}");
+    assert!(
+        closed.contains("Vaše odpověď byla <strong>A</strong>"),
+        "{closed}"
+    );
 
     let response = reveal().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -1424,7 +1427,14 @@ async fn the_teacher_follows_a_question_without_asking_again() {
     next_question_event(&mut events, &mut buffer, |q| q.people == 1).await;
 
     // ...another one answers...
-    answer_as(&base, &idp, &User::new("dvorakpe", "Petr Dvořák"), &question, 1).await;
+    answer_as(
+        &base,
+        &idp,
+        &User::new("dvorakpe", "Petr Dvořák"),
+        &question,
+        1,
+    )
+    .await;
     next_question_event(&mut events, &mut buffer, |q| {
         (q.answer_count, q.people) == (1, 2)
     })
@@ -1813,7 +1823,14 @@ async fn rooms_and_answers_survive_a_restart_with_a_state_file() {
         .json()
         .await
         .unwrap();
-    answer_as(&base, &idp, &User::new("novakja1", "Jan Novák"), &question, 1).await;
+    answer_as(
+        &base,
+        &idp,
+        &User::new("novakja1", "Jan Novák"),
+        &question,
+        1,
+    )
+    .await;
     terminate(server);
     assert!(state_file.exists(), "the state is saved on termination");
 
@@ -1847,7 +1864,14 @@ async fn rooms_and_answers_survive_a_restart_with_a_state_file() {
     assert!(results.question.open);
 
     // Another student can still join with the code from before the restart.
-    answer_as(&base, &idp, &User::new("dvorakpe", "Petr Dvořák"), &question, 0).await;
+    answer_as(
+        &base,
+        &idp,
+        &User::new("dvorakpe", "Petr Dvořák"),
+        &question,
+        0,
+    )
+    .await;
     terminate(server);
 
     // A state file that cannot be read does not keep the server from

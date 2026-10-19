@@ -217,7 +217,12 @@ impl Events {
                 }
                 continue;
             }
-            match self.response.chunk().await.context("the event stream broke off")? {
+            match self
+                .response
+                .chunk()
+                .await
+                .context("the event stream broke off")?
+            {
                 Some(chunk) => self.buffer.extend_from_slice(&chunk),
                 None => return Ok(None),
             }

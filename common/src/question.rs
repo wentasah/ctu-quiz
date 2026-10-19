@@ -669,7 +669,11 @@ What's wrong with it?
         assert!(!q.prompt_html.contains("teacher"), "{}", q.prompt_html);
         assert!(!q.prompt_html.contains("inline"), "{}", q.prompt_html);
         assert!(!q.prompt_html.contains("&lt;!--"), "{}", q.prompt_html);
-        assert!(q.prompt_html.contains("<p>Q  here?</p>"), "{}", q.prompt_html);
+        assert!(
+            q.prompt_html.contains("<p>Q  here?</p>"),
+            "{}",
+            q.prompt_html
+        );
         // Other raw HTML next to a comment is still escaped.
         assert!(q.prompt_html.contains("&lt;b&gt;kept"), "{}", q.prompt_html);
 
