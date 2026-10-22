@@ -1,0 +1,10 @@
+# Configuration of cargo audit, which the CI job security-update runs too.
+
+[advisories]
+ignore = [
+    # Marvin attack on rsa, which has no fixed version. It comes in through
+    # openidconnect, and it needs a private key to be used: the server and
+    # the CLI only verify ID tokens with the provider's public keys. Only
+    # the mock identity provider in testsupport signs, with a test key.
+    "RUSTSEC-2023-0071",
+]
