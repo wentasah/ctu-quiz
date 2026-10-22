@@ -41,7 +41,7 @@ The changelog is generated from commit subjects by
 2. **Look at what is unreleased** and choose the version:
 
    ```sh
-   git cliff --unreleased
+   git cliff --unreleased | mdcat
    ```
 
 3. **Prepare the release:**
