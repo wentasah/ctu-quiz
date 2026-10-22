@@ -131,6 +131,11 @@ async fn ask_flow() {
         .unwrap();
     assert!(response.status().is_success());
 
+    // Slow refreshes, so that the second Enter below can arrive while the
+    // CLI is refreshing its token to follow the question. Giving up on that
+    // refresh must not lose the login.
+    idp.set_refresh_delay(Duration::from_millis(100));
+
     // Requirement 12: Enter closes the question and saves the answers.
     let mut stdin = child.stdin.take().unwrap();
     stdin.write_all(b"\n").await.unwrap();
@@ -151,6 +156,9 @@ async fn ask_flow() {
     let page = results_page().await;
     assert!(page.contains("class=\"bars\""), "{page}");
     assert!(!page.contains(" correct\""), "{page}");
+    // The token lives shorter than the CLI's margin, so following the
+    // question starts with a refresh; Enter interrupts it half way.
+    idp.wait_for_refresh().await;
     stdin.write_all(b"\n").await.unwrap();
     drop(stdin);
 

@@ -148,7 +148,11 @@ struct Inner {
     refresh_tokens: Mutex<HashMap<String, Pending>>,
     /// How long the access tokens live, as far as `expires_in` says.
     token_lifetime: Mutex<Duration>,
+    /// How long a refresh takes after the old refresh token is used up.
+    refresh_delay: Mutex<Duration>,
     refreshes: AtomicUsize,
+    /// Refreshes that have used up their refresh token but not answered yet.
+    refreshing: AtomicUsize,
 }
 
 /// A running mock OIDC provider.
@@ -188,7 +192,9 @@ impl MockIdp {
             pending: Mutex::new(HashMap::new()),
             refresh_tokens: Mutex::new(HashMap::new()),
             token_lifetime: Mutex::new(Duration::from_secs(3600)),
+            refresh_delay: Mutex::new(Duration::ZERO),
             refreshes: AtomicUsize::new(0),
+            refreshing: AtomicUsize::new(0),
         });
 
         let app = Router::new()
@@ -217,9 +223,24 @@ impl MockIdp {
         *self.inner.token_lifetime.lock().unwrap() = lifetime;
     }
 
+    /// Makes every refresh answer only after `delay`, while the refresh token
+    /// it used is already gone: a client that gives up waiting by then has
+    /// lost its login, unless it saves the new refresh token anyway.
+    pub fn set_refresh_delay(&self, delay: Duration) {
+        *self.inner.refresh_delay.lock().unwrap() = delay;
+    }
+
     /// How many times a refresh token has been used.
     pub fn refreshes(&self) -> usize {
         self.inner.refreshes.load(Ordering::SeqCst)
+    }
+
+    /// Waits until a refresh has used up its refresh token and is held back
+    /// by [`set_refresh_delay`](Self::set_refresh_delay).
+    pub async fn wait_for_refresh(&self) {
+        while self.inner.refreshing.load(Ordering::SeqCst) == 0 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
     }
 
     /// Mints an access token for `user` with the API `audience`, as the CLI
@@ -428,7 +449,8 @@ struct TokenForm {
 }
 
 async fn token(State(inner): State<Arc<Inner>>, Form(form): Form<TokenForm>) -> Response {
-    let pending = if form.grant_type.as_deref() == Some("refresh_token") {
+    let refresh = form.grant_type.as_deref() == Some("refresh_token");
+    let pending = if refresh {
         inner.refreshes.fetch_add(1, Ordering::SeqCst);
         form.refresh_token
             .and_then(|token| inner.refresh_tokens.lock().unwrap().remove(&token))
@@ -478,6 +500,13 @@ async fn token(State(inner): State<Arc<Inner>>, Form(form): Form<TokenForm>) -> 
         .unwrap()
         .insert(refresh_token.clone(), pending);
     response.set_refresh_token(Some(RefreshToken::new(refresh_token)));
+
+    if refresh {
+        let delay = *inner.refresh_delay.lock().unwrap();
+        inner.refreshing.fetch_add(1, Ordering::SeqCst);
+        tokio::time::sleep(delay).await;
+        inner.refreshing.fetch_sub(1, Ordering::SeqCst);
+    }
     Json(response).into_response()
 }
 

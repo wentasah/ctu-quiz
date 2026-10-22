@@ -1,5 +1,7 @@
 //! Client for the quiz server's HTTP API.
 
+use std::sync::Arc;
+
 use anyhow::{Context, Result, anyhow};
 use quiz_common::api::{
     API_PREFIX, ApiError, CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, RoomStatus,
@@ -23,9 +25,10 @@ pub struct Login {
 pub struct Api {
     http: reqwest::Client,
     base: Url,
-    token: Mutex<Token>,
+    /// Shared with the task that refreshes it, see [`Api::access_token`].
+    token: Arc<Mutex<Token>>,
     /// Without it, the token is used as it is, even when it has expired.
-    login: Option<Login>,
+    login: Option<Arc<Login>>,
 }
 
 impl Api {
@@ -33,8 +36,8 @@ impl Api {
         Self {
             http,
             base,
-            token: Mutex::new(token),
-            login,
+            token: Arc::new(Mutex::new(token)),
+            login: login.map(Arc::new),
         }
     }
 
@@ -123,13 +126,27 @@ impl Api {
     ///
     /// Access tokens may live only a few minutes, less than a question stays
     /// open, so `quiz ask` would otherwise lose its login half way through.
+    ///
+    /// The refresh runs in a task of its own, which holds the token until the
+    /// new one is in place. Callers are often `select!` branches that may be
+    /// dropped at any `await`; dropped in the middle of a refresh, after the
+    /// provider has used up the old refresh token but before the new one was
+    /// saved, they would leave the CLI with a refresh token that no longer
+    /// works, and the teacher would have to log in again.
     async fn access_token(&self) -> Result<String> {
-        let mut token = self.token.lock().await;
-        if let Some(login) = &self.login {
+        let Some(login) = &self.login else {
+            return Ok(self.token.lock().await.access_token.clone());
+        };
+        let token = Arc::clone(&self.token);
+        let login = Arc::clone(login);
+        let http = self.http.clone();
+        let server = self.base.to_string();
+        tokio::spawn(async move {
+            let mut token = token.lock_owned().await;
             if !token.is_usable(&login.info) {
                 *token = auth::token(
-                    &self.http,
-                    self.base.as_str(),
+                    &http,
+                    &server,
                     &login.info,
                     login.port,
                     login.open_browser,
@@ -137,8 +154,10 @@ impl Api {
                 )
                 .await?;
             }
-        }
-        Ok(token.access_token.clone())
+            Ok(token.access_token.clone())
+        })
+        .await
+        .context("the task refreshing the login failed")?
     }
 
     async fn send<T: DeserializeOwned>(&self, request: RequestBuilder) -> Result<T> {
