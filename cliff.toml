@@ -1,0 +1,70 @@
+# Configuration of git-cliff (https://git-cliff.org) for CHANGELOG.md.
+#
+#   git cliff -o CHANGELOG.md                    # whole changelog
+#   git cliff --unreleased --tag v0.2.0 --prepend CHANGELOG.md
+#
+# Commits are grouped by what they change. Both the current
+# "Component: Description" style and Conventional Commits
+# ("feat(server): ...") are understood.
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project are documented in this file.\n
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] – {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        {% set subject = commit.raw_message | split(pat="\n") | first | trim -%}
+        - {% if subject is matching("^[a-z]+(\\(.*\\))?!?: ") %}\
+            {% if commit.scope %}{{ commit.scope | upper_first }}: {% endif %}\
+            {{ commit.message | split(pat="\n") | first | trim | upper_first }}\
+          {% else %}{{ subject }}{% endif %} \
+          ([{{ commit.id | truncate(length=7, end="") }}]({{ self::remote_url() }}/-/commit/{{ commit.id }}))\
+    {% endfor %}
+{% endfor %}
+{% macro remote_url() -%}
+https://gitlab.fel.cvut.cz/sojkam1/quiz
+{%- endmacro -%}
+"""
+trim = true
+
+[git]
+# Parse Conventional Commits when present, but keep the other commits too.
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "v[0-9].*"
+topo_order = false
+sort_commits = "oldest"
+
+# The first matching parser wins. The HTML comments only fix the order
+# of the groups and are stripped in the template.
+commit_parsers = [
+  # Conventional Commits
+  { message = "^feat", group = "<!-- 0 -->Added" },
+  { message = "^fix", group = "<!-- 2 -->Fixed" },
+  { message = "^perf", group = "<!-- 1 -->Changed" },
+  { message = "^refactor", group = "<!-- 1 -->Changed" },
+  { message = "^docs", group = "<!-- 3 -->Documentation" },
+  { message = "^(build|ci)", group = "<!-- 4 -->Build and deployment" },
+  { message = "^(style|test|chore)", skip = true },
+
+  # "Component: Description" style
+  { message = "^Run cargo fmt", skip = true },
+  { message = "^Minor ", skip = true },
+  { message = "^(README|Docs?):", group = "<!-- 3 -->Documentation" },
+  { message = "^(Nix|CI|Docker):", group = "<!-- 4 -->Build and deployment" },
+  { message = "^([A-Za-z]+: )?Fix", group = "<!-- 2 -->Fixed" },
+  { message = "^([A-Za-z]+: )?Add ", group = "<!-- 0 -->Added" },
+  { message = ".*", group = "<!-- 1 -->Changed" },
+]
