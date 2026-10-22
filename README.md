@@ -46,7 +46,7 @@ To try everything on one machine without a real identity provider, see
 ## How one question works
 
 ```
-$ quiz --server https://quiz.iid.ciirc.cvut.cz ask cviceni/01regex/otazka1.md
+$ quiz ask cviceni/01regex/otazka1.md
 Consider the following BASH code: ...
 
   A) In Bash, every stage of a pipeline runs in its own subshell. ...
@@ -61,6 +61,9 @@ The presentation view was opened in a browser.
 Press Enter to close the question and save the answers (Ctrl-C or the button in the presentation view work too).
   answers: 17/23
 ```
+
+The example assumes the server is set in `quiz.toml`; otherwise add
+`--server`, as described in step 2 of [Getting started](#getting-started).
 
 The count at the bottom is the number of answers out of the number of
 students in the room: those who have its page open, plus those who answered
