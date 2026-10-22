@@ -1,43 +1,42 @@
 //! The presentation view that the teacher shows on a projector.
 //!
-//! Its URL contains an unguessable token, which is what authorizes access: the
-//! CLI receives the URL over the authenticated API and opens it in a browser,
-//! so that nothing has to be logged into on the presenting machine. Students
-//! never see this URL - they get the one from the QR code.
+//! It requires the same OIDC login as the students' pages and shows the room
+//! of whoever is logged in, so its URL is the same for every teacher and
+//! nobody else can watch or close their questions there.
 
 use anyhow::{Context, Result};
 use axum::{
-    extract::{Form, Path, State},
+    extract::{Form, State},
     response::{Html, IntoResponse, Redirect, Response},
 };
 use qrcode::{EcLevel, QrCode, render::svg};
 use serde::Deserialize;
 
 use crate::{
+    auth::User,
     error::PageError,
     live,
-    state::AppState,
+    state::{AppState, Store},
     views::{self, DisplayPage, bars, page_title},
 };
 use askama::Template;
 
-/// `GET /d/{token}` - question, QR code, code to type, live answer count and,
-/// once the question is closed, the bar graph (requirements 9, 11 and 12).
+/// `GET /d` - question, QR code, code to type, live answer count and, once
+/// the question is closed, the bar graph (requirements 9, 11 and 12).
 ///
-/// The URL belongs to the teacher's room and shows whichever question is being
-/// asked there, so the window stays open for the whole lecture.
+/// It shows whichever question is being asked in the room of the teacher
+/// logged in, so the window stays open for the whole lecture.
 pub async fn display(
     State(state): State<AppState>,
-    Path(token): Path<String>,
+    User(user): User,
 ) -> Result<Response, PageError> {
     let store = state.store.read().await;
-    let room = store.room_by_display_token(&token).ok_or_else(not_found)?;
-    let question = store.current_question(&room.token).ok_or_else(not_found)?;
+    let room = room_token(&store, &user.login)?;
+    let question = store.current_question(&room).ok_or_else(not_found)?;
 
     let page = DisplayPage {
         prefix: views::prefix(),
         show_answers: true,
-        token: token.clone(),
         question: question.id.clone(),
         title: page_title(Some(question)),
         prompt_html: question.content.prompt_html.clone(),
@@ -60,27 +59,26 @@ pub struct CloseForm {
     question: String,
 }
 
-/// `POST /d/{token}/close` - closes the question from the projector, as the
-/// teacher would from the CLI. A waiting `quiz ask` notices it on its event
-/// stream and saves the answers.
+/// `POST /d/close` - closes the question from the projector, as the teacher
+/// would from the CLI. A waiting `quiz ask` notices it on its event stream
+/// and saves the answers.
 pub async fn close(
     State(state): State<AppState>,
-    Path(token): Path<String>,
+    User(user): User,
     Form(form): Form<CloseForm>,
 ) -> Result<Response, PageError> {
     {
         let mut store = state.store.write().await;
-        let room = store.room_by_display_token(&token).ok_or_else(not_found)?;
+        let room = room_token(&store, &user.login)?;
 
         // The teacher may have asked the next question in the meantime;
         // that one was not on the screen, so it stays open.
-        if room.current.as_deref() == Some(form.question.as_str()) {
-            let teacher = room.teacher.clone();
+        if store.room(&room).and_then(|room| room.current.as_deref()) == Some(&form.question) {
             let question = store.get_mut(&form.question).ok_or_else(not_found)?;
             if question.close() {
                 tracing::info!(
                     question = %form.question,
-                    %teacher,
+                    teacher = %user.login,
                     answers = question.responses.len(),
                     counts = ?question.counts(),
                     "question closed in the presentation view"
@@ -91,23 +89,29 @@ pub async fn close(
     }
 
     // Redirect so that reloading the page does not post the form again.
-    Ok(Redirect::to(&views::link(&format!("/d/{token}"))).into_response())
+    Ok(Redirect::to(&views::link("/d")).into_response())
 }
 
-/// `GET /d/{token}/events` - live updates for the presentation view.
+/// `GET /d/events` - live updates for the presentation view.
 pub async fn events(
     State(state): State<AppState>,
-    Path(token): Path<String>,
+    User(user): User,
 ) -> Result<Response, PageError> {
-    let room = state
-        .store
-        .read()
-        .await
-        .room_by_display_token(&token)
-        .map(|room| room.token.clone())
-        .ok_or_else(not_found)?;
-
+    let room = room_token(&*state.store.read().await, &user.login)?;
     Ok(live::stream(state, live::Source::Presentation(room)).into_response())
+}
+
+/// Token of the room of `login`. Anybody else, students included, has no
+/// room and so nothing to present.
+fn room_token(store: &Store, login: &str) -> Result<String, PageError> {
+    store
+        .room_of_teacher(login)
+        .map(|room| room.token.clone())
+        .ok_or_else(|| {
+            PageError::not_found(
+                "Nemáte otevřenou žádnou místnost. Otázku položíte příkazem quiz ask.",
+            )
+        })
 }
 
 /// What students have to type into a browser to reach the main page.

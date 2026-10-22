@@ -44,7 +44,6 @@ struct SavedRoom {
     token: String,
     code: String,
     teacher: String,
-    display_token: String,
     current: Option<String>,
     asked: usize,
     created_at: DateTime<Utc>,
@@ -75,7 +74,6 @@ impl Saved {
                 token: room.token.clone(),
                 code: room.code.clone(),
                 teacher: room.teacher.clone(),
-                display_token: room.display_token.clone(),
                 current: room.current.clone(),
                 asked: room.asked,
                 created_at: room.created_at,
@@ -113,11 +111,10 @@ impl Saved {
         for room in self.rooms {
             store.insert_room(Room {
                 url: cfg.url(&format!("r/{}", room.token))?.to_string(),
-                display_url: cfg.url(&format!("d/{}", room.display_token))?.to_string(),
+                display_url: cfg.url("d")?.to_string(),
                 token: room.token,
                 code: room.code,
                 teacher: room.teacher,
-                display_token: room.display_token,
                 presenters: Arc::new(()),
                 students: Presence::default(),
                 current: room.current,
@@ -280,7 +277,6 @@ mod tests {
             token: token.to_owned(),
             code: code.to_owned(),
             teacher: teacher.to_owned(),
-            display_token: format!("{token}-display"),
             current: Some(format!("{token}-q")),
             asked: 1,
             created_at: at,
@@ -332,12 +328,8 @@ mod tests {
 
         let room = store.room_by_code("123456").unwrap();
         assert_eq!(room.url, "https://quiz.example.org/new/r/room");
-        assert_eq!(
-            room.display_url,
-            "https://quiz.example.org/new/d/room-display"
-        );
+        assert_eq!(room.display_url, "https://quiz.example.org/new/d");
         assert!(store.room_of_teacher("teacher").is_some());
-        assert!(store.room_by_display_token("room-display").is_some());
         let question = store.current_question("room").unwrap();
         assert_eq!(question.answer_url, room.url);
         assert_eq!(question.responses["student"].index, 1);

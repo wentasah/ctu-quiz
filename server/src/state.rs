@@ -113,10 +113,9 @@ pub struct Room {
     pub teacher: String,
     /// URL of the room, as printed by the CLI and encoded in the QR code.
     pub url: String,
-    /// Secret part of the presentation URL.
-    pub display_token: String,
     /// URL of the presentation view, which shows whatever question is being
-    /// asked here, so one browser window serves the whole lecture.
+    /// asked in the room of the teacher logged in there, so one browser
+    /// window serves the whole lecture.
     pub display_url: String,
     /// Held by every open event stream of the presentation view, so that
     /// the count of its holders tells whether one is open.
@@ -377,8 +376,6 @@ pub struct Store {
     by_code: HashMap<String, String>,
     /// Login of a teacher to the token of their room.
     by_teacher: HashMap<String, String>,
-    /// Display token of a room to its token.
-    by_display: HashMap<String, String>,
 }
 
 impl Store {
@@ -500,17 +497,8 @@ impl Store {
         logins.len()
     }
 
-    /// Looks up a room from the secret part of its presentation URL.
-    pub fn room_by_display_token(&self, token: &str) -> Option<&Room> {
-        self.by_display
-            .get(token)
-            .and_then(|token| self.rooms.get(token))
-    }
-
     pub fn insert_room(&mut self, room: Room) {
         self.by_code.insert(room.code.clone(), room.token.clone());
-        self.by_display
-            .insert(room.display_token.clone(), room.token.clone());
         self.by_teacher
             .insert(room.teacher.clone(), room.token.clone());
         self.rooms.insert(room.token.clone(), room);
@@ -563,7 +551,6 @@ impl Store {
         let token = self.by_teacher.remove(teacher)?;
         let room = self.rooms.remove(&token)?;
         self.by_code.remove(&room.code);
-        self.by_display.remove(&room.display_token);
 
         let asked: Vec<String> = self
             .questions
@@ -615,7 +602,6 @@ impl Store {
         for token in &abandoned {
             if let Some(room) = self.rooms.remove(token) {
                 self.by_code.remove(&room.code);
-                self.by_display.remove(&room.display_token);
                 // Only if the teacher has not opened a newer room since.
                 if self.by_teacher.get(&room.teacher) == Some(&room.token) {
                     self.by_teacher.remove(&room.teacher);
@@ -703,12 +689,10 @@ impl AppState {
             Some(room) => room.token.clone(),
             None => {
                 let token = random_token();
-                let display_token = random_token();
                 let code = store.free_code();
                 store.insert_room(Room {
                     url: self.cfg.url(&format!("r/{token}"))?.to_string(),
-                    display_url: self.cfg.url(&format!("d/{display_token}"))?.to_string(),
-                    display_token,
+                    display_url: self.cfg.url("d")?.to_string(),
                     presenters: Arc::new(()),
                     students: Presence::default(),
                     token: token.clone(),
@@ -910,7 +894,6 @@ mod tests {
             code: "123456".to_owned(),
             teacher: "teacher".to_owned(),
             url: String::new(),
-            display_token: random_token(),
             display_url: String::new(),
             presenters: Arc::new(()),
             students: Presence::default(),

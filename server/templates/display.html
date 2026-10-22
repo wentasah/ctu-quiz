@@ -2,7 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block body_class %}display{% endblock %}
 {% block content %}
-<div id="live" data-events="{{ prefix }}/d/{{ token }}/events" data-open="{{ open }}"
+<div id="live" data-events="{{ prefix }}/d/events" data-open="{{ open }}"
      data-revealed="{{ revealed }}"
      data-question="{{ question }}">
   <div class="question">
@@ -26,7 +26,7 @@
     <p class="code-label">nebo zadejte na <strong>{{ host }}</strong> kód</p>
     <p class="code">{{ code }}</p>
     <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>
-    <form method="post" action="{{ prefix }}/d/{{ token }}/close" class="close-form">
+    <form method="post" action="{{ prefix }}/d/close" class="close-form">
       <input type="hidden" name="question" value="{{ question }}">
       <button type="submit">Uzavřít otázku</button>
     </form>

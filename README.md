@@ -55,7 +55,7 @@ Consider the following BASH code: ...
 
 Question code:     428173
 Students answer at: https://quiz.iid.ciirc.cvut.cz/r/4f3c...c1
-Presentation view:  https://quiz.iid.ciirc.cvut.cz/d/9a77...b4
+Presentation view:  https://quiz.iid.ciirc.cvut.cz/d
 
 The presentation view was opened in a browser.
 Press Enter to close the question and save the answers (Ctrl-C or the button in the presentation view work too).
@@ -72,7 +72,9 @@ and left.
    question over the API.
 3. It opens the **presentation view** in a browser. That page shows the
    question, a QR code with the answer URL, the six-digit question code and a
-   live count of the answers. If no browser can be opened, the URL is printed
+   live count of the answers. It is only shown to the teacher who asked the
+   question, logged in in that browser, so the first visit there asks for
+   the same login as the CLI. If no browser can be opened, the URL is printed
    for opening by hand. The window stays open for the whole lecture: every
    further question appears in it by itself, and a new window is only opened
    when the old one has been closed.
@@ -231,8 +233,9 @@ goes like this:
   screen, so an answer sent just as the teacher moves on is dropped instead
   of being counted for the wrong question.
 
-The presentation view (`/d/<token>`) belongs to the room too, and always
-shows the current question. The server keeps an event stream to each open
+The presentation view (`/d`) shows the room of the teacher logged in in
+the browser, and always the current question in it. Its URL is the same
+for everybody, and anybody else gets a page saying they have no room. The server keeps an event stream to each open
 presentation view, so it knows whether one exists, and `quiz ask` opens a
 browser only when none does. Each question still gets its own CSV.
 
@@ -450,7 +453,9 @@ What happens then:
    development provider asks *who are you?* — log in as `sojkam1`, the login
    passed to `--teachers`.
 2. The CLI publishes the question and opens the presentation view: the
-   question, a QR code, the six-digit code and a live counter. Add
+   question, a QR code, the six-digit code and a live counter. The browser
+   usually still has the session from step 1; if not, log in as `sojkam1`
+   again. Add
    `--no-browser` if you would rather open the printed URLs yourself.
 3. To act as a student, open <http://localhost:8080/> **in a private window**
    (so it gets a session of its own), log in as somebody else, for example
@@ -661,11 +666,10 @@ The counters start from zero whenever the server restarts.
 * Every student-facing page and every API endpoint requires an OIDC login. The
   only exceptions are `/healthz`, `/metrics` (aggregate numbers only), the two
   static files and `/api/v1/oidc`, which just tells the CLI where to log in.
-* The **presentation view** is a capability URL: `/d/<32 hex characters>`. It
-  is handed to the teacher over the authenticated API and needs no login, so
-  nothing has to be typed on the machine driving the projector. Keep it
-  unshared — anybody with the URL can watch the question and close it, though
-  not answer it.
+* The **presentation view** (`/d`) requires the OIDC login too and shows
+  only the room of the teacher logged in, so nobody else can watch the
+  question before it is closed or close it. On a shared machine driving the
+  projector, log out of the browser session (`/logout`) after the lecture.
 * Per-answer counts are only published once the question is closed, so students
   cannot watch the distribution while they are answering.
 * Session cookies are signed with a key generated at startup, `HttpOnly`,

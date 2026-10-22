@@ -73,16 +73,13 @@ async fn a_question_is_asked_answered_and_closed() {
         "students are sent to the teacher's room: {}",
         question.answer_url
     );
-    assert!(question.display_url.starts_with(&format!("{base}/d/")));
+    assert_eq!(question.display_url, format!("{base}/d"));
     assert!(question.open);
     assert_eq!(question.answer_count, 0);
 
     // Requirement 9: the presentation view shows the QR code and the code.
-    let display = reqwest::Client::new()
-        .get(&question.display_url)
-        .send()
-        .await
-        .unwrap();
+    let projector = browser_as(&base, &idp, &teacher).await;
+    let display = projector.get(&question.display_url).send().await.unwrap();
     assert_eq!(display.status(), StatusCode::OK);
     let body = display.text().await.unwrap();
     assert!(body.contains("</svg>"), "the QR code is missing");
@@ -118,7 +115,7 @@ async fn a_question_is_asked_answered_and_closed() {
 
     // Requirement 11: the live update carries the number of answers, but not
     // the distribution while the question is open.
-    let events = live_state(&format!("{}/events", question.display_url)).await;
+    let events = live_state_as(&projector, &format!("{}/events", question.display_url)).await;
     assert!(events.contains("event: state"), "got: {events}");
     assert!(events.contains("\"answer_count\":3"), "got: {events}");
     assert!(!events.contains("\"counts\""), "got: {events}");
@@ -179,7 +176,7 @@ async fn a_question_is_asked_answered_and_closed() {
 
     // Requirement 12: the closed question shows a bar graph, the counts are
     // now public and the QR code is gone.
-    let body = reqwest::Client::new()
+    let body = projector
         .get(&question.display_url)
         .send()
         .await
@@ -191,7 +188,7 @@ async fn a_question_is_asked_answered_and_closed() {
     assert!(body.contains("Otázka uzavřena"));
     assert!(!body.contains("</svg>"), "the QR code is still shown");
 
-    let events = live_state(&format!("{}/events", question.display_url)).await;
+    let events = live_state_as(&projector, &format!("{}/events", question.display_url)).await;
     assert!(events.contains("\"open\":false"), "got: {events}");
     assert!(events.contains("\"counts\":[0,1,2]"), "got: {events}");
 
@@ -390,14 +387,14 @@ async fn html_in_a_question_reaches_the_browser_escaped() {
     let question: QuestionInfo = response.json().await.unwrap();
 
     // The projector page and the student page both show the question.
-    idp.login_as(&User::new("novakja1", "Jan Novák"));
-    let student = reqwest::Client::builder()
-        .cookie_store(true)
-        .build()
-        .unwrap();
+    let projector = browser_as(&base, &idp, &teacher).await;
+    let student = browser_as(&base, &idp, &User::new("novakja1", "Jan Novák")).await;
 
-    for url in [&question.display_url, &question.answer_url] {
-        let page = student.get(url).send().await.unwrap().text().await.unwrap();
+    for (browser, url) in [
+        (&projector, &question.display_url),
+        (&student, &question.answer_url),
+    ] {
+        let page = browser.get(url).send().await.unwrap().text().await.unwrap();
         assert!(
             !page.contains("<script>alert(1)"),
             "{url} rendered a script"
@@ -557,7 +554,8 @@ async fn one_presentation_window_serves_the_whole_lecture() {
     assert!(!first.presented);
 
     // The window follows the room.
-    let mut window = api
+    let projector = browser_as(&base, &idp, &teacher).await;
+    let mut window = projector
         .get(format!("{}/events", first.display_url))
         .send()
         .await
@@ -578,7 +576,7 @@ async fn one_presentation_window_serves_the_whole_lecture() {
     assert!(second.presented, "the open window was not noticed");
     assert_eq!(second.display_url, first.display_url);
     assert!(next_event(&mut window).await.contains(&second.id));
-    let page = api
+    let page = projector
         .get(&first.display_url)
         .send()
         .await
@@ -634,13 +632,15 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
             .unwrap()
             .open
     };
-    let close = |display_url: String, id: &str| {
-        api.post(format!("{display_url}/close"))
+    let projector = browser_as(&base, &idp, &teacher).await;
+    let close = |browser: &reqwest::Client, id: &str| {
+        browser
+            .post(format!("{}/close", question.display_url))
             .form(&[("question", id)])
             .send()
     };
 
-    let page = api
+    let page = projector
         .get(&question.display_url)
         .send()
         .await
@@ -651,19 +651,16 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
     assert!(page.contains("Uzavřít otázku"), "{page}");
 
     // A question that is not on the screen stays open, and so does the one
-    // that is, for somebody who does not know the presentation URL.
-    let response = close(question.display_url.clone(), "other").await.unwrap();
+    // that is for anybody but the teacher who asked it.
+    let response = close(&projector, "other").await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let response = close(format!("{base}/d/guessed"), &question.id)
-        .await
-        .unwrap();
+    let student = browser_as(&base, &idp, &User::new("novakja1", "Jan Novák")).await;
+    let response = close(&student, &question.id).await.unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert!(is_open().await);
 
     // The button closes it and shows the results.
-    let response = close(question.display_url.clone(), &question.id)
-        .await
-        .unwrap();
+    let response = close(&projector, &question.id).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let page = response.text().await.unwrap();
     assert!(page.contains("Otázka uzavřena"), "{page}");
@@ -733,7 +730,8 @@ async fn a_hidden_question_stays_on_the_projector() {
     assert!(page.contains("a subshell swallows the variable"), "{page}");
 
     // The teacher's screen shows everything, which is the whole point.
-    let display = reqwest::Client::new()
+    let display = browser_as(&base, &idp, &teacher)
+        .await
         .get(&question.display_url)
         .send()
         .await
@@ -870,7 +868,8 @@ async fn shuffled_answers_are_the_same_for_everybody() {
     assert_eq!(labels, ["A", "B", "C", "D", "E", "F", "G", "H"]);
 
     // Everybody sees that one order: the projector and the phones alike.
-    let display = reqwest::Client::new()
+    let display = browser_as(&base, &idp, &teacher)
+        .await
         .get(&question.display_url)
         .send()
         .await
@@ -954,6 +953,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
         .build()
         .unwrap();
     student.get(format!("{base}/")).send().await.unwrap();
+    let projector = browser_as(&base, &idp, &teacher).await;
     let page = |client: reqwest::Client, url: String| async move {
         client.get(url).send().await.unwrap().text().await.unwrap()
     };
@@ -961,7 +961,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
     // While the question is open, nothing tells which answer is right.
     for open in [
         page(student.clone(), question.answer_url.clone()).await,
-        page(reqwest::Client::new(), question.display_url.clone()).await,
+        page(projector.clone(), question.display_url.clone()).await,
     ] {
         assert!(open.contains("the right one"), "{open}");
         for leak in ["[x]", "[ ]", "{-1}", "checkbox", "correct", "&#10003;"] {
@@ -997,7 +997,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
     // that the teacher can talk about them first.
     for closed in [
         page(student.clone(), question.answer_url.clone()).await,
-        page(reqwest::Client::new(), question.display_url.clone()).await,
+        page(projector.clone(), question.display_url.clone()).await,
     ] {
         assert!(closed.contains("class=\"bars\""), "{closed}");
         assert!(closed.contains("data-revealed=\"false\""), "{closed}");
@@ -1012,13 +1012,13 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
     let response = reveal().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     assert!(response.json::<QuestionInfo>().await.unwrap().revealed);
-    let events = live_state(&format!("{}/events", question.display_url)).await;
+    let events = live_state_as(&projector, &format!("{}/events", question.display_url)).await;
     assert!(events.contains("\"revealed\":true"), "got: {events}");
 
     // Once revealed, the results mark the right answer.
     for closed in [
         page(student.clone(), question.answer_url.clone()).await,
-        page(reqwest::Client::new(), question.display_url.clone()).await,
+        page(projector.clone(), question.display_url.clone()).await,
     ] {
         assert_eq!(closed.matches(" correct\"").count(), 1, "{closed}");
         let right = closed.find(" correct\"").unwrap();
@@ -1061,7 +1061,10 @@ async fn pages_link_the_stylesheet_and_script_of_this_version() {
         .json()
         .await
         .unwrap();
-    let page = reqwest::get(&question.display_url)
+    let page = browser_as(&base, &idp, &teacher)
+        .await
+        .get(&question.display_url)
+        .send()
         .await
         .unwrap()
         .text()
@@ -1161,7 +1164,8 @@ async fn logging_out_removes_the_room() {
     // And there is nothing left to come back to.
     let response = student.get(&question.answer_url).send().await.unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    let response = reqwest::Client::new()
+    let response = browser_as(&base, &idp, &teacher)
+        .await
         .get(&question.display_url)
         .send()
         .await
@@ -1418,7 +1422,8 @@ async fn the_teacher_sees_how_many_students_are_in_the_room() {
     assert_eq!(people().await, (0, 1), "one student, not one per tab");
 
     // The presentation view is not a student.
-    let mut display = api
+    let mut display = browser_as(&base, &idp, &teacher)
+        .await
         .get(format!("{}/events", question.display_url))
         .send()
         .await
@@ -1671,8 +1676,16 @@ fn regex_free_replace(text: &str, from: &str, to: &str, with: &str) -> String {
 }
 
 /// Reads the first server-sent event from `url`.
-async fn live_state(url: &str) -> String {
-    live_state_as(&reqwest::Client::new(), url).await
+/// A browser with a session of `user`.
+async fn browser_as(base: &str, idp: &MockIdp, user: &User) -> reqwest::Client {
+    let browser = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    idp.login_as(user);
+    let response = browser.get(format!("{base}/")).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    browser
 }
 
 /// Reads the first server-sent event from `url`, as a logged-in browser.

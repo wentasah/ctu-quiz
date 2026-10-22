@@ -198,8 +198,6 @@ pub struct DisplayPage {
     /// everything. It is here because `results.html` is shared with the
     /// students' page, which may not.
     pub show_answers: bool,
-    /// Secret part of the presentation URL, used to build the event stream URL.
-    pub token: String,
     /// Id of the question shown, so that the page notices when the stream
     /// starts talking about another one.
     pub question: String,
