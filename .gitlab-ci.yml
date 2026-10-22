@@ -177,12 +177,19 @@ release:
 #
 # - Access tokens: a project access token with the Developer role and the
 #   api and write_repository scopes.
-# - CI/CD > Variables: SECURITY_UPDATE_TOKEN with the token, masked and
-#   protected (so the branch main has to be protected).
+# - CI/CD > Variables: SECURITY_UPDATE_TOKEN with the token, masked,
+#   protected (so the branch main has to be protected) and with the
+#   environment scope security-update. Without the scope, every job of a
+#   pipeline on main would get the token, the builds too, which run the
+#   build scripts of all dependencies.
 # - Build > Pipeline schedules: a schedule for main, e.g. weekly.
 security-update:
   stage: build
   image: alpine:3.22
+  # Only for the environment-scoped token; the job deploys nothing.
+  environment:
+    name: security-update
+    action: access
   rules:
     # Also in a pipeline started with "Run pipeline", which has to be on main
     # (or another protected branch) to get the protected token.
