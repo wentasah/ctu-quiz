@@ -186,26 +186,49 @@ async fn wait_for_reveal(
         println!("The right answers were not revealed; {later}.");
         return Ok(());
     };
-    println!("Press Enter to reveal the right answers (Ctrl-C ends without them).");
+    println!(
+        "Press Enter to reveal the right answers (Ctrl-C ends without them, the button \
+         in the presentation view reveals them too)."
+    );
 
-    tokio::select! {
-        line = lines.next_line() => match line {
-            Ok(Some(_)) => {
-                api.reveal(id).await?;
-                println!("The right answers are revealed.");
+    // The teacher may reveal them in the presentation view instead. Losing
+    // the event stream only means that Enter is the one way left.
+    let mut events = None;
+    let mut watching = true;
+    loop {
+        tokio::select! {
+            line = lines.next_line() => {
+                match line {
+                    Ok(Some(_)) => {
+                        api.reveal(id).await?;
+                        println!("The right answers are revealed.");
+                    }
+                    // No terminal on the standard input: nobody to press Enter.
+                    Ok(None) | Err(_) => {
+                        println!("The right answers were not revealed; {later}.");
+                    }
+                }
+                return Ok(());
             }
-            // No terminal on the standard input: nobody to press Enter.
-            Ok(None) | Err(_) => println!("The right answers were not revealed; {later}."),
-        },
-        // A plain `return` would leave the Enter-reading task stuck on
-        // tokio's blocking pool, which the runtime waits for on shutdown, so
-        // the process would not actually exit until Enter is pressed anyway.
-        _ = tokio::signal::ctrl_c() => {
-            println!("\nThe right answers were not revealed; {later}.");
-            std::process::exit(0);
+            question = next_state(api, id, &mut events), if watching => match question {
+                Ok(question) if question.revealed => {
+                    println!("The right answers were revealed in the presentation view.");
+                    // As below: the Enter-reading task would keep the
+                    // process alive.
+                    std::process::exit(0);
+                }
+                Ok(_) => {}
+                Err(_) => watching = false,
+            },
+            // A plain `return` would leave the Enter-reading task stuck on
+            // tokio's blocking pool, which the runtime waits for on shutdown, so
+            // the process would not actually exit until Enter is pressed anyway.
+            _ = tokio::signal::ctrl_c() => {
+                println!("\nThe right answers were not revealed; {later}.");
+                std::process::exit(0);
+            }
         }
     }
-    Ok(())
 }
 
 /// One line about what is on the students' own screens, so that the teacher

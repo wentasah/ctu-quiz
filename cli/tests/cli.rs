@@ -313,6 +313,97 @@ async fn ask_flow() {
 }
 
 #[tokio::test]
+async fn ask_ends_when_the_presentation_view_reveals_the_answers() {
+    tokio::time::timeout(TIMEOUT, reveal_in_presentation_view())
+        .await
+        .expect("the CLI finished in time");
+}
+
+/// The teacher closes the question at the keyboard, then walks to the
+/// projector and reveals the right answers there: `quiz ask` must not wait
+/// for an Enter that is not coming.
+async fn reveal_in_presentation_view() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let dir = scratch("ask-reveal");
+    let question = dir.join("otazky.md");
+    std::fs::write(&question, EXAMPLE_QUESTION).unwrap();
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    idp.login_as(&teacher);
+
+    let mut child = quiz(&dir)
+        .args([
+            "--server",
+            &base,
+            "--no-browser",
+            "--login-port",
+            "0",
+            "ask",
+        ])
+        .arg(&question)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("the quiz binary is built");
+    let mut stdin = child.stdin.take().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut printed = String::new();
+    let mut read_until = async |prefix: &str| {
+        while let Some(line) = lines.next_line().await.unwrap() {
+            printed.push_str(&line);
+            printed.push('\n');
+            if line.contains(&idp.issuer) && line.contains("/authorize") {
+                reqwest::get(line.trim()).await.unwrap();
+            }
+            if line.starts_with(prefix) {
+                return printed.clone();
+            }
+        }
+        printed.clone()
+    };
+
+    read_until("Press Enter to close").await;
+    stdin.write_all(b"\n").await.unwrap();
+    read_until("Press Enter to reveal").await;
+
+    let projector = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    let page = projector
+        .get(format!("{base}/d"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(page.contains("Ukázat správné odpovědi"), "{page}");
+    let id = question_on_page(&page).expect("the reveal button names the question");
+    let response = projector
+        .post(format!("{base}/d/reveal"))
+        .form(&[("question", id.as_str())])
+        .send()
+        .await
+        .unwrap();
+    let page = response.text().await.unwrap();
+    assert!(page.contains(" correct\""), "{page}");
+    assert!(!page.contains("Ukázat správné odpovědi"), "{page}");
+
+    // The standard input stays open: no Enter, no end of file.
+    let printed = read_until("never printed").await;
+    let status = child.wait().await.unwrap();
+    assert!(status.success(), "the CLI failed:\n{printed}");
+    assert!(
+        printed.contains("The right answers were revealed in the presentation view."),
+        "{printed}"
+    );
+    drop(stdin);
+}
+
+#[tokio::test]
 async fn ask_without_standard_input_closes_the_question_after_the_given_time() {
     tokio::time::timeout(TIMEOUT, ask_without_stdin())
         .await

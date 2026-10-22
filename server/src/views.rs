@@ -208,6 +208,8 @@ pub struct DisplayPage {
     pub open: bool,
     /// Whether the right answers are marked in the results.
     pub revealed: bool,
+    /// Whether there are right answers to reveal.
+    pub scored: bool,
     pub answer_count: usize,
     pub code: String,
     pub answer_url: String,

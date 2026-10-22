@@ -155,9 +155,11 @@ time is left.
 
 A scored question then waits for one more Enter before the right answers are
 marked in the results, so that the class can talk about the bar graph first.
-Ctrl-C, or a standard input that is not a terminal, ends `quiz ask` without
-revealing them; `quiz reveal <question id>` does it later. An open question
-cannot be revealed.
+The *Ukázat správné odpovědi* button in the presentation view reveals them
+too, and `quiz ask` then ends by itself. Ctrl-C, or a standard input that is
+not a terminal, ends `quiz ask` without revealing them; `quiz reveal
+<question id>` or the button does it later. An open question cannot be
+revealed.
 
 ## The CSV file with question answers
 

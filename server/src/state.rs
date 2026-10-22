@@ -345,6 +345,18 @@ impl Question {
         true
     }
 
+    /// Marks the right answers in the results and wakes up the event streams
+    /// of the question. Returns false if they were revealed already, or the
+    /// question is still open: students could still change their answer.
+    pub fn reveal(&mut self) -> bool {
+        if self.is_open() || self.revealed {
+            return false;
+        }
+        self.revealed = true;
+        self.notify();
+        true
+    }
+
     /// Starts the `--close-after` countdown at `now`, unless it is running
     /// already or there is none. Returns when the question is to close.
     pub fn start_countdown(&mut self, now: DateTime<Utc>) -> Option<DateTime<Utc>> {

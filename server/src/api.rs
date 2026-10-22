@@ -212,9 +212,7 @@ pub async fn reveal_question(
             "the question is still open; close it before revealing the answers",
         ));
     }
-    if !question.revealed {
-        question.revealed = true;
-        question.notify();
+    if question.reveal() {
         tracing::info!(question = %id, teacher = %teacher.login, "answers revealed");
     }
     store.notify_room_of(&id);

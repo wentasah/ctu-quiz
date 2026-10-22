@@ -115,6 +115,7 @@ pub fn router(state: AppState) -> Router {
         .route("/d", get(display::display))
         .route("/d/events", get(display::events))
         .route("/d/close", post(display::close))
+        .route("/d/reveal", post(display::reveal))
         // OIDC endpoints.
         .route("/login", get(auth::login))
         .route("/auth/callback", get(auth::callback))

@@ -671,6 +671,15 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
     // that is for anybody but the teacher who asked it.
     let response = close(&projector, "other").await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    // Nor are the right answers of an open question revealed.
+    let reveal = |browser: &reqwest::Client| {
+        browser
+            .post(format!("{}/reveal", question.display_url))
+            .form(&[("question", question.id.as_str())])
+            .send()
+    };
+    let response = reveal(&projector).await.unwrap();
+    assert!(!response.text().await.unwrap().contains(" correct\""));
     let student = browser_as(&base, &idp, &User::new("novakja1", "Jan Novák")).await;
     let response = close(&student, &question.id).await.unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
@@ -683,6 +692,14 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
     assert!(page.contains("Otázka uzavřena"), "{page}");
     assert!(!page.contains("Uzavřít otázku"), "{page}");
     assert!(!is_open().await);
+
+    // Then another button reveals the right answers, for the teacher only.
+    assert!(page.contains("Ukázat správné odpovědi"), "{page}");
+    let response = reveal(&student).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let page = reveal(&projector).await.unwrap().text().await.unwrap();
+    assert!(page.contains(" correct\""), "{page}");
+    assert!(!page.contains("Ukázat správné odpovědi"), "{page}");
 }
 
 #[tokio::test]

@@ -56,6 +56,7 @@ pub async fn display(
         prompt_html: question.content.prompt_html.clone(),
         open: question.is_open(),
         revealed: question.revealed,
+        scored: question.content.is_scored(),
         answer_count: question.responses.len(),
         code: question.code.clone(),
         answer_url: question.answer_url.clone(),
@@ -69,7 +70,7 @@ pub async fn display(
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CloseForm {
+pub struct QuestionForm {
     /// Id of the question the page was showing when the button was pressed.
     question: String,
 }
@@ -80,7 +81,7 @@ pub struct CloseForm {
 pub async fn close(
     State(state): State<AppState>,
     User(user): User,
-    Form(form): Form<CloseForm>,
+    Form(form): Form<QuestionForm>,
 ) -> Result<Response, PageError> {
     {
         let mut store = state.store.write().await;
@@ -104,6 +105,34 @@ pub async fn close(
     }
 
     // Redirect so that reloading the page does not post the form again.
+    Ok(Redirect::to(&views::link("/d")).into_response())
+}
+
+/// `POST /d/reveal` - marks the right answers in the results, as `quiz
+/// reveal` does. A `quiz ask` waiting for Enter to do so notices and ends.
+pub async fn reveal(
+    State(state): State<AppState>,
+    User(user): User,
+    Form(form): Form<QuestionForm>,
+) -> Result<Response, PageError> {
+    {
+        let mut store = state.store.write().await;
+        let room = room_token(&store, &user.login)?;
+
+        // Only the question on the screen; any other one was not seen.
+        if store.room(&room).and_then(|room| room.current.as_deref()) == Some(&form.question) {
+            let question = store.get_mut(&form.question).ok_or_else(not_found)?;
+            if question.reveal() {
+                tracing::info!(
+                    question = %form.question,
+                    teacher = %user.login,
+                    "answers revealed in the presentation view"
+                );
+            }
+            store.notify_room_of(&form.question);
+        }
+    }
+
     Ok(Redirect::to(&views::link("/d")).into_response())
 }
 

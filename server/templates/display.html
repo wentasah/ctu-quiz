@@ -26,7 +26,7 @@
     <p class="code-label">nebo zadejte na <strong>{{ host }}</strong> kód</p>
     <p class="code">{{ code }}</p>
     <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>
-    <form method="post" action="{{ prefix }}/d/close" class="close-form">
+    <form method="post" action="{{ prefix }}/d/close" class="action-form">
       <input type="hidden" name="question" value="{{ question }}">
       {% if let Some(countdown) = countdown %}
       <button type="submit" class="countdown" data-remaining-ms="{{ countdown.remaining_ms }}"
@@ -39,6 +39,12 @@
     {% else %}
     <p class="closed">Otázka uzavřena</p>
     <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>
+    {% if scored && !revealed %}
+    <form method="post" action="{{ prefix }}/d/reveal" class="action-form">
+      <input type="hidden" name="question" value="{{ question }}">
+      <button type="submit">Ukázat správné odpovědi</button>
+    </form>
+    {% endif %}
     {% endif %}
   </aside>
 </div>
