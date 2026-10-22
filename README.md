@@ -128,7 +128,7 @@ server = "https://quiz.iid.ciirc.cvut.cz"
 [ask]
 shuffle = true
 hide-question = true
-close-after = 120
+close-after = 120 # seconds
 ```
 
 An environment variable or an option on the command line still wins over
