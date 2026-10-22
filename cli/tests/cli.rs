@@ -198,7 +198,7 @@ async fn ask_flow() {
     let mut rows = csv.lines();
     assert_eq!(
         rows.next().unwrap(),
-        "login,name,points,answer,answer_text,answered_at"
+        "login,name,points,answer,answer_text,answered_at,seconds"
     );
     let row = rows.next().expect("one answer was collected");
     assert!(row.starts_with("novakja1,Jan Novák,1.0,A,"), "{row}");

@@ -9,8 +9,9 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
 use quiz_common::{
     Question,
-    api::{AnswerInfo, QuestionInfo, Results, RoomInfo},
+    api::{AnswerInfo, QuestionInfo, ResultRow, Results, RoomInfo},
 };
+use serde::Serialize;
 
 /// Shows the parsed question, so that the teacher can check the Markdown was
 /// understood as intended before students see it.
@@ -124,13 +125,44 @@ fn next_to(source: &Path, name: String) -> PathBuf {
     }
 }
 
-/// Writes one row per student: login, name, chosen answer and when.
+/// One row of the CSV of a question: a [`ResultRow`] and how long the
+/// student took to answer.
+#[derive(Serialize)]
+struct CsvRow<'a> {
+    login: &'a str,
+    name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    points: Option<f64>,
+    answer: &'a str,
+    answer_text: &'a str,
+    answered_at: DateTime<Utc>,
+    /// Seconds from asking the question to the answer, to a tenth.
+    seconds: f64,
+}
+
+impl<'a> CsvRow<'a> {
+    fn new(row: &'a ResultRow, asked_at: DateTime<Utc>) -> Self {
+        let millis = (row.answered_at - asked_at).num_milliseconds();
+        CsvRow {
+            login: &row.login,
+            name: &row.name,
+            points: row.points,
+            answer: &row.answer,
+            answer_text: &row.answer_text,
+            answered_at: row.answered_at,
+            seconds: (millis as f64 / 100.0).round() / 10.0,
+        }
+    }
+}
+
+/// Writes one row per student: login, name, chosen answer, when, and how
+/// long after the question was asked.
 pub fn write_csv(path: &Path, results: &Results) -> Result<()> {
     let mut writer =
         csv::Writer::from_path(path).with_context(|| format!("cannot write {}", path.display()))?;
     for row in &results.rows {
         writer
-            .serialize(row)
+            .serialize(CsvRow::new(row, results.question.created_at))
             .with_context(|| format!("cannot write {}", path.display()))?;
     }
     writer
@@ -302,7 +334,7 @@ fn ellipsis(text: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{csv_path, ellipsis, points_note, remaining, room_csv_path, room_table};
+    use super::{CsvRow, csv_path, ellipsis, points_note, remaining, room_csv_path, room_table};
     use chrono::TimeZone;
     use quiz_common::api::{QuestionInfo, ResultRow, Results, StudentView};
     use std::path::Path;
@@ -402,6 +434,14 @@ mod tests {
             ]
         );
         assert_eq!(room_table(&[]), [vec!["login", "name", "total"]]);
+    }
+
+    #[test]
+    fn csv_has_seconds_from_asking_to_answering() {
+        let results = results("q1.md", &[("novakja1", "Jan", 1.0)]);
+        let mut row = results.rows[0].clone();
+        row.answered_at = results.question.created_at + chrono::TimeDelta::milliseconds(12_345);
+        assert_eq!(CsvRow::new(&row, results.question.created_at).seconds, 12.3);
     }
 
     #[test]

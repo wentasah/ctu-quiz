@@ -215,7 +215,8 @@ pub struct RoomQuestion {
     pub info: QuestionInfo,
 }
 
-/// One row of the collected answers, and one row of the exported CSV.
+/// One row of the collected answers, and most of one row of the exported
+/// CSV.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultRow {
     /// Login of the student, taken from the OIDC token.
