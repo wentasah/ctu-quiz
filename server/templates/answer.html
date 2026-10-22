@@ -3,20 +3,20 @@
 {% block body_class %}answer{% endblock %}
 {% block content %}
 <div class="card" id="live" data-events="{{ prefix }}/r/{{ room }}/events"
-     data-open="{{ open }}" data-revealed="{{ revealed }}" data-question="{{ question }}">
+     data-open="{{ open }}" data-revealed="{{ revealed }}" data-question="{{ question }}"
+     data-offline="{{ lang.t("offline") }}">
   <p class="who">{{ user.name }} ({{ user.login }}) &middot;
-    <a href="{{ prefix }}/logout">odhlásit</a></p>
+    <a href="{{ prefix }}/logout">{{ lang.t("logout") }}</a></p>
 
   {% if waiting %}
-  <h1>Čekejte na otázku</h1>
-  <p class="status">Až vyučující položí otázku, objeví se zde sama.
-    Tuto stránku nezavírejte.</p>
-  <p class="status count">Kód této místnosti: <strong>{{ code }}</strong></p>
+  <h1>{{ lang.t("wait-for-question") }}</h1>
+  <p class="status">{{ lang.t("wait-for-question-hint") }}</p>
+  <p class="status count">{{ lang.msg("room-code").arg("code", code.as_str()).html()|safe }}</p>
   {% else %}
   {% if show_question %}
   <div class="prompt">{{ prompt_html|safe }}</div>
   {% else %}
-  <p class="status hidden-prompt">Otázka je jen na plátně.</p>
+  <p class="status hidden-prompt">{{ lang.t("question-on-screen") }}</p>
   {% endif %}
 
   {% if open %}
@@ -32,34 +32,32 @@
     {% endfor %}
   </form>
   {% if !show_answers %}
-  <p class="status">Možnosti jsou na plátně; vyberte písmeno své odpovědi.</p>
+  <p class="status">{{ lang.t("options-on-screen") }}</p>
   {% endif %}
   {% if !chosen_label.is_empty() %}
-  <p class="status">Vaše odpověď <strong>{{ chosen_label }}</strong> byla zaznamenána.
-    Dokud je otázka otevřená, můžete ji změnit.</p>
+  <p class="status">{{ lang.msg("answer-recorded").arg("label", chosen_label.as_str()).html()|safe }}</p>
   {% else %}
-  <p class="status">Vyberte jednu z možností.</p>
+  <p class="status">{{ lang.t("choose-answer") }}</p>
   {% endif %}
-  <p class="status count">Odpovědělo <strong data-count>{{ answer_count }}</strong>
-    <span class="unit">studentů</span></p>
+  <p class="status count">{{ lang.msg("students-answered").arg("count", answer_count).html()|safe }}</p>
   {% else %}
-  <h2>Otázka je uzavřena</h2>
+  <h2>{{ lang.t("question-is-closed") }}</h2>
   {% include "results.html" %}
   {% if let Some(verdict) = verdict %}
   {% match verdict %}
   {% when crate::views::Verdict::Correct %}
-  <p class="status ok">Vaše odpověď <strong>{{ chosen_label }}</strong> byla správná.</p>
+  <p class="status ok">{{ lang.msg("answer-correct").arg("label", chosen_label.as_str()).html()|safe }}</p>
   {% when crate::views::Verdict::Partial %}
-  <p class="status partial">Vaše odpověď <strong>{{ chosen_label }}</strong> byla částečně správná.</p>
+  <p class="status partial">{{ lang.msg("answer-partial").arg("label", chosen_label.as_str()).html()|safe }}</p>
   {% when crate::views::Verdict::Wrong %}
-  <p class="status wrong">Vaše odpověď <strong>{{ chosen_label }}</strong> byla špatná.</p>
+  <p class="status wrong">{{ lang.msg("answer-wrong").arg("label", chosen_label.as_str()).html()|safe }}</p>
   {% endmatch %}
   {% else if !chosen_label.is_empty() %}
-  <p class="status">Vaše odpověď byla <strong>{{ chosen_label }}</strong>.</p>
+  <p class="status">{{ lang.msg("your-answer-was").arg("label", chosen_label.as_str()).html()|safe }}</p>
   {% else %}
-  <p class="status">Na tuto otázku jste neodpověděl(a).</p>
+  <p class="status">{{ lang.t("not-answered") }}</p>
   {% endif %}
-  <p class="status">Další otázka se zde objeví sama, stránku nezavírejte.</p>
+  <p class="status">{{ lang.t("next-question-here") }}</p>
   {% endif %}
   {% endif %}
 </div>

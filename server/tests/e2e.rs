@@ -88,7 +88,7 @@ async fn a_question_is_asked_answered_and_closed() {
     assert!(body.contains(&question.code));
     assert!(body.contains("Consider the following BASH code"));
     assert!(body.contains("<code class=\"language-bash\">"));
-    assert!(body.contains("<title>Kvíz – otázka 1</title>"), "{body}");
+    assert!(body.contains("<title>Quiz – question 1</title>"), "{body}");
     assert!(!body.contains("question.md"), "the file name is shown");
     dump_page("display-open.html", &body);
 
@@ -187,7 +187,7 @@ async fn a_question_is_asked_answered_and_closed() {
         .await
         .unwrap();
     assert!(body.contains("class=\"bars\""), "no bar graph");
-    assert!(body.contains("Otázka uzavřena"));
+    assert!(body.contains("Question closed"));
     assert!(!body.contains("</svg>"), "the QR code is still shown");
 
     let events = live_state_as(&projector, &format!("{}/events", question.display_url)).await;
@@ -485,7 +485,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
         .unwrap();
     assert!(body.contains("Second?"), "{body}");
     assert!(!body.contains("First?"), "{body}");
-    assert!(body.contains("<title>Kvíz – otázka 2</title>"), "{body}");
+    assert!(body.contains("<title>Quiz – question 2</title>"), "{body}");
     assert_eq!(question_on_page(&body).as_deref(), Some(second.id.as_str()));
 
     // An answer sent for the question that was on the page a moment ago is
@@ -516,7 +516,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
         .send()
         .await
         .unwrap();
-    assert!(response.text().await.unwrap().contains("byla zaznamenána"));
+    assert!(response.text().await.unwrap().contains("has been recorded"));
 
     // Once the teacher closes it, the page waits for the one after that.
     api.post(format!("{base}/api/v1/questions/{}/close", second.id))
@@ -532,8 +532,11 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
         .text()
         .await
         .unwrap();
-    assert!(body.contains("Otázka je uzavřena"), "{body}");
-    assert!(body.contains("Další otázka se zde objeví sama"), "{body}");
+    assert!(body.contains("The question is closed"), "{body}");
+    assert!(
+        body.contains("The next question appears here by itself"),
+        "{body}"
+    );
 }
 
 #[tokio::test]
@@ -600,7 +603,7 @@ async fn one_presentation_window_serves_the_whole_lecture() {
         .unwrap();
     assert!(page.contains("Second?"), "{page}");
     assert!(!page.contains("First?"), "{page}");
-    assert!(page.contains("<title>Kvíz – otázka 2</title>"), "{page}");
+    assert!(page.contains("<title>Quiz – question 2</title>"), "{page}");
 
     // Once the window is closed, the CLI has to open another one.
     drop(window);
@@ -664,14 +667,14 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
         .text()
         .await
         .unwrap();
-    assert!(page.contains("Uzavřít otázku"), "{page}");
+    assert!(page.contains("Close the question"), "{page}");
     assert!(!page.contains("countdown"), "nothing closes it by itself");
 
     // A question that is not on the screen stays open, and so does the one
     // that is for anybody but the teacher who asked it.
     let response = close(&projector, "other").await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    // Nor are the right answers of an open question revealed.
+    // Nor are the correct answers of an open question revealed.
     let reveal = |browser: &reqwest::Client| {
         browser
             .post(format!("{}/reveal", question.display_url))
@@ -689,17 +692,17 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
     let response = close(&projector, &question.id).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let page = response.text().await.unwrap();
-    assert!(page.contains("Otázka uzavřena"), "{page}");
-    assert!(!page.contains("Uzavřít otázku"), "{page}");
+    assert!(page.contains("Question closed"), "{page}");
+    assert!(!page.contains("Close the question"), "{page}");
     assert!(!is_open().await);
 
-    // Then another button reveals the right answers, for the teacher only.
-    assert!(page.contains("Ukázat správné odpovědi"), "{page}");
+    // Then another button reveals the correct answers, for the teacher only.
+    assert!(page.contains("Show the correct answers"), "{page}");
     let response = reveal(&student).await.unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let page = reveal(&projector).await.unwrap().text().await.unwrap();
     assert!(page.contains(" correct\""), "{page}");
-    assert!(!page.contains("Ukázat správné odpovědi"), "{page}");
+    assert!(!page.contains("Show the correct answers"), "{page}");
 }
 
 #[tokio::test]
@@ -841,7 +844,10 @@ async fn a_hidden_question_stays_on_the_projector() {
         !page.contains("Roury"),
         "the heading is part of the question"
     );
-    assert!(page.contains("Otázka je jen na plátně"), "{page}");
+    assert!(
+        page.contains("The question is on the screen only"),
+        "{page}"
+    );
     assert!(page.contains("a subshell swallows the variable"), "{page}");
 
     // The teacher's screen shows everything, which is the whole point.
@@ -885,7 +891,7 @@ async fn a_hidden_question_stays_on_the_projector() {
         .send()
         .await
         .unwrap();
-    assert!(response.text().await.unwrap().contains("byla zaznamenána"));
+    assert!(response.text().await.unwrap().contains("has been recorded"));
 
     api.post(format!("{base}/api/v1/questions/{}/close", question.id))
         .bearer_auth(token.clone())
@@ -1077,7 +1083,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
         client.get(url).send().await.unwrap().text().await.unwrap()
     };
 
-    // While the question is open, nothing tells which answer is right.
+    // While the question is open, nothing tells which answer is correct.
     for open in [
         page(student.clone(), question.answer_url.clone()).await,
         page(projector.clone(), question.display_url.clone()).await,
@@ -1112,7 +1118,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
         .await
         .unwrap();
 
-    // Closing shows the results, but not yet which answer is right, so
+    // Closing shows the results, but not yet which answer is correct, so
     // that the teacher can talk about them first.
     for closed in [
         page(student.clone(), question.answer_url.clone()).await,
@@ -1124,7 +1130,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
     }
     let closed = page(student.clone(), question.answer_url.clone()).await;
     assert!(
-        closed.contains("Vaše odpověď byla <strong>A</strong>"),
+        closed.contains("Your answer was <strong>A</strong>"),
         "{closed}"
     );
 
@@ -1134,18 +1140,18 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
     let events = live_state_as(&projector, &format!("{}/events", question.display_url)).await;
     assert!(events.contains("\"revealed\":true"), "got: {events}");
 
-    // Once revealed, the results mark the right answer.
+    // Once revealed, the results mark the correct answer.
     for closed in [
         page(student.clone(), question.answer_url.clone()).await,
         page(projector.clone(), question.display_url.clone()).await,
     ] {
         assert_eq!(closed.matches(" correct\"").count(), 1, "{closed}");
-        let right = closed.find(" correct\"").unwrap();
-        assert!(closed[right..].contains("the right one"), "{closed}");
+        let correct = closed.find(" correct\"").unwrap();
+        assert!(closed[correct..].contains("the right one"), "{closed}");
     }
     // The student learns that their answer was wrong.
     let closed = page(student.clone(), question.answer_url.clone()).await;
-    let wrong = "<p class=\"status wrong\">Vaše odpověď <strong>A</strong> byla špatná.";
+    let wrong = "<p class=\"status wrong\">Your answer <strong>A</strong> was wrong.";
     assert!(closed.contains(wrong), "{closed}");
 
     let results: Results = api
@@ -1303,7 +1309,10 @@ async fn logging_out_removes_the_room() {
         .text()
         .await
         .unwrap();
-    assert!(body.contains("nepatří k žádné otázce"), "got: {body}");
+    assert!(
+        body.contains("does not belong to any question"),
+        "got: {body}"
+    );
 
     // Logging out again has nothing to close.
     let closed: RoomClosed = api
@@ -1472,7 +1481,7 @@ async fn a_wrong_code_is_reported_on_the_main_page() {
         .text()
         .await
         .unwrap();
-    assert!(body.contains("Kód otázky"));
+    assert!(body.contains("Question code"));
     assert!(body.contains("Jan Novák"));
 
     let body = student
@@ -1484,7 +1493,10 @@ async fn a_wrong_code_is_reported_on_the_main_page() {
         .text()
         .await
         .unwrap();
-    assert!(body.contains("nepatří k žádné otázce"), "got: {body}");
+    assert!(
+        body.contains("does not belong to any question"),
+        "got: {body}"
+    );
 
     // An unknown room is a plain 404 page.
     let response = student
@@ -1493,6 +1505,55 @@ async fn a_wrong_code_is_reported_on_the_main_page() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn pages_follow_the_language_of_the_browser_or_the_one_picked() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &[]).await;
+    let student = browser_as(&base, &idp, &User::new("novakja1", "Jan Novák")).await;
+
+    let page = |path: &str, accept: &str| {
+        student
+            .get(format!("{base}{path}"))
+            .header("accept-language", accept.to_owned())
+            .send()
+    };
+
+    let body = page("/", "cs-CZ,cs;q=0.9")
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(body.contains("<html lang=\"cs\">"), "{body}");
+    assert!(body.contains("Kód otázky"), "{body}");
+    // The language selector offers every language, the current one chosen.
+    assert!(
+        body.contains("<option value=\"en\" lang=\"en\">English</option>"),
+        "{body}"
+    );
+    assert!(
+        body.contains("<option value=\"cs\" lang=\"cs\" selected>"),
+        "{body}"
+    );
+
+    // Error pages, too.
+    let response = page("/r/does-not-exist", "cs").await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = response.text().await.unwrap();
+    assert!(body.contains("Tato stránka na serveru není"), "{body}");
+
+    // A language the server does not have falls back to the default.
+    let body = page("/", "de").await.unwrap().text().await.unwrap();
+    assert!(body.contains("<html lang=\"en\">"), "{body}");
+
+    // The language picked on the main page wins over the browser's, and
+    // sticks.
+    let body = page("/?lang=en", "cs").await.unwrap().text().await.unwrap();
+    assert!(body.contains("Question code"), "{body}");
+    let body = page("/", "cs").await.unwrap().text().await.unwrap();
+    assert!(body.contains("Question code"), "{body}");
 }
 
 #[tokio::test]
@@ -1771,7 +1832,7 @@ async fn answer_as(
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.text().await.unwrap();
     assert!(
-        body.contains("byla zaznamenána"),
+        body.contains("has been recorded"),
         "the answer was not saved"
     );
     dump_page("answer-open.html", &body);

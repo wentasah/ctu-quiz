@@ -16,6 +16,7 @@ use serde::Deserialize;
 use crate::{
     auth::User,
     error::PageError,
+    i18n::Lang,
     live,
     state::{AppState, Store},
     views::{self, Countdown, DisplayPage, bars, page_title},
@@ -30,6 +31,7 @@ use askama::Template;
 pub async fn display(
     State(state): State<AppState>,
     User(user): User,
+    lang: Lang,
 ) -> Result<Response, PageError> {
     let mut store = state.store.write().await;
     let room = room_token(&store, &user.login)?;
@@ -50,9 +52,10 @@ pub async fn display(
 
     let page = DisplayPage {
         prefix: views::prefix(),
+        lang,
         show_answers: true,
         question: question.id.clone(),
-        title: page_title(Some(question)),
+        title: page_title(Some(question), lang),
         prompt_html: question.content.prompt_html.clone(),
         open: question.is_open(),
         revealed: question.revealed,
@@ -108,7 +111,7 @@ pub async fn close(
     Ok(Redirect::to(&views::link("/d")).into_response())
 }
 
-/// `POST /d/reveal` - marks the right answers in the results, as `quiz
+/// `POST /d/reveal` - marks the correct answers in the results, as `quiz
 /// reveal` does. A `quiz ask` waiting for Enter to do so notices and ends.
 pub async fn reveal(
     State(state): State<AppState>,
@@ -151,11 +154,7 @@ fn room_token(store: &Store, login: &str) -> Result<String, PageError> {
     store
         .room_of_teacher(login)
         .map(|room| room.token.clone())
-        .ok_or_else(|| {
-            PageError::not_found(
-                "Nemáte otevřenou žádnou místnost. Otázku položíte příkazem quiz ask.",
-            )
-        })
+        .ok_or_else(|| PageError::not_found("no-room"))
 }
 
 /// What students have to type into a browser to reach the main page.
@@ -186,7 +185,7 @@ fn qr_svg(url: &str) -> Result<String> {
 }
 
 fn not_found() -> PageError {
-    PageError::not_found("Tato otázka už na serveru není.")
+    PageError::not_found("question-gone")
 }
 
 #[cfg(test)]

@@ -34,6 +34,8 @@ uuid.workspace = true
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 async-stream = "0.3"
 futures-core = "0.3"
+fluent-bundle = "0.16"
+unic-langid = "0.9"
 
 [dev-dependencies]
 quiz-testsupport.workspace = true

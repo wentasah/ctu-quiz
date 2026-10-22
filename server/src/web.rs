@@ -15,6 +15,7 @@ use serde::Deserialize;
 use crate::{
     auth::User,
     error::PageError,
+    i18n::Lang,
     live,
     state::{AppState, Response as Answer},
     views::{self, AnswerPage, IndexPage, Verdict, bars, page_title},
@@ -22,8 +23,8 @@ use crate::{
 use askama::Template;
 
 /// `GET /` - asks for the question code (requirement 10).
-pub async fn index(User(user): User) -> Result<Response, PageError> {
-    Ok(Html(code_page(user, String::new())?).into_response())
+pub async fn index(User(user): User, lang: Lang) -> Result<Response, PageError> {
+    Ok(Html(code_page(user, lang, String::new())?).into_response())
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,6 +36,7 @@ pub struct JoinForm {
 pub async fn join(
     State(state): State<AppState>,
     User(user): User,
+    lang: Lang,
     Form(form): Form<JoinForm>,
 ) -> Result<Response, PageError> {
     // Be forgiving about spaces and dashes in a code read off a projector.
@@ -48,11 +50,11 @@ pub async fn join(
         .map(|room| room.token.clone())
     else {
         tracing::info!(login = %user.login, %code, "unknown question code");
-        return Ok(Html(code_page(
-            user,
-            format!("Kód {code} nepatří k žádné otázce. Zkuste to prosím znovu."),
-        )?)
-        .into_response());
+        let error = lang
+            .msg("unknown-code")
+            .arg("code", code.as_str())
+            .to_string();
+        return Ok(Html(code_page(user, lang, error)?).into_response());
     };
 
     tracing::info!(login = %user.login, %code, %room, "student entered a code");
@@ -65,6 +67,7 @@ pub async fn join(
 pub async fn room(
     State(state): State<AppState>,
     User(user): User,
+    lang: Lang,
     Path(token): Path<String>,
 ) -> Result<Response, PageError> {
     let store = state.store.read().await;
@@ -73,11 +76,12 @@ pub async fn room(
 
     let mut page = AnswerPage {
         prefix: views::prefix(),
+        lang,
         user,
         room: room.token.clone(),
         code: room.code.clone(),
         question: String::new(),
-        title: page_title(current),
+        title: page_title(current, lang),
         prompt_html: String::new(),
         show_question: true,
         show_answers: true,
@@ -153,13 +157,13 @@ pub async fn answer(
             tracing::info!(question = %id, login = %user.login, "answer to a closed question");
             return Err(PageError::new(
                 axum::http::StatusCode::CONFLICT,
-                "Otázka je uzavřena",
-                "Otázka už nepřijímá odpovědi.",
+                "question-is-closed",
+                "question-not-accepting",
             ));
         }
 
         let Some(answer) = question.content.answers.get(form.answer) else {
-            return Err(PageError::bad_request("Taková odpověď neexistuje."));
+            return Err(PageError::bad_request("no-such-answer"));
         };
         let label = answer.label.clone();
 
@@ -208,9 +212,14 @@ pub async fn events(
     Ok(live::stream(state, source).into_response())
 }
 
-fn code_page(user: crate::auth::Identity, error: String) -> Result<String, askama::Error> {
+fn code_page(
+    user: crate::auth::Identity,
+    lang: Lang,
+    error: String,
+) -> Result<String, askama::Error> {
     IndexPage {
         prefix: views::prefix(),
+        lang,
         user,
         error,
     }
@@ -218,5 +227,5 @@ fn code_page(user: crate::auth::Identity, error: String) -> Result<String, askam
 }
 
 fn not_found() -> PageError {
-    PageError::not_found("Tato stránka na serveru není, nebo už byla odstraněna.")
+    PageError::not_found("page-gone")
 }

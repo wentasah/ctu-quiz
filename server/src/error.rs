@@ -8,31 +8,46 @@ use axum::{
 };
 use quiz_common::api::ApiError;
 
-use crate::views::{MessagePage, prefix};
+use crate::{
+    i18n::Lang,
+    views::{MessagePage, prefix},
+};
 
 /// Error of a handler that serves HTML: shown to the user as a page.
-#[derive(Debug)]
+///
+/// It holds the ids of its messages rather than their texts: the
+/// [`negotiate`](crate::i18n::negotiate) middleware renders the page in the
+/// language of the request.
+#[derive(Debug, Clone)]
 pub struct PageError {
     status: StatusCode,
     title: &'static str,
-    message: String,
+    message: &'static str,
+    args: Vec<(&'static str, String)>,
 }
 
 impl PageError {
-    pub fn new(status: StatusCode, title: &'static str, message: impl Into<String>) -> Self {
+    pub fn new(status: StatusCode, title: &'static str, message: &'static str) -> Self {
         Self {
             status,
             title,
-            message: message.into(),
+            message,
+            args: Vec::new(),
         }
     }
 
-    pub fn not_found(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::NOT_FOUND, "Nenalezeno", message)
+    /// Gives the message an argument.
+    pub fn arg(mut self, name: &'static str, value: impl Into<String>) -> Self {
+        self.args.push((name, value.into()));
+        self
     }
 
-    pub fn bad_request(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::BAD_REQUEST, "Chybný požadavek", message)
+    pub fn not_found(message: &'static str) -> Self {
+        Self::new(StatusCode::NOT_FOUND, "not-found", message)
+    }
+
+    pub fn bad_request(message: &'static str) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, "bad-request", message)
     }
 
     /// Logs the cause and shows a generic message, so that internal details
@@ -41,26 +56,42 @@ impl PageError {
         tracing::error!(%error, "request failed");
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Chyba serveru",
-            "Požadavek se nepodařilo zpracovat. Zkuste to prosím znovu.",
+            "server-error",
+            "server-error-hint",
         )
     }
-}
 
-impl IntoResponse for PageError {
-    fn into_response(self) -> Response {
+    /// The error page in `lang`.
+    pub fn render(&self, lang: Lang) -> Response {
+        let message = self
+            .args
+            .iter()
+            .fold(lang.msg(self.message), |msg, (name, value)| {
+                msg.arg(name, value.as_str())
+            });
         let page = MessagePage {
             prefix: prefix(),
-            title: self.title.to_owned(),
-            message: self.message.clone(),
+            lang,
+            title: lang.t(self.title),
+            message: message.to_string(),
         };
         match page.render() {
             Ok(html) => (self.status, Html(html)).into_response(),
             Err(error) => {
                 tracing::error!(%error, "rendering the error page failed");
-                (self.status, format!("{}: {}", self.title, self.message)).into_response()
+                (self.status, format!("{}: {}", page.title, page.message)).into_response()
             }
         }
+    }
+}
+
+impl IntoResponse for PageError {
+    /// Renders the page in the default language, and leaves the error in the
+    /// response for the middleware to render it again in the right one.
+    fn into_response(self) -> Response {
+        let mut response = self.render(Lang::default());
+        response.extensions_mut().insert(self);
+        response
     }
 }
 

@@ -25,7 +25,7 @@
     if (offline && !note) {
       note = document.createElement("div");
       note.id = "offline";
-      note.textContent = "Připojení přerušeno, obnovuji…";
+      note.textContent = live.dataset.offline;
       document.body.appendChild(note);
     } else if (!offline && note) {
       note.remove();
@@ -142,4 +142,23 @@
   if (document.fonts) {
     document.fonts.ready.then(fitAll);
   }
+})();
+
+// Switches the language as soon as another one is chosen on the main page.
+// The button is there for browsers without JavaScript.
+(function () {
+  "use strict";
+
+  var select = document.querySelector("select[data-autosubmit]");
+  if (!select) {
+    return;
+  }
+
+  var button = select.form.querySelector("button");
+  if (button) {
+    button.hidden = true;
+  }
+  select.addEventListener("change", function () {
+    select.form.submit();
+  });
 })();

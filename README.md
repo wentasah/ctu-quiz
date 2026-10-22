@@ -14,7 +14,8 @@ It has two parts:
   answers as a CSV next to the Markdown file.
 
 Everybody authenticates with **OIDC**: students in the browser, the teacher in
-the CLI. The student-facing web pages are in Czech, everything else in English.
+the CLI. The web pages are in English or Czech, following the browser's
+language; students can switch it on the main page.
 
 ## Getting started
 
@@ -84,7 +85,7 @@ and left.
 4. Students either scan the QR code or go to the main page, log in and type the
    code — both ways land on the same answer URL. They tap one of the answers and
    may correct it while the question is open.
-5. Pressing Enter, or the *Uzavřít otázku* button in the presentation view,
+5. Pressing Enter, or the *Close the question* button in the presentation view,
    closes the question. Every open browser switches over to a bar graph with
    the results, and the CLI writes
    `otazka1_2026-09-21_14-05-03.csv` next to `otazka1.md`.
@@ -110,7 +111,7 @@ quiz logout [--all]          # end the lecture: close the room, forget the token
 quiz status                   # the room, and the questions the server keeps
 quiz close <question id>      # if `quiz ask` was interrupted: close and save
 quiz close                    # end the lecture but stay logged in: close the room
-quiz reveal <question id>     # mark the right answers, if `quiz ask` did not
+quiz reveal <question id>     # mark the correct answers, if `quiz ask` did not
 ```
 
 `--server` (or `QUIZ_SERVER`) selects the server, `--no-browser` never opens a
@@ -144,7 +145,7 @@ shows the defaults in effect for the options that take a value.
 
 Ctrl-C does the same as Enter: the question is closed and the answers are
 saved, so a mistyped key does not lose the collected data. So does the
-*Uzavřít otázku* button in the presentation view, for a teacher who stands
+*Close the question* button in the presentation view, for a teacher who stands
 at the projector rather than at the keyboard: `quiz ask` notices the
 question was closed and saves its answers.
 
@@ -156,9 +157,9 @@ opened at all, it counts from when the question is asked. The button
 empties from right to left like a progress bar, so the class sees how much
 time is left.
 
-A scored question then waits for one more Enter before the right answers are
+A scored question then waits for one more Enter before the correct answers are
 marked in the results, so that the class can talk about the bar graph first.
-The *Ukázat správné odpovědi* button in the presentation view reveals them
+The *Show the correct answers* button in the presentation view reveals them
 too, and `quiz ask` then ends by itself. Ctrl-C, or a standard input that is
 not a terminal, ends `quiz ask` without revealing them; `quiz reveal
 <question id>` or the button does it later. An open question cannot be
@@ -261,13 +262,13 @@ Everything students need is on the projector, so their own screen does not
 have to repeat it — and what is not on their screen is a lot more work to
 paste into a chatbot:
 
-| `quiz ask`        | On the phone                                                       |
-|-------------------|--------------------------------------------------------------------|
-| (nothing)         | the question and the answers                                       |
-| `--hide-question` | the answers only; *„Otázka je jen na plátně.“* instead of the text |
-| `--hide-answers`  | the question with bare labels `A`, `B`, `C`, … to choose from      |
-| `--labels-only`   | a keypad of the labels `A`, `B`, `C`, …                            |
-| `--shuffle`       | the answers in a random order, the same one as on the projector    |
+| `quiz ask`        | On the phone                                                                  |
+|-------------------|-------------------------------------------------------------------------------|
+| (nothing)         | the question and the answers                                                  |
+| `--hide-question` | the answers only; *"The question is on the screen only."* instead of the text |
+| `--hide-answers`  | the question with bare labels `A`, `B`, `C`, … to choose from                 |
+| `--labels-only`   | a keypad of the labels `A`, `B`, `C`, …                                       |
+| `--shuffle`       | the answers in a random order, the same one as on the projector               |
 
 `--labels-only` is the short way of writing `--hide-question --hide-answers`.
 `--shuffle` combines with any of them; see [below](#shuffling-the-answers).
@@ -284,7 +285,7 @@ API always carry the full text.
 question is published. The labels are handed out afterwards, so `A` is still
 the first answer on the screen and everybody sees that one order: the
 projector, every phone and the CSV. Asking the same file again shuffles
-anew, so the right answer is not where it was last year, and the CLI prints
+anew, so the correct answer is not where it was last year, and the CLI prints
 the order it ended up with.
 
 ## The question format
@@ -327,7 +328,7 @@ Details worth knowing:
 * `---`, `***` and `___` all work as the separator, and a rule inside a fenced
   code block is ignored.
 * If the file starts with a heading, it becomes the page title.
-* Answers may be **scored**. `- [x] …` is a right answer worth 1 point and
+* Answers may be **scored**. `- [x] …` is a correct answer worth 1 point and
   `- [ ] …` a wrong one worth 0; `{2}`, `{0.5}` or `{-1}` at the very end of
   an answer sets its points explicitly, with or without a checkbox:
 
@@ -586,6 +587,7 @@ the container image use (`quiz-server --help` lists them all):
 | `--session-ttl-hours` | `QUIZ_SESSION_TTL_HOURS` | `12` |
 | `--state-file` | `QUIZ_STATE_FILE` | none (state in memory only) |
 | `--trust-proxy` | `QUIZ_TRUST_PROXY` | off |
+| `--default-lang` | `QUIZ_DEFAULT_LANG` | `en` (or `cs`) |
 
 `--public-url` may contain a path prefix (`https://osy.fel.cvut.cz/quiz`); the
 server then serves all its pages under that prefix, so the reverse proxy has to
@@ -643,6 +645,26 @@ in `server/static/app.css` in the `--hl-*` variables, once for the light theme
 and once for the dark one. Only leaf scopes are coloured there: scopes such as
 `meta` or `function` wrap whole regions, and colouring them would tint entire
 function bodies.
+
+## Adding a language
+
+The texts of the web pages are [Fluent](https://projectfluent.org/) messages
+in `server/locales`, one file per language. To add one, translate
+`server/locales/en.ftl` into a file named after the language's tag, say
+`de.ftl`, and add a line for it to the `languages!` list in
+`server/src/i18n.rs`:
+
+```rust
+languages! {
+    En = "en", "English";
+    Cs = "cs", "Čeština";
+    De = "de", "Deutsch";
+}
+```
+
+The language selector on the main page then offers it, browsers asking for it
+get it, and `--default-lang de` makes it the default. `cargo test` fails while
+the new file lacks a message of `en.ftl` or has one more.
 
 ## Logging
 
@@ -735,6 +757,7 @@ The counters start from zero whenever the server restarts.
 | `server/src/metrics.rs` | the Prometheus metrics at `/metrics` |
 | `server/src/api.rs` | the API used by the CLI |
 | `server/templates`, `server/static` | HTML, CSS and the live-update script |
+| `server/src/i18n.rs`, `server/locales` | the languages of the web pages and their Fluent texts |
 | `cli/src/auth.rs` | the loopback OIDC login and the token cache |
 | `cli/src/report.rs` | terminal output and the CSV export |
 | `testsupport/` | mock OIDC provider: the tests' fixture and the `mock-idp` binary |

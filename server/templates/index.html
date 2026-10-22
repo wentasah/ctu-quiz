@@ -1,20 +1,33 @@
 {% extends "layout.html" %}
-{% block title %}Kvíz{% endblock %}
+{% block title %}{{ lang.t("quiz") }}{% endblock %}
 {% block body_class %}home{% endblock %}
 {% block content %}
 <div class="card">
-  <p class="who">Přihlášen jako <strong>{{ user.name }}</strong> ({{ user.login }})
-    &middot; <a href="{{ prefix }}/logout">odhlásit</a></p>
-  <h1>Kód otázky</h1>
-  <p>Zadejte kód, který vyučující zobrazil vedle QR kódu.</p>
+  <p class="who">{{ lang.msg("logged-in-as").arg("name", user.name.as_str()).arg("login", user.login.as_str()).html()|safe }}
+    &middot; <a href="{{ prefix }}/logout">{{ lang.t("logout") }}</a></p>
+  <h1>{{ lang.t("question-code") }}</h1>
+  <p>{{ lang.t("question-code-hint") }}</p>
   {% if !error.is_empty() %}
   <p class="error">{{ error }}</p>
   {% endif %}
   <form method="post" action="{{ prefix }}/join" class="code-form">
     <input type="text" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="6"
-           autocomplete="off" autofocus aria-label="Kód otázky" placeholder="123456">
-    <button type="submit">Zobrazit otázku</button>
+           autocomplete="off" autofocus aria-label="{{ lang.t("question-code") }}" placeholder="123456">
+    <button type="submit">{{ lang.t("show-question") }}</button>
   </form>
 </div>
-<footer class="source">Zdrojový kód: <a href="https://gitlab.fel.cvut.cz/sojkam1/quiz">gitlab.fel.cvut.cz/sojkam1/quiz</a></footer>
+<footer class="source">
+  <form method="get" action="{{ prefix }}/" class="language-form">
+    <label>{{ lang.t("language") }}
+      <select name="lang" data-autosubmit>
+        {% for other in crate::i18n::Lang::ALL %}
+        <option value="{{ other }}" lang="{{ other }}"{% if other.code() == lang.code() %} selected{% endif %}>{{ other.name() }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">{{ lang.t("change-language") }}</button>
+  </form>
+  <p>{{ lang.t("source-code") }} <a href="https://gitlab.fel.cvut.cz/sojkam1/quiz">gitlab.fel.cvut.cz/sojkam1/quiz</a></p>
+</footer>
 {% endblock %}
+{% block scripts %}<script src="{{ prefix }}/static/app.js?v={{ crate::views::asset_version() }}"></script>{% endblock %}

@@ -6,7 +6,7 @@ use askama::Template;
 
 use chrono::{DateTime, Utc};
 
-use crate::{auth::Identity, state::Question};
+use crate::{auth::Identity, i18n::Lang, state::Question};
 
 /// Path prefix of the server inside its public URL, e.g. `/quiz`, or an empty
 /// string when the server is served from the root of a host.
@@ -105,10 +105,13 @@ pub fn bars(question: &Question, chosen: Option<usize>) -> Vec<Bar> {
 /// Title of the browser tab, for a page showing `question` or, before the
 /// first one, none. It is neither the question's heading, which may be hidden
 /// from students, nor the name of the Markdown file.
-pub fn page_title(question: Option<&Question>) -> String {
+pub fn page_title(question: Option<&Question>, lang: Lang) -> String {
     match question {
-        Some(question) => format!("Kvíz – otázka {}", question.number),
-        None => "Kvíz".to_owned(),
+        Some(question) => lang
+            .msg("page-title")
+            .arg("number", question.number)
+            .to_string(),
+        None => lang.t("quiz"),
     }
 }
 
@@ -117,6 +120,7 @@ pub fn page_title(question: Option<&Question>) -> String {
 #[template(path = "index.html")]
 pub struct IndexPage {
     pub prefix: String,
+    pub lang: Lang,
     pub user: Identity,
     /// Empty unless the previously typed code was wrong.
     pub error: String,
@@ -127,6 +131,7 @@ pub struct IndexPage {
 #[template(path = "message.html")]
 pub struct MessagePage {
     pub prefix: String,
+    pub lang: Lang,
     pub title: String,
     pub message: String,
 }
@@ -137,6 +142,7 @@ pub struct MessagePage {
 #[template(path = "answer.html")]
 pub struct AnswerPage {
     pub prefix: String,
+    pub lang: Lang,
     pub user: Identity,
     /// Token of the room, i.e. the page's own URL.
     pub room: String,
@@ -154,7 +160,7 @@ pub struct AnswerPage {
     /// Whether the teacher has yet to ask the next question.
     pub waiting: bool,
     pub open: bool,
-    /// Whether the right answers are marked in the results.
+    /// Whether the correct answers are marked in the results.
     pub revealed: bool,
     pub answer_count: usize,
     /// Label of the student's own answer, empty if they did not answer.
@@ -196,6 +202,7 @@ impl Verdict {
 #[template(path = "display.html")]
 pub struct DisplayPage {
     pub prefix: String,
+    pub lang: Lang,
     /// Always true: the presentation view is the one screen that shows
     /// everything. It is here because `results.html` is shared with the
     /// students' page, which may not.
@@ -206,9 +213,9 @@ pub struct DisplayPage {
     pub title: String,
     pub prompt_html: String,
     pub open: bool,
-    /// Whether the right answers are marked in the results.
+    /// Whether the correct answers are marked in the results.
     pub revealed: bool,
-    /// Whether there are right answers to reveal.
+    /// Whether there are correct answers to reveal.
     pub scored: bool,
     pub answer_count: usize,
     pub code: String,

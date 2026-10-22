@@ -78,10 +78,17 @@ a { color: var(--accent); }
 .status { color: var(--muted); }
 .source { color: var(--muted); font-size: .75rem; text-align: center; margin-top: 1.5rem; }
 .source a { color: inherit; }
+.source p { margin: .25rem 0; }
+.language-form { display: flex; gap: .5rem; justify-content: center; align-items: center; margin: .25rem 0; }
+.language-form select { font: inherit; margin-left: .25rem; }
+.language-form button { padding: .1rem .5rem; border-radius: 4px; }
 .status.ok { color: var(--ok); }
 .status.partial { color: var(--partial); }
 .status.wrong { color: var(--error); }
 .error { color: var(--error); font-weight: 600; }
+
+/* `display` below would otherwise show elements a script has hidden. */
+[hidden] { display: none !important; }
 
 button, .button {
   font: inherit;

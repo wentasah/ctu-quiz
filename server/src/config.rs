@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use url::Url;
 
-use crate::auth::Identity;
+use crate::{auth::Identity, i18n::Lang};
 
 /// Which OIDC claim identifies a user. On the CTU/FEE identity provider
 /// `preferred_username` is the familiar eight-character login (`sojkam1`).
@@ -129,6 +129,11 @@ pub struct Config {
     /// Only enable this behind a reverse proxy that sets the header itself.
     #[arg(long, env = "QUIZ_TRUST_PROXY")]
     pub trust_proxy: bool,
+
+    /// Language of the web UI for browsers that ask for none the server has.
+    /// Users can switch it on the main page.
+    #[arg(long, env = "QUIZ_DEFAULT_LANG", default_value_t = Lang::default())]
+    pub default_lang: Lang,
 }
 
 impl Config {

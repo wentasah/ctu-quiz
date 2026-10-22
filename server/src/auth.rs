@@ -509,8 +509,8 @@ pub async fn login(
         tracing::warn!("too many logins in progress, refusing to start another");
         return PageError::new(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            "Server je zaneprázdněn",
-            "Právě probíhá příliš mnoho přihlášení. Zkuste to prosím za chvíli znovu.",
+            "server-busy",
+            "too-many-logins",
         )
         .into_response();
     }
@@ -547,29 +547,25 @@ pub async fn callback(
     if let Some(error) = query.error {
         let description = query.error_description.unwrap_or_default();
         tracing::warn!(%error, %description, "the OIDC provider reported an error");
-        return Err(PageError::bad_request(format!(
-            "Přihlášení se nezdařilo: {error} {description}"
-        )));
+        return Err(PageError::bad_request("login-error")
+            .arg("error", error)
+            .arg("description", description));
     }
 
     let (Some(code), Some(csrf)) = (query.code, query.state) else {
-        return Err(PageError::bad_request(
-            "Odpověď od poskytovatele identity je neúplná.",
-        ));
+        return Err(PageError::bad_request("login-incomplete"));
     };
 
     // Only the browser that started the login may finish it.
     let login_cookie = login_cookie_name(&csrf, state.cfg.secure_cookies());
     if jar.get(&login_cookie).is_none() {
         tracing::warn!("a login was finished by a browser that did not start it");
-        return Err(PageError::bad_request(
-            "Přihlášení nebylo zahájeno v tomto prohlížeči. Zkuste to prosím znovu.",
-        ));
+        return Err(PageError::bad_request("login-other-browser"));
     }
 
     let pending = state.logins.write().await.remove(&csrf).ok_or_else(|| {
         tracing::warn!("no pending login for the returned state parameter");
-        PageError::bad_request("Přihlášení vypršelo, zkuste to prosím znovu.")
+        PageError::bad_request("login-expired")
     })?;
 
     let identity = state
@@ -580,8 +576,8 @@ pub async fn callback(
             tracing::warn!(error = %format!("{error:#}"), "login failed");
             PageError::new(
                 axum::http::StatusCode::BAD_GATEWAY,
-                "Přihlášení se nezdařilo",
-                "Poskytovatel identity odmítl přihlášení.",
+                "login-failed",
+                "login-refused",
             )
         })?;
 

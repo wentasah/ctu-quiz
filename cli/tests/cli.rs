@@ -135,7 +135,7 @@ async fn ask_flow() {
     let mut stdin = child.stdin.take().unwrap();
     stdin.write_all(b"\n").await.unwrap();
 
-    // The question is scored, so a second Enter reveals the right answers;
+    // The question is scored, so a second Enter reveals the correct answers;
     // until then the results do not show them.
     while let Some(line) = lines.next_line().await.unwrap() {
         printed.push_str(&line);
@@ -165,7 +165,7 @@ async fn ask_flow() {
     assert!(printed.contains("Average points: 1.00 of 1"), "{printed}");
     assert!(printed.contains("Answers saved to"), "{printed}");
     assert!(
-        printed.contains("The right answers are revealed."),
+        printed.contains("The correct answers are revealed."),
         "{printed}"
     );
     let page = results_page().await;
@@ -320,7 +320,7 @@ async fn ask_ends_when_the_presentation_view_reveals_the_answers() {
 }
 
 /// The teacher closes the question at the keyboard, then walks to the
-/// projector and reveals the right answers there: `quiz ask` must not wait
+/// projector and reveals the correct answers there: `quiz ask` must not wait
 /// for an Enter that is not coming.
 async fn reveal_in_presentation_view() {
     let idp = MockIdp::start().await;
@@ -380,7 +380,7 @@ async fn reveal_in_presentation_view() {
         .text()
         .await
         .unwrap();
-    assert!(page.contains("Ukázat správné odpovědi"), "{page}");
+    assert!(page.contains("Show the correct answers"), "{page}");
     let id = question_on_page(&page).expect("the reveal button names the question");
     let response = projector
         .post(format!("{base}/d/reveal"))
@@ -390,14 +390,14 @@ async fn reveal_in_presentation_view() {
         .unwrap();
     let page = response.text().await.unwrap();
     assert!(page.contains(" correct\""), "{page}");
-    assert!(!page.contains("Ukázat správné odpovědi"), "{page}");
+    assert!(!page.contains("Show the correct answers"), "{page}");
 
     // The standard input stays open: no Enter, no end of file.
     let printed = read_until("never printed").await;
     let status = child.wait().await.unwrap();
     assert!(status.success(), "the CLI failed:\n{printed}");
     assert!(
-        printed.contains("The right answers were revealed in the presentation view."),
+        printed.contains("The correct answers were revealed in the presentation view."),
         "{printed}"
     );
     drop(stdin);
@@ -461,7 +461,7 @@ async fn ask_without_stdin() {
     );
     assert!(printed.contains("Answers saved to"), "{printed}");
     assert!(
-        printed.contains("The right answers were not revealed"),
+        printed.contains("The correct answers were not revealed"),
         "{printed}"
     );
 }

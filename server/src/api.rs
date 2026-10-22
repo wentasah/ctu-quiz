@@ -190,10 +190,10 @@ pub async fn close_question(
     Ok(Json(store.question_info(owned(&store, &id, &teacher)?)))
 }
 
-/// `POST /api/v1/questions/{id}/reveal` - marks the right answers in the
+/// `POST /api/v1/questions/{id}/reveal` - marks the correct answers in the
 /// results, on the projector and on the students' screens.
 ///
-/// Only a closed question can be revealed, so that nobody learns the right
+/// Only a closed question can be revealed, so that nobody learns the correct
 /// answer while they can still change theirs.
 pub async fn reveal_question(
     State(state): State<AppState>,

@@ -174,7 +174,7 @@ async fn ask(
     Ok(())
 }
 
-/// Lets the teacher talk about the results before the right answers are
+/// Lets the teacher talk about the results before the correct answers are
 /// marked in them, on the projector and on the students' screens.
 async fn wait_for_reveal(
     api: &Api,
@@ -183,11 +183,11 @@ async fn wait_for_reveal(
 ) -> Result<()> {
     let later = format!("`quiz reveal {id}` reveals them later");
     let Some(lines) = stdin else {
-        println!("The right answers were not revealed; {later}.");
+        println!("The correct answers were not revealed; {later}.");
         return Ok(());
     };
     println!(
-        "Press Enter to reveal the right answers (Ctrl-C ends without them, the button \
+        "Press Enter to reveal the correct answers (Ctrl-C ends without them, the button \
          in the presentation view reveals them too)."
     );
 
@@ -201,18 +201,18 @@ async fn wait_for_reveal(
                 match line {
                     Ok(Some(_)) => {
                         api.reveal(id).await?;
-                        println!("The right answers are revealed.");
+                        println!("The correct answers are revealed.");
                     }
                     // No terminal on the standard input: nobody to press Enter.
                     Ok(None) | Err(_) => {
-                        println!("The right answers were not revealed; {later}.");
+                        println!("The correct answers were not revealed; {later}.");
                     }
                 }
                 return Ok(());
             }
             question = next_state(api, id, &mut events), if watching => match question {
                 Ok(question) if question.revealed => {
-                    println!("The right answers were revealed in the presentation view.");
+                    println!("The correct answers were revealed in the presentation view.");
                     // As below: the Enter-reading task would keep the
                     // process alive.
                     std::process::exit(0);
@@ -224,7 +224,7 @@ async fn wait_for_reveal(
             // tokio's blocking pool, which the runtime waits for on shutdown, so
             // the process would not actually exit until Enter is pressed anyway.
             _ = tokio::signal::ctrl_c() => {
-                println!("\nThe right answers were not revealed; {later}.");
+                println!("\nThe correct answers were not revealed; {later}.");
                 std::process::exit(0);
             }
         }
@@ -353,7 +353,7 @@ async fn close(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<()> {
 /// It is built anew from the closed scored questions the server keeps in the
 /// room, so closing a question again or out of order does no harm. Failing
 /// to write it is only reported: the answers of the question are saved by
-/// then, and the teacher may still want to reveal the right ones.
+/// then, and the teacher may still want to reveal the correct ones.
 async fn save_room(api: &Api, source: &Path) {
     match write_room(api, source).await {
         Ok(Some(path)) => println!("Points of the room saved to {}", path.display()),
@@ -386,7 +386,7 @@ async fn write_room(api: &Api, source: &Path) -> Result<Option<PathBuf>> {
     Ok(Some(path))
 }
 
-/// Marks the right answers of a question whose `quiz ask` ended before.
+/// Marks the correct answers of a question whose `quiz ask` ended before.
 async fn reveal(cli: &Cli, id: &str) -> Result<()> {
     let api = connect(cli, false).await?;
     let question = api.reveal(id).await?;
@@ -395,9 +395,9 @@ async fn reveal(cli: &Cli, id: &str) -> Result<()> {
         .iter()
         .any(|answer| answer.points.is_some())
     {
-        println!("The right answers are revealed.");
+        println!("The correct answers are revealed.");
     } else {
-        println!("The question has no points, so there are no right answers to reveal.");
+        println!("The question has no points, so there are no correct answers to reveal.");
     }
     Ok(())
 }

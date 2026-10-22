@@ -258,7 +258,7 @@ pub struct Question {
     /// not taken from the students.
     pub closes_at: Option<DateTime<Utc>>,
     pub closed_at: Option<DateTime<Utc>>,
-    /// Whether the teacher has revealed which answers are right; only ever
+    /// Whether the teacher has revealed which answers are correct; only ever
     /// after the question is closed.
     pub revealed: bool,
     /// Answers, keyed by login, so that answering twice replaces the answer.
@@ -345,7 +345,7 @@ impl Question {
         true
     }
 
-    /// Marks the right answers in the results and wakes up the event streams
+    /// Marks the correct answers in the results and wakes up the event streams
     /// of the question. Returns false if they were revealed already, or the
     /// question is still open: students could still change their answer.
     pub fn reveal(&mut self) -> bool {

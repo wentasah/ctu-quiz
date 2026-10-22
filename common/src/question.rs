@@ -10,7 +10,7 @@
 //! follows a paragraph, where CommonMark would read it as a setext heading.
 //! Horizontal rules inside fenced code blocks are ignored.
 //!
-//! An answer may say how many points it is worth: `- [x] ...` is a right
+//! An answer may say how many points it is worth: `- [x] ...` is a correct
 //! answer worth 1 point, `- [ ] ...` a wrong one worth 0, and `{2}`, `{0.5}`
 //! or `{-1}` at the very end of the answer sets the points explicitly. Either
 //! every answer has such a mark or none does. The marks are removed from the
@@ -149,7 +149,7 @@ pub fn parse(source: &str) -> Result<Question, ParseError> {
 /// The labels are handed out again afterwards, so `A` is still the first
 /// answer on the screen and everybody - the projector, every phone and the
 /// CSV - sees the same order. Asking the same file again shuffles anew,
-/// which is the point: the right answer is not always `B`.
+/// which is the point: the correct answer is not always `B`.
 pub fn shuffle_answers(question: &mut Question) {
     question.answers.shuffle(&mut rand::rng());
     for (index, answer) in question.answers.iter_mut().enumerate() {

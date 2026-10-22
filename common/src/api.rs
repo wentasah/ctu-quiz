@@ -130,7 +130,7 @@ pub struct QuestionInfo {
     pub teacher: String,
     pub created_at: DateTime<Utc>,
     pub closed_at: Option<DateTime<Utc>>,
-    /// Whether the right answers are shown with the results.
+    /// Whether the correct answers are shown with the results.
     #[serde(default)]
     pub revealed: bool,
 }
@@ -143,7 +143,7 @@ pub struct LiveState {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
     pub open: bool,
-    /// Whether the results show which answers are right. A change means
+    /// Whether the results show which answers are correct. A change means
     /// the page has to be re-rendered.
     #[serde(default)]
     pub revealed: bool,

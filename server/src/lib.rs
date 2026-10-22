@@ -11,6 +11,7 @@ pub mod auth;
 pub mod config;
 pub mod display;
 pub mod error;
+pub mod i18n;
 pub mod live;
 pub mod metrics;
 pub mod persist;
@@ -25,6 +26,7 @@ use axum::{
     Router,
     body::Body,
     http::{Request, header},
+    middleware,
     response::IntoResponse,
     routing::{get, post},
 };
@@ -126,6 +128,10 @@ pub fn router(state: AppState) -> Router {
         .route("/static/app.js", get(javascript))
         .route("/healthz", get(|| async { "ok\n" }))
         .route("/metrics", get(metrics::metrics))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            i18n::negotiate,
+        ))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(move |request: &Request<Body>| {

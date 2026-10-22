@@ -70,7 +70,7 @@ pub enum Command {
         ///
         /// Everybody sees the same order - the projector, every phone and
         /// the CSV - but asking the same file again shuffles anew, so the
-        /// right answer is not in the same place as last year.
+        /// correct answer is not in the same place as last year.
         #[arg(long)]
         shuffle: bool,
     },
@@ -104,7 +104,7 @@ pub enum Command {
         #[arg(long, short)]
         output: Option<PathBuf>,
     },
-    /// Mark the right answers in the results of a closed question.
+    /// Mark the correct answers in the results of a closed question.
     ///
     /// `quiz ask` offers this itself once the question is closed; this is
     /// for when it was interrupted before.

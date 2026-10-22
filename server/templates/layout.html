@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="{{ lang }}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Kvíz{% endblock %}</title>
+    <title>{% block title %}{{ lang.t("quiz") }}{% endblock %}</title>
     <link rel="stylesheet" href="{{ prefix }}/static/app.css?v={{ crate::views::asset_version() }}">
   </head>
   <body class="{% block body_class %}{% endblock %}">
