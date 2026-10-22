@@ -279,6 +279,7 @@ body.display .join .code {
 body.display .counter { font-size: 1em; color: var(--muted); }
 body.display .counter strong { font-size: clamp(2em, calc(var(--fit) * 4vw), 3.4em); color: var(--fg); }
 body.display .closed { font-weight: 700; color: var(--error); }
+body.display .close-form { margin-top: 1rem; }
 
 @media (max-width: 60rem) {
   body.display #live { grid-template-columns: 1fr; }

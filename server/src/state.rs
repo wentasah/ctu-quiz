@@ -328,6 +328,17 @@ impl Question {
         }
     }
 
+    /// Stops accepting answers and wakes up the event streams of the
+    /// question. Returns false if it was closed already.
+    pub fn close(&mut self) -> bool {
+        if !self.is_open() {
+            return false;
+        }
+        self.closed_at = Some(Utc::now());
+        self.notify();
+        true
+    }
+
     pub fn results(&self) -> Results {
         let rows = self
             .responses

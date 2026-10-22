@@ -508,7 +508,10 @@ async fn wait_for_close(
     close_after: Option<u64>,
     stdin: &mut Option<Lines<BufReader<Stdin>>>,
 ) -> Result<()> {
-    println!("Press Enter to close the question and save the answers (Ctrl-C works too).");
+    println!(
+        "Press Enter to close the question and save the answers (Ctrl-C or the button \
+         in the presentation view work too)."
+    );
 
     // Redrawing one line is for a terminal; a log file wants one line per
     // change instead of escape sequences.

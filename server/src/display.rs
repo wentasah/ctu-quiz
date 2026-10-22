@@ -7,10 +7,11 @@
 
 use anyhow::{Context, Result};
 use axum::{
-    extract::{Path, State},
-    response::{Html, IntoResponse, Response},
+    extract::{Form, Path, State},
+    response::{Html, IntoResponse, Redirect, Response},
 };
 use qrcode::{EcLevel, QrCode, render::svg};
+use serde::Deserialize;
 
 use crate::{
     error::PageError,
@@ -51,6 +52,46 @@ pub async fn display(
     };
 
     Ok(Html(page.render()?).into_response())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CloseForm {
+    /// Id of the question the page was showing when the button was pressed.
+    question: String,
+}
+
+/// `POST /d/{token}/close` - closes the question from the projector, as the
+/// teacher would from the CLI. A waiting `quiz ask` notices it on its event
+/// stream and saves the answers.
+pub async fn close(
+    State(state): State<AppState>,
+    Path(token): Path<String>,
+    Form(form): Form<CloseForm>,
+) -> Result<Response, PageError> {
+    {
+        let mut store = state.store.write().await;
+        let room = store.room_by_display_token(&token).ok_or_else(not_found)?;
+
+        // The teacher may have asked the next question in the meantime;
+        // that one was not on the screen, so it stays open.
+        if room.current.as_deref() == Some(form.question.as_str()) {
+            let teacher = room.teacher.clone();
+            let question = store.get_mut(&form.question).ok_or_else(not_found)?;
+            if question.close() {
+                tracing::info!(
+                    question = %form.question,
+                    %teacher,
+                    answers = question.responses.len(),
+                    counts = ?question.counts(),
+                    "question closed in the presentation view"
+                );
+            }
+            store.notify_room_of(&form.question);
+        }
+    }
+
+    // Redirect so that reloading the page does not post the form again.
+    Ok(Redirect::to(&views::link(&format!("/d/{token}"))).into_response())
 }
 
 /// `GET /d/{token}/events` - live updates for the presentation view.

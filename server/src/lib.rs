@@ -114,6 +114,7 @@ pub fn router(state: AppState) -> Router {
         // Presentation view, reachable with the secret display token.
         .route("/d/{token}", get(display::display))
         .route("/d/{token}/events", get(display::events))
+        .route("/d/{token}/close", post(display::close))
         // OIDC endpoints.
         .route("/login", get(auth::login))
         .route("/auth/callback", get(auth::callback))

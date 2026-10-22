@@ -10,7 +10,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use chrono::Utc;
 use quiz_common::api::{
     CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, RoomStatus, WhoAmI,
 };
@@ -165,9 +164,7 @@ pub async fn close_question(
         .get_mut(&id)
         .ok_or_else(|| ApiFailure::not_found("no such question"))?;
 
-    if question.is_open() {
-        question.closed_at = Some(Utc::now());
-        question.notify();
+    if question.close() {
         tracing::info!(
             question = %id,
             teacher = %teacher.login,

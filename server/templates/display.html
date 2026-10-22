@@ -26,6 +26,10 @@
     <p class="code-label">nebo zadejte na <strong>{{ host }}</strong> kód</p>
     <p class="code">{{ code }}</p>
     <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>
+    <form method="post" action="{{ prefix }}/d/{{ token }}/close" class="close-form">
+      <input type="hidden" name="question" value="{{ question }}">
+      <button type="submit">Uzavřít otázku</button>
+    </form>
     {% else %}
     <p class="closed">Otázka uzavřena</p>
     <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>

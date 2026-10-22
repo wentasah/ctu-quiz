@@ -58,7 +58,7 @@ Students answer at: https://quiz.iid.ciirc.cvut.cz/r/4f3c...c1
 Presentation view:  https://quiz.iid.ciirc.cvut.cz/d/9a77...b4
 
 The presentation view was opened in a browser.
-Press Enter to close the question and save the answers (Ctrl-C works too).
+Press Enter to close the question and save the answers (Ctrl-C or the button in the presentation view work too).
   answers: 17/23
 ```
 
@@ -79,8 +79,9 @@ and left.
 4. Students either scan the QR code or go to the main page, log in and type the
    code — both ways land on the same answer URL. They tap one of the answers and
    may correct it while the question is open.
-5. Pressing Enter closes the question. Every open browser switches over to a
-   bar graph with the results, and the CLI writes
+5. Pressing Enter, or the *Uzavřít otázku* button in the presentation view,
+   closes the question. Every open browser switches over to a bar graph with
+   the results, and the CLI writes
    `otazka1_2026-09-21_14-05-03.csv` next to `otazka1.md`.
 6. The **next question of the same teacher goes to the same URL**, so the
    students scan or type nothing again: the page they still have open shows
@@ -137,7 +138,10 @@ command line, only by `false` in a nearer `quiz.toml`. The `--help` output
 shows the defaults in effect for the options that take a value.
 
 Ctrl-C does the same as Enter: the question is closed and the answers are
-saved, so a mistyped key does not lose the collected data.
+saved, so a mistyped key does not lose the collected data. So does the
+*Uzavřít otázku* button in the presentation view, for a teacher who stands
+at the projector rather than at the keyboard: `quiz ask` notices the
+question was closed and saves its answers.
 
 A scored question then waits for one more Enter before the right answers are
 marked in the results, so that the class can talk about the bar graph first.
@@ -660,8 +664,8 @@ The counters start from zero whenever the server restarts.
 * The **presentation view** is a capability URL: `/d/<32 hex characters>`. It
   is handed to the teacher over the authenticated API and needs no login, so
   nothing has to be typed on the machine driving the projector. Keep it
-  unshared — anybody with the URL can watch the question, though not answer it
-  or close it.
+  unshared — anybody with the URL can watch the question and close it, though
+  not answer it.
 * Per-answer counts are only published once the question is closed, so students
   cannot watch the distribution while they are answering.
 * Session cookies are signed with a key generated at startup, `HttpOnly`,

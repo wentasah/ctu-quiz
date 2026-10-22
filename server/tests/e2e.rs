@@ -602,6 +602,76 @@ async fn one_presentation_window_serves_the_whole_lecture() {
 }
 
 #[tokio::test]
+async fn the_question_can_be_closed_in_the_presentation_view() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.access_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+    let question: QuestionInfo = api
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(&token)
+        .json(&CreateQuestion {
+            source_name: "otazky.md".to_owned(),
+            markdown: QUESTION.to_owned(),
+            view: StudentView::default(),
+            shuffle: false,
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let is_open = async || {
+        api.get(format!("{base}/api/v1/questions/{}", question.id))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json::<QuestionInfo>()
+            .await
+            .unwrap()
+            .open
+    };
+    let close = |display_url: String, id: &str| {
+        api.post(format!("{display_url}/close"))
+            .form(&[("question", id)])
+            .send()
+    };
+
+    let page = api
+        .get(&question.display_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(page.contains("Uzavřít otázku"), "{page}");
+
+    // A question that is not on the screen stays open, and so does the one
+    // that is, for somebody who does not know the presentation URL.
+    let response = close(question.display_url.clone(), "other").await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = close(format!("{base}/d/guessed"), &question.id)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(is_open().await);
+
+    // The button closes it and shows the results.
+    let response = close(question.display_url.clone(), &question.id)
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let page = response.text().await.unwrap();
+    assert!(page.contains("Otázka uzavřena"), "{page}");
+    assert!(!page.contains("Uzavřít otázku"), "{page}");
+    assert!(!is_open().await);
+}
+
+#[tokio::test]
 async fn a_hidden_question_stays_on_the_projector() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
