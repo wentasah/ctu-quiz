@@ -2,7 +2,7 @@
 //!
 //! Two files are read, both in TOML:
 //!
-//! * `config.toml` in the directory of [`dir`], the teacher's own defaults;
+//! * `config.toml` in the directory of [`config_dir`], the teacher's own defaults;
 //! * `quiz.toml` in the current directory or the nearest of its parents,
 //!   the defaults of one course, kept next to its questions.
 //!
@@ -36,7 +36,7 @@ const PROJECT_FILE: &str = "quiz.toml";
 
 /// Where the tool keeps its files: `$XDG_CONFIG_HOME/quiz` or
 /// `~/.config/quiz` on Linux and macOS, `%APPDATA%\quiz` on Windows.
-pub fn dir() -> Result<PathBuf> {
+pub fn config_dir() -> Result<PathBuf> {
     let strategy = choose_base_strategy().context("cannot find the configuration directory")?;
     Ok(strategy.config_dir().join("quiz"))
 }
@@ -45,8 +45,8 @@ pub fn dir() -> Result<PathBuf> {
 /// files. Files that do not exist are skipped.
 pub fn apply(command: clap::Command) -> Result<clap::Command> {
     let mut files = Vec::new();
-    if let Ok(dir) = dir() {
-        files.push(Toml::file(dir.join("config.toml")));
+    if let Ok(config_dir) = config_dir() {
+        files.push(Toml::file(config_dir.join("config.toml")));
     }
     // A missing file is skipped. A relative path makes figment look in the
     // parent directories too.

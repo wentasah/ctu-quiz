@@ -57,7 +57,7 @@ struct Cache {
 
 /// `tokens.json` in the directory of [`crate::config::dir`].
 fn cache_path() -> Result<PathBuf> {
-    Ok(crate::config::dir()?.join("tokens.json"))
+    Ok(crate::config::config_dir()?.join("tokens.json"))
 }
 
 fn load_cache() -> Cache {
