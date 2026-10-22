@@ -27,10 +27,10 @@ language; students can switch it on the main page.
    `server = "https://quiz.iid.ciirc.cvut.cz"` in `quiz.toml`.
 3. Write a question in Markdown as described in
    [The question format](#the-question-format) and check it with
-   `quiz parse otazka.md`.
+   `quiz parse question.md`.
 4. Optionally run `quiz login` before the lecture, so that the browser login
    is out of the way.
-5. Ask the question with `quiz ask otazka.md` — see
+5. Ask the question with `quiz ask question.md` — see
    [How one question works](#how-one-question-works) for what happens next.
 6. Find the answers in the [CSV file](#the-csv-file-with-question-answers)
    next to the question, and the points of the whole lecture in the
@@ -47,7 +47,7 @@ To try everything on one machine without a real identity provider, see
 ## How one question works
 
 ```console
-$ quiz ask cviceni/01regex/otazka1.md
+$ quiz ask exercises/01regex/question1.md
 Consider the following BASH code: ...
 
   A) In Bash, every stage of a pipeline runs in its own subshell. ...
@@ -88,7 +88,7 @@ and left.
 5. Pressing Enter, or the *Close the question* button in the presentation view,
    closes the question. Every open browser switches over to a bar graph with
    the results, and the CLI writes
-   `otazka1_2026-09-21_14-05-03.csv` next to `otazka1.md`.
+   `question1_2026-09-21_14-05-03.csv` next to `question1.md`.
 6. The **next question of the same teacher goes to the same URL**, so the
    students scan or type nothing again: the page they still have open shows
    the new question by itself.
@@ -99,12 +99,12 @@ Teacher CLI (the `quiz` command) works are described below. Let's
 start with some examples:
 
 ```sh
-quiz ask otazka.md            # publish, present, collect, save (the main one)
-quiz ask otazka.md -o answers.csv --close-after 120
-quiz ask otazka.md --hide-question   # question only on the projector
-quiz ask otazka.md --labels-only     # phones show A, B, C only
-quiz ask otazka.md --shuffle         # answers in a random order
-quiz parse otazka.md          # check the Markdown, no server needed
+quiz ask question.md          # publish, present, collect, save (the main one)
+quiz ask question.md -o answers.csv --close-after 120
+quiz ask question.md --hide-question   # question only on the projector
+quiz ask question.md --labels-only     # phones show A, B, C only
+quiz ask question.md --shuffle         # answers in a random order
+quiz parse question.md        # check the Markdown, no server needed
 quiz login                    # log in ahead of the lecture
 quiz whoami                    # who am I, and may I ask questions?
 quiz logout [--all]          # end the lecture: close the room, forget the token
@@ -181,7 +181,7 @@ to a tenth of a second. A scored question adds a `points` column after
 `name`, holding the points of the chosen answer.
 
 The file name is the base name of the question file plus the date and time:
-`otazka.md` → `otazka_2026-09-21_14-05-03.csv`, written into the same
+`question.md` → `question_2026-09-21_14-05-03.csv`, written into the same
 directory unless `--output` says otherwise.
 
 ## The CSV file with the points of a room
@@ -193,14 +193,14 @@ question in the order they were asked, headed by its file name, and the
 total in the last column:
 
 ```csv
-login,name,otazka1.md,otazka2.md,total
+login,name,question1.md,question2.md,total
 novakja1,Jan Novák,1.0,-0.5,0.5
 svobodpe,Petra Svobodová,1.0,,1.0
 ```
 
 An empty cell means the student did not answer that question; it counts as
 nothing towards the total. A file asked twice gets a second column headed
-`otazka1.md (2)`. Questions without points are left out.
+`question1.md (2)`. Questions without points are left out.
 
 The file is named after the date and time the room was opened and the room
 code, `room_2026-09-21_14-00-07_428173.csv`, and written next to the
@@ -354,7 +354,7 @@ Details worth knowing:
   JavaScript: bash, C, C++, Rust, Python, Make, asm, diff, JSON, YAML, SQL and
   about a hundred more work out of the box. An unknown or missing language
   just means unhighlighted code.
-* `quiz parse otazka.md` shows how a file is parsed without contacting the
+* `quiz parse question.md` shows how a file is parsed without contacting the
   server.
 * HTML written in the Markdown is **escaped**, not rendered: the question is
   shown to a whole lecture hall, so `<script>` in it must not run in their
@@ -674,7 +674,7 @@ question, exported results, refused tokens and one line per HTTP request.
 
 ```
 2026-09-21T12:04:58.402Z  INFO http{method=POST uri=/api/v1/questions}: quiz_server::api:
-    question created question=4f3c…c1 code=428173 teacher=sojkam1 source=otazka.md answers=3
+    question created question=4f3c…c1 code=428173 teacher=sojkam1 source=question.md answers=3
 2026-09-21T12:05:41.881Z  INFO http{method=POST uri=/r/7b21…9f/answer}: quiz_server::web:
     answer recorded question=4f3c…c1 login=novakja1 answer=B changed=false total=12
 ```
