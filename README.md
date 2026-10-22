@@ -45,7 +45,7 @@ To try everything on one machine without a real identity provider, see
 
 ## How one question works
 
-```
+```console
 $ quiz ask cviceni/01regex/otazka1.md
 Consider the following BASH code: ...
 
