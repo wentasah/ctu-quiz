@@ -10,6 +10,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use chrono::Utc;
 use quiz_common::api::{
     CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, RoomStatus, WhoAmI,
 };
@@ -101,13 +102,21 @@ pub async fn create_question(
             content,
             request.view,
             &teacher.login,
+            request.close_after,
         )
         .await?;
 
-    let store = state.store.read().await;
-    let question = store
-        .get(&id)
-        .ok_or_else(|| ApiFailure::internal("the question vanished right after it was created"))?;
+    let mut store = state.store.write().await;
+    let vanished = || ApiFailure::internal("the question vanished right after it was created");
+    if request.start_countdown
+        && let Some(at) = store
+            .get_mut(&id)
+            .ok_or_else(vanished)?
+            .start_countdown(Utc::now())
+    {
+        state.close_at(id.clone(), at);
+    }
+    let question = store.get(&id).ok_or_else(vanished)?;
 
     tracing::info!(
         question = %question.id,
@@ -118,6 +127,7 @@ pub async fn create_question(
         show_question = question.view.show_question,
         show_answers = question.view.show_answers,
         shuffled = request.shuffle,
+        close_after = request.close_after,
         answer_url = %question.answer_url,
         display_url = %question.display_url,
         "question created"

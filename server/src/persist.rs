@@ -61,6 +61,11 @@ struct SavedQuestion {
     presented: bool,
     teacher: String,
     created_at: DateTime<Utc>,
+    /// These two are missing in the files of older servers.
+    #[serde(default)]
+    close_after: Option<u64>,
+    #[serde(default)]
+    closes_at: Option<DateTime<Utc>>,
     closed_at: Option<DateTime<Utc>>,
     revealed: bool,
     responses: BTreeMap<String, Response>,
@@ -92,6 +97,8 @@ impl Saved {
                 presented: question.presented,
                 teacher: question.teacher.clone(),
                 created_at: question.created_at,
+                close_after: question.close_after,
+                closes_at: question.closes_at,
                 closed_at: question.closed_at,
                 revealed: question.revealed,
                 responses: question.responses.clone(),
@@ -146,6 +153,8 @@ impl Saved {
                 presented: question.presented,
                 teacher: question.teacher,
                 created_at: question.created_at,
+                close_after: question.close_after,
+                closes_at: question.closes_at,
                 closed_at: question.closed_at,
                 revealed: question.revealed,
                 responses: question.responses,
@@ -202,7 +211,17 @@ impl AppState {
             dropped,
             "state of the previous run restored"
         );
+        // The countdowns that were running go on; those that ran out while
+        // the server was down close the question right away.
+        let countdowns: Vec<_> = restored
+            .questions()
+            .filter(|question| question.is_open())
+            .filter_map(|question| Some((question.id.clone(), question.closes_at?)))
+            .collect();
         *self.store.write().await = restored;
+        for (id, at) in countdowns {
+            self.close_at(id, at);
+        }
     }
 
     /// Writes the current state to `--state-file`, if one is given.
@@ -295,6 +314,8 @@ mod tests {
             presented: false,
             teacher: "teacher".to_owned(),
             created_at: at,
+            close_after: None,
+            closes_at: None,
             closed_at: None,
             revealed: false,
             responses: BTreeMap::from([(

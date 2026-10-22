@@ -280,6 +280,14 @@ body.display .counter { font-size: 1em; color: var(--muted); }
 body.display .counter strong { font-size: clamp(2em, calc(var(--fit) * 4vw), 3.4em); color: var(--fg); }
 body.display .closed { font-weight: 700; color: var(--error); }
 body.display .close-form { margin-top: 1rem; }
+/* `quiz ask --close-after`: the fill shrinks to the left as the time runs
+   out; app.js keeps `--left` going from 1 down to 0. */
+body.display button.countdown {
+  color: var(--fg);
+  background: linear-gradient(to right,
+    var(--bar) calc(var(--left, 1) * 100%),
+    var(--card) calc(var(--left, 1) * 100%));
+}
 
 @media (max-width: 60rem) {
   body.display #live { grid-template-columns: 1fr; }

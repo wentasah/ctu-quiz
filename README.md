@@ -145,6 +145,14 @@ saved, so a mistyped key does not lose the collected data. So does the
 at the projector rather than at the keyboard: `quiz ask` notices the
 question was closed and saves its answers.
 
+`--close-after` makes the server close the question by itself. The time
+counts from when the presentation view first shows the question, so the
+time the teacher takes to log in there is not taken from the students;
+with `--no-browser`, when the CLI cannot tell whether the view will be
+opened at all, it counts from when the question is asked. The button
+empties from right to left like a progress bar, so the class sees how much
+time is left.
+
 A scored question then waits for one more Enter before the right answers are
 marked in the results, so that the class can talk about the bar graph first.
 Ctrl-C, or a standard input that is not a terminal, ends `quiz ask` without

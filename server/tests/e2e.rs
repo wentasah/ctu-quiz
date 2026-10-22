@@ -49,6 +49,8 @@ async fn a_question_is_asked_answered_and_closed() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -240,6 +242,8 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         });
         let request = match token {
             Some(token) => request.bearer_auth(token),
@@ -301,6 +305,8 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -333,6 +339,8 @@ async fn a_teacher_role_in_the_access_token_allows_asking_questions() {
                 markdown: QUESTION.to_owned(),
                 view: StudentView::default(),
                 shuffle: false,
+                close_after: None,
+                start_countdown: false,
             });
         async move { request.send().await.unwrap().status() }
     };
@@ -379,6 +387,8 @@ async fn html_in_a_question_reaches_the_browser_escaped() {
                 .to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -421,6 +431,8 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
                 markdown,
                 view: StudentView::default(),
                 shuffle: false,
+                close_after: None,
+                start_countdown: false,
             });
         async move {
             let response = request.send().await.unwrap();
@@ -541,6 +553,8 @@ async fn one_presentation_window_serves_the_whole_lecture() {
                 markdown: markdown.to_owned(),
                 view: StudentView::default(),
                 shuffle: false,
+                close_after: None,
+                start_countdown: false,
             });
         async move {
             let response = request.send().await.unwrap();
@@ -614,6 +628,8 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -649,6 +665,7 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
         .await
         .unwrap();
     assert!(page.contains("Uzavřít otázku"), "{page}");
+    assert!(!page.contains("countdown"), "nothing closes it by itself");
 
     // A question that is not on the screen stays open, and so does the one
     // that is for anybody but the teacher who asked it.
@@ -666,6 +683,85 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
     assert!(page.contains("Otázka uzavřena"), "{page}");
     assert!(!page.contains("Uzavřít otázku"), "{page}");
     assert!(!is_open().await);
+}
+
+#[tokio::test]
+async fn close_after_counts_down_from_when_the_projector_shows_the_question() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let token = idp.access_token(&teacher, CLIENT_ID);
+    let api = reqwest::Client::new();
+    let ask = |close_after: u64, start_countdown: bool| {
+        let request = api
+            .post(format!("{base}/api/v1/questions"))
+            .bearer_auth(&token)
+            .json(&CreateQuestion {
+                source_name: "otazky.md".to_owned(),
+                markdown: QUESTION.to_owned(),
+                view: StudentView::default(),
+                shuffle: false,
+                close_after: Some(close_after),
+                start_countdown,
+            });
+        async move {
+            request
+                .send()
+                .await
+                .unwrap()
+                .json::<QuestionInfo>()
+                .await
+                .unwrap()
+        }
+    };
+    let is_open = async |question: &QuestionInfo| {
+        api.get(format!("{base}/api/v1/questions/{}", question.id))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json::<QuestionInfo>()
+            .await
+            .unwrap()
+            .open
+    };
+    let closes_within = async |question: &QuestionInfo, limit: Duration| {
+        let start = std::time::Instant::now();
+        while is_open(question).await {
+            assert!(start.elapsed() < limit, "the question is still open");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    };
+
+    // The time the teacher takes to log in at the projector does not count.
+    let question = ask(1, false).await;
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert!(is_open(&question).await, "it closed before it was shown");
+
+    let page = browser_as(&base, &idp, &teacher)
+        .await
+        .get(&question.display_url)
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(page.contains("class=\"countdown\""), "{page}");
+    assert!(page.contains("data-total-ms=\"1000\""), "{page}");
+    let remaining: i64 = page
+        .split_once("data-remaining-ms=\"")
+        .and_then(|(_, rest)| rest.split_once('"'))
+        .map(|(ms, _)| ms.parse().unwrap())
+        .expect("the time left is on the button");
+    assert!((500..=1000).contains(&remaining), "{remaining}");
+
+    // Then the server closes it by itself.
+    closes_within(&question, Duration::from_secs(5)).await;
+
+    // `quiz ask --no-browser` starts the countdown right away.
+    let question = ask(1, true).await;
+    closes_within(&question, Duration::from_secs(5)).await;
 }
 
 #[tokio::test]
@@ -687,6 +783,8 @@ async fn a_hidden_question_stays_on_the_projector() {
                 markdown: markdown.to_owned(),
                 view,
                 shuffle: false,
+                close_after: None,
+                start_countdown: false,
             });
         async move {
             request
@@ -837,6 +935,8 @@ async fn shuffled_answers_are_the_same_for_everybody() {
                 markdown: markdown.clone(),
                 view: StudentView::default(),
                 shuffle,
+                close_after: None,
+                start_countdown: false,
             });
         async move {
             request
@@ -937,6 +1037,8 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
                 .to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -1054,6 +1156,8 @@ async fn pages_link_the_stylesheet_and_script_of_this_version() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -1111,6 +1215,8 @@ async fn logging_out_removes_the_room() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -1204,6 +1310,8 @@ async fn logging_out_removes_the_room() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -1239,6 +1347,8 @@ async fn the_teacher_sees_the_room_and_the_questions_kept_in_it() {
                 markdown: QUESTION.to_owned(),
                 view: StudentView::default(),
                 shuffle: false,
+                close_after: None,
+                start_countdown: false,
             })
             .send()
             .await
@@ -1313,6 +1423,8 @@ async fn an_unusable_question_is_refused_with_an_explanation() {
             markdown: "A question without any answers.\n".to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -1382,6 +1494,8 @@ async fn the_teacher_sees_how_many_students_are_in_the_room() {
             markdown: "Here?\n\n---\n\n- yes\n- no\n".to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -1460,6 +1574,8 @@ async fn the_teacher_follows_a_question_without_asking_again() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -1778,6 +1894,8 @@ async fn metrics_count_questions_answers_and_who_is_connected() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await
@@ -1899,6 +2017,8 @@ async fn rooms_and_answers_survive_a_restart_with_a_state_file() {
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
+            close_after: None,
+            start_countdown: false,
         })
         .send()
         .await

@@ -65,6 +65,34 @@
   });
 })();
 
+// Counts down the time until a question asked with `--close-after` closes by
+// itself, on its button in the presentation view. The server says how much
+// time was left when it rendered the page, so the browser's clock does not
+// matter; once the server closes the question, the event stream reloads the
+// page.
+(function () {
+  "use strict";
+
+  var button = document.querySelector("button.countdown");
+  if (!button) {
+    return;
+  }
+
+  var remaining = Number(button.dataset.remainingMs);
+  var total = Number(button.dataset.totalMs);
+  var start = performance.now();
+
+  function tick(now) {
+    var left = Math.max(0, remaining - (now - start)) / total;
+    button.style.setProperty("--left", left);
+    if (left > 0) {
+      window.requestAnimationFrame(tick);
+    }
+  }
+
+  window.requestAnimationFrame(tick);
+})();
+
 // Shrinks the question and the QR code box of the presentation view when they
 // would not fit into the window, so that nothing has to be scrolled on the
 // projector. The stylesheet sizes both boxes from their `--fit`; this finds

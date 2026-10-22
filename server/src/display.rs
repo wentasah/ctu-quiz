@@ -9,6 +9,7 @@ use axum::{
     extract::{Form, State},
     response::{Html, IntoResponse, Redirect, Response},
 };
+use chrono::Utc;
 use qrcode::{EcLevel, QrCode, render::svg};
 use serde::Deserialize;
 
@@ -17,7 +18,7 @@ use crate::{
     error::PageError,
     live,
     state::{AppState, Store},
-    views::{self, DisplayPage, bars, page_title},
+    views::{self, Countdown, DisplayPage, bars, page_title},
 };
 use askama::Template;
 
@@ -30,9 +31,22 @@ pub async fn display(
     State(state): State<AppState>,
     User(user): User,
 ) -> Result<Response, PageError> {
-    let store = state.store.read().await;
+    let mut store = state.store.write().await;
     let room = room_token(&store, &user.login)?;
-    let question = store.current_question(&room).ok_or_else(not_found)?;
+    let id = store
+        .current_question(&room)
+        .map(|question| question.id.clone())
+        .ok_or_else(not_found)?;
+
+    // The countdown of `--close-after` starts once the question is on the
+    // screen, not when it was asked: the teacher may have had to log in here
+    // first.
+    let question = store.get_mut(&id).ok_or_else(not_found)?;
+    if let Some(at) = question.start_countdown(Utc::now()) {
+        tracing::info!(question = %id, closes_at = %at, "countdown started");
+        state.close_at(id.clone(), at);
+    }
+    let question = store.get(&id).ok_or_else(not_found)?;
 
     let page = DisplayPage {
         prefix: views::prefix(),
@@ -48,6 +62,7 @@ pub async fn display(
         host: host_hint(&state),
         qr_svg: qr_svg(&question.answer_url)?,
         bars: bars(question, None),
+        countdown: Countdown::of(question, Utc::now()),
     };
 
     Ok(Html(page.render()?).into_response())

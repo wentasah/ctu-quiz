@@ -250,6 +250,13 @@ pub struct Question {
     pub presented: bool,
     pub teacher: String,
     pub created_at: DateTime<Utc>,
+    /// Seconds the question stays open once the presentation view shows it,
+    /// if it was asked with `--close-after`.
+    pub close_after: Option<u64>,
+    /// When the question closes by itself; set when the presentation view
+    /// first shows it, so that the time the teacher takes to log in there is
+    /// not taken from the students.
+    pub closes_at: Option<DateTime<Utc>>,
     pub closed_at: Option<DateTime<Utc>>,
     /// Whether the teacher has revealed which answers are right; only ever
     /// after the question is closed.
@@ -336,6 +343,18 @@ impl Question {
         self.closed_at = Some(Utc::now());
         self.notify();
         true
+    }
+
+    /// Starts the `--close-after` countdown at `now`, unless it is running
+    /// already or there is none. Returns when the question is to close.
+    pub fn start_countdown(&mut self, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+        if !self.is_open() || self.closes_at.is_some() {
+            return None;
+        }
+        // Out of range is as good as never.
+        let delay = TimeDelta::try_seconds(i64::try_from(self.close_after?).ok()?)?;
+        self.closes_at = Some(now.checked_add_signed(delay)?);
+        self.closes_at
     }
 
     pub fn results(&self) -> Results {
@@ -680,6 +699,7 @@ impl AppState {
         content: quiz_common::Question,
         view: StudentView,
         teacher: &str,
+        close_after: Option<u64>,
     ) -> Result<String> {
         let now = Utc::now();
         let id = random_token();
@@ -736,6 +756,8 @@ impl AppState {
             view,
             teacher: teacher.to_owned(),
             created_at: now,
+            close_after,
+            closes_at: None,
             closed_at: None,
             revealed: false,
             responses: BTreeMap::new(),
@@ -751,6 +773,32 @@ impl AppState {
         self.metrics.question_asked();
 
         Ok(id)
+    }
+
+    /// Closes question `id` at `at`, when its `--close-after` countdown
+    /// runs out, unless it is closed or dropped before.
+    pub fn close_at(&self, id: String, at: DateTime<Utc>) {
+        let state = self.clone();
+        tokio::spawn(async move {
+            // A time in the past fails to convert: nothing to wait for.
+            if let Ok(delay) = (at - Utc::now()).to_std() {
+                tokio::time::sleep(delay).await;
+            }
+            let mut store = state.store.write().await;
+            let Some(question) = store.get_mut(&id) else {
+                return;
+            };
+            if question.closes_at == Some(at) && question.close() {
+                tracing::info!(
+                    question = %id,
+                    teacher = %question.teacher,
+                    answers = question.responses.len(),
+                    counts = ?question.counts(),
+                    "question closed when its time ran out"
+                );
+                store.notify_room_of(&id);
+            }
+        });
     }
 
     /// Remembers a login that is under way. Returns `false` when too many
@@ -919,6 +967,8 @@ mod tests {
             presented: false,
             teacher: "teacher".to_owned(),
             created_at: now,
+            close_after: None,
+            closes_at: None,
             closed_at: None,
             revealed: false,
             responses: BTreeMap::new(),

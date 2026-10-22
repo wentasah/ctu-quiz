@@ -4,6 +4,8 @@ use std::sync::OnceLock;
 
 use askama::Template;
 
+use chrono::{DateTime, Utc};
+
 use crate::{auth::Identity, state::Question};
 
 /// Path prefix of the server inside its public URL, e.g. `/quiz`, or an empty
@@ -213,6 +215,35 @@ pub struct DisplayPage {
     pub host: String,
     pub qr_svg: String,
     pub bars: Vec<Bar>,
+    /// Time left until the question closes by itself, with `--close-after`.
+    pub countdown: Option<Countdown>,
+}
+
+/// How long until a question closes by itself, relative to when the page was
+/// rendered, so that a browser with its clock off still counts down right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Countdown {
+    pub remaining_ms: i64,
+    pub total_ms: i64,
+}
+
+impl Countdown {
+    /// The countdown of `question` at `now`, if it has started.
+    pub fn of(question: &Question, now: DateTime<Utc>) -> Option<Self> {
+        let closes_at = question.closes_at?;
+        let total_ms = i64::try_from(question.close_after?)
+            .ok()?
+            .saturating_mul(1000);
+        Some(Self {
+            remaining_ms: (closes_at - now).num_milliseconds().clamp(0, total_ms),
+            total_ms: total_ms.max(1),
+        })
+    }
+
+    /// Part of the time still left, from 1 down to 0.
+    pub fn left(&self) -> f64 {
+        self.remaining_ms as f64 / self.total_ms as f64
+    }
 }
 
 #[cfg(test)]

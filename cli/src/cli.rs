@@ -47,7 +47,8 @@ pub enum Command {
         /// followed by the date and time.
         #[arg(long, short)]
         output: Option<PathBuf>,
-        /// Close the question automatically after this many seconds.
+        /// Close the question automatically after this many seconds, counted
+        /// from when the presentation view first shows it.
         #[arg(long, value_name = "SECONDS")]
         close_after: Option<u64>,
         /// Keep the question text off the students' own screens.

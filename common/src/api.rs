@@ -67,6 +67,15 @@ pub struct CreateQuestion {
     /// on the screen either way.
     #[serde(default)]
     pub shuffle: bool,
+    /// Seconds after which the server closes the question by itself, counted
+    /// from when the presentation view first shows it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub close_after: Option<u64>,
+    /// Whether the `close_after` countdown starts right away instead. The
+    /// CLI asks for that with `--no-browser`, when it cannot tell whether
+    /// anybody is going to open the presentation view.
+    #[serde(default)]
+    pub start_countdown: bool,
 }
 
 /// One possible answer as shown to students.

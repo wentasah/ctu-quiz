@@ -28,7 +28,13 @@
     <p class="counter">Odpovědělo<br><strong data-count>{{ answer_count }}</strong></p>
     <form method="post" action="{{ prefix }}/d/close" class="close-form">
       <input type="hidden" name="question" value="{{ question }}">
+      {% if let Some(countdown) = countdown %}
+      <button type="submit" class="countdown" data-remaining-ms="{{ countdown.remaining_ms }}"
+              data-total-ms="{{ countdown.total_ms }}"
+              style="--left: {{ countdown.left() }}">Uzavřít otázku</button>
+      {% else %}
       <button type="submit">Uzavřít otázku</button>
+      {% endif %}
     </form>
     {% else %}
     <p class="closed">Otázka uzavřena</p>

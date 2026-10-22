@@ -123,6 +123,8 @@ async fn ask(
             markdown,
             view,
             shuffle,
+            close_after,
+            start_countdown: cli.no_browser,
         })
         .await?;
 
@@ -146,7 +148,16 @@ async fn ask(
     // One reader for the whole run, so that an Enter typed ahead is not
     // lost between the two prompts.
     let mut stdin = Some(BufReader::new(tokio::io::stdin()).lines());
-    wait_for_close(&api, &question.id, close_after, &mut stdin).await?;
+    if let Some(seconds) = close_after {
+        if cli.no_browser {
+            println!("The question closes by itself in {seconds} s.");
+        } else {
+            println!(
+                "The question closes by itself {seconds} s after the presentation view shows it."
+            );
+        }
+    }
+    wait_for_close(&api, &question.id, &mut stdin).await?;
 
     let closed = api.close(&question.id).await?;
     let results = api.results(&question.id).await?;
@@ -505,7 +516,6 @@ const STREAM_SILENCE: Duration = Duration::from_secs(45);
 async fn wait_for_close(
     api: &Api,
     id: &str,
-    close_after: Option<u64>,
     stdin: &mut Option<Lines<BufReader<Stdin>>>,
 ) -> Result<()> {
     println!(
@@ -517,13 +527,6 @@ async fn wait_for_close(
     // change instead of escape sequences.
     let terminal = std::io::stdout().is_terminal();
     let mut last_counts = None;
-    let deadline = async {
-        match close_after {
-            Some(seconds) => tokio::time::sleep(Duration::from_secs(seconds)).await,
-            None => std::future::pending().await,
-        }
-    };
-    tokio::pin!(deadline);
     let mut events = None;
 
     loop {
@@ -545,10 +548,6 @@ async fn wait_for_close(
                     println!("\nThe question has been closed.");
                     return Ok(());
                 }
-            }
-            () = &mut deadline => {
-                println!();
-                return Ok(());
             }
             line = next_line(stdin) => {
                 match line {
