@@ -91,9 +91,9 @@ pub enum Command {
     Whoami,
     /// Show the room students are in and the questions kept in it.
     Status,
-    /// Close a question and save its answers, or close the whole room.
+    /// Close the whole room or a question and save its answers.
     Close {
-        /// Question id, as printed by `quiz ask`.
+        /// Question id, as printed by `quiz ask` or `quiz status`.
         ///
         /// Without it the room is closed instead: the page students have
         /// open stops working, the questions asked in it are removed from
