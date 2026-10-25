@@ -11,7 +11,7 @@ authors.workspace = true
 quiz-common = { workspace = true, features = ["highlight"] }
 
 anyhow.workspace = true
-askama = "0.16"
+askama = { version = "0.16", default-features = false, features = ["derive", "std"] }
 base64 = "0.22"
 axum.workspace = true
 axum-extra = { version = "0.12", features = ["cookie-signed"] }
