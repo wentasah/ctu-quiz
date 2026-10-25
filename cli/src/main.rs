@@ -81,7 +81,7 @@ async fn run(cli: &Cli) -> Result<()> {
         Command::Whoami => whoami(cli).await,
         Command::Status => status(cli).await,
         Command::Close { id, output } => match id {
-            Some(id) => close(cli, id, output.clone()).await,
+            Some(id) => close_question(cli, id, output.clone()).await,
             None => close_room(cli, output.is_some()).await,
         },
         Command::Reveal { id } => reveal(cli, id).await,
@@ -333,7 +333,7 @@ async fn status(cli: &Cli) -> Result<()> {
 }
 
 /// Closes a question whose `quiz ask` was interrupted, and saves its answers.
-async fn close(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<()> {
+async fn close_question(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<()> {
     let api = connect(cli, false).await?;
     let closed = api.close(id).await?;
     let results = api.results(id).await?;
