@@ -673,7 +673,7 @@ mod tests {
 
         let dir = std::env::temp_dir().join(format!("quiz-shebang-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("otazky.md");
+        let file = dir.join("questions.md");
         let source = "#!/usr/bin/env -S quiz ask\n\nQ?\n\n---\n\n- a\n- b\n";
         std::fs::write(&file, source).unwrap();
 

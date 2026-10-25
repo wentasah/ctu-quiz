@@ -363,8 +363,8 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 21, 14, 5, 3)
             .unwrap();
         assert_eq!(
-            csv_path(Path::new("cviceni/01regex/otazky.md"), None, when),
-            Path::new("cviceni/01regex/otazky_2026-09-21_14-05-03.csv")
+            csv_path(Path::new("labs/01regex/questions.md"), None, when),
+            Path::new("labs/01regex/questions_2026-09-21_14-05-03.csv")
         );
         assert_eq!(
             csv_path(Path::new("question.md"), None, when),
@@ -372,11 +372,11 @@ mod tests {
         );
         assert_eq!(
             csv_path(
-                Path::new("cviceni/01regex/otazky.md"),
+                Path::new("labs/01regex/questions.md"),
                 Some(Path::new("results")),
                 when
             ),
-            Path::new("results/otazky_2026-09-21_14-05-03.csv")
+            Path::new("results/questions_2026-09-21_14-05-03.csv")
         );
     }
 
@@ -387,20 +387,20 @@ mod tests {
             .unwrap();
         assert_eq!(
             room_csv_path(
-                Path::new("cviceni/01regex/otazky.md"),
+                Path::new("labs/01regex/questions.md"),
                 None,
                 "428173",
                 opened
             ),
-            Path::new("cviceni/01regex/room_2026-09-21_14-00-07_428173.csv")
+            Path::new("labs/01regex/room_2026-09-21_14-00-07_428173.csv")
         );
         assert_eq!(
-            room_csv_path(Path::new("otazky.md"), None, "428173", opened),
+            room_csv_path(Path::new("questions.md"), None, "428173", opened),
             Path::new("room_2026-09-21_14-00-07_428173.csv")
         );
         assert_eq!(
             room_csv_path(
-                Path::new("otazky.md"),
+                Path::new("questions.md"),
                 Some(Path::new("results")),
                 "428173",
                 opened

@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn source_name_keeps_only_the_file_name() {
-        assert_eq!(source_name("cviceni/01regex/otazky.md"), "otazky.md");
+        assert_eq!(source_name("labs/01regex/questions.md"), "questions.md");
         assert_eq!(source_name("../../etc/passwd"), "passwd");
         assert_eq!(source_name("  "), "question.md");
         assert_eq!(source_name("question.md"), "question.md");

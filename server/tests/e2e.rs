@@ -427,7 +427,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
             .post(format!("{base}/api/v1/questions"))
             .bearer_auth(token.clone())
             .json(&CreateQuestion {
-                source_name: "otazky.md".to_owned(),
+                source_name: "questions.md".to_owned(),
                 markdown,
                 view: StudentView::default(),
                 shuffle: false,
@@ -552,7 +552,7 @@ async fn one_presentation_window_serves_the_whole_lecture() {
             .post(format!("{base}/api/v1/questions"))
             .bearer_auth(token.clone())
             .json(&CreateQuestion {
-                source_name: "otazky.md".to_owned(),
+                source_name: "questions.md".to_owned(),
                 markdown: markdown.to_owned(),
                 view: StudentView::default(),
                 shuffle: false,
@@ -627,7 +627,7 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
         .post(format!("{base}/api/v1/questions"))
         .bearer_auth(&token)
         .json(&CreateQuestion {
-            source_name: "otazky.md".to_owned(),
+            source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
@@ -717,7 +717,7 @@ async fn close_after_counts_down_from_when_the_projector_shows_the_question() {
             .post(format!("{base}/api/v1/questions"))
             .bearer_auth(&token)
             .json(&CreateQuestion {
-                source_name: "otazky.md".to_owned(),
+                source_name: "questions.md".to_owned(),
                 markdown: QUESTION.to_owned(),
                 view: StudentView::default(),
                 shuffle: false,
@@ -799,7 +799,7 @@ async fn a_hidden_question_stays_on_the_projector() {
             .post(format!("{base}/api/v1/questions"))
             .bearer_auth(token.clone())
             .json(&CreateQuestion {
-                source_name: "otazky.md".to_owned(),
+                source_name: "questions.md".to_owned(),
                 markdown: markdown.to_owned(),
                 view,
                 shuffle: false,
@@ -954,7 +954,7 @@ async fn shuffled_answers_are_the_same_for_everybody() {
             .post(format!("{base}/api/v1/questions"))
             .bearer_auth(token.clone())
             .json(&CreateQuestion {
-                source_name: "otazky.md".to_owned(),
+                source_name: "questions.md".to_owned(),
                 markdown: markdown.clone(),
                 view: StudentView::default(),
                 shuffle,
@@ -1055,7 +1055,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
         .post(format!("{base}/api/v1/questions"))
         .bearer_auth(token.clone())
         .json(&CreateQuestion {
-            source_name: "otazky.md".to_owned(),
+            source_name: "questions.md".to_owned(),
             markdown: "Which one?\n\n---\n\n- [ ] the wrong one {-1}\n- [x] the right one\n"
                 .to_owned(),
             view: StudentView::default(),
@@ -1175,7 +1175,7 @@ async fn pages_link_the_stylesheet_and_script_of_this_version() {
         .post(format!("{base}/api/v1/questions"))
         .bearer_auth(idp.access_token(&teacher, CLIENT_ID))
         .json(&CreateQuestion {
-            source_name: "otazky.md".to_owned(),
+            source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
@@ -1234,7 +1234,7 @@ async fn logging_out_removes_the_room() {
         .post(format!("{base}/api/v1/questions"))
         .bearer_auth(&token)
         .json(&CreateQuestion {
-            source_name: "otazky.md".to_owned(),
+            source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
@@ -1332,7 +1332,7 @@ async fn logging_out_removes_the_room() {
         .post(format!("{base}/api/v1/questions"))
         .bearer_auth(&token)
         .json(&CreateQuestion {
-            source_name: "otazky.md".to_owned(),
+            source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
@@ -1369,7 +1369,7 @@ async fn the_teacher_sees_the_room_and_the_questions_kept_in_it() {
         api.post(format!("{base}/api/v1/questions"))
             .bearer_auth(&token)
             .json(&CreateQuestion {
-                source_name: "otazky.md".to_owned(),
+                source_name: "questions.md".to_owned(),
                 markdown: QUESTION.to_owned(),
                 view: StudentView::default(),
                 shuffle: false,
@@ -1568,7 +1568,7 @@ async fn the_teacher_sees_how_many_students_are_in_the_room() {
         .post(format!("{base}/api/v1/questions"))
         .bearer_auth(&token)
         .json(&CreateQuestion {
-            source_name: "otazky.md".to_owned(),
+            source_name: "questions.md".to_owned(),
             markdown: "Here?\n\n---\n\n- yes\n- no\n".to_owned(),
             view: StudentView::default(),
             shuffle: false,
@@ -1968,7 +1968,7 @@ async fn metrics_count_questions_answers_and_who_is_connected() {
         .post(format!("{base}/api/v1/questions"))
         .bearer_auth(&token)
         .json(&CreateQuestion {
-            source_name: "otazky.md".to_owned(),
+            source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,
@@ -2091,7 +2091,7 @@ async fn rooms_and_answers_survive_a_restart_with_a_state_file() {
         .post(format!("{base}/api/v1/questions"))
         .bearer_auth(&token)
         .json(&CreateQuestion {
-            source_name: "otazky.md".to_owned(),
+            source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
             view: StudentView::default(),
             shuffle: false,

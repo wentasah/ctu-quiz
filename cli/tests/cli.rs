@@ -35,7 +35,7 @@ async fn ask_flow() {
     // A directory of our own: the question, the CSV and, thanks to
     // XDG_CONFIG_HOME, the token cache all live here instead of in $HOME.
     let dir = scratch("ask");
-    let question = dir.join("otazky.md");
+    let question = dir.join("questions.md");
     std::fs::write(&question, EXAMPLE_QUESTION).unwrap();
 
     idp.login_as(&User::new("sojkam1", "Michal Sojka"));
@@ -199,8 +199,12 @@ async fn ask_flow() {
         .unwrap()
         .to_string_lossy()
         .into_owned();
-    assert!(name.starts_with("otazky_"), "{name}");
-    assert_eq!(name.len(), "otazky_2026-09-21_22-05-03.csv".len(), "{name}");
+    assert!(name.starts_with("questions_"), "{name}");
+    assert_eq!(
+        name.len(),
+        "questions_2026-09-21_22-05-03.csv".len(),
+        "{name}"
+    );
 
     let csv = std::fs::read_to_string(&csv_files[0]).unwrap();
     let mut rows = csv.lines();
@@ -232,7 +236,7 @@ async fn ask_flow() {
     let csv = std::fs::read_to_string(&room_csv).unwrap();
     assert_eq!(
         csv,
-        "login,name,otazky.md,total\nnovakja1,Jan Novák,1.0,1.0\n"
+        "login,name,questions.md,total\nnovakja1,Jan Novák,1.0,1.0\n"
     );
 
     // The token was cached, so the next command needs no browser at all.
@@ -273,7 +277,7 @@ async fn ask_flow() {
     );
     let row = printed
         .lines()
-        .find(|line| line.contains("otazky.md"))
+        .find(|line| line.contains("questions.md"))
         .expect("the question is listed");
     assert!(row.starts_with("*  1 "), "{row}");
     assert!(row.contains(" revealed "), "{row}");
@@ -334,7 +338,7 @@ async fn reveal_in_presentation_view() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let dir = scratch("ask-reveal");
-    let question = dir.join("otazky.md");
+    let question = dir.join("questions.md");
     std::fs::write(&question, EXAMPLE_QUESTION).unwrap();
     let teacher = User::new("sojkam1", "Michal Sojka");
     idp.login_as(&teacher);
@@ -423,7 +427,7 @@ async fn reveal_in_presentation_view() {
         .collect();
     saved.sort();
     assert_eq!(saved.len(), 2, "{saved:?}");
-    assert!(saved[0].starts_with("otazky_"), "{saved:?}");
+    assert!(saved[0].starts_with("questions_"), "{saved:?}");
     assert!(saved[1].starts_with("room_"), "{saved:?}");
     let next_to_question = std::fs::read_dir(&dir)
         .unwrap()
@@ -446,7 +450,7 @@ async fn ask_without_stdin() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
     let dir = scratch("ask-no-stdin");
-    let question = dir.join("otazky.md");
+    let question = dir.join("questions.md");
     std::fs::write(&question, EXAMPLE_QUESTION).unwrap();
     idp.login_as(&User::new("sojkam1", "Michal Sojka"));
 
@@ -596,7 +600,7 @@ async fn an_executable_question_loses_its_shebang_line() {
     use std::os::unix::fs::PermissionsExt;
 
     let dir = scratch("shebang");
-    let question = dir.join("otazky.md");
+    let question = dir.join("questions.md");
     std::fs::write(&question, EXECUTABLE_QUESTION).unwrap();
     let shebang = EXECUTABLE_QUESTION.lines().next().unwrap();
     assert!(shebang.starts_with("#!"), "the fixture has no shebang line");
