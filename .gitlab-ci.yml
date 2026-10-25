@@ -54,6 +54,7 @@ check-release:
   artifacts:
     paths:
       - release-notes.md
+    expire_in: 2 weeks
 
 .build:
   stage: build
@@ -99,7 +100,7 @@ check-release:
       - quiz
       - quiz.exe
       - quiz-server
-    expire_in: 3 months
+    expire_in: 2 weeks
 
 build-linux-gnu:
   extends: .build
