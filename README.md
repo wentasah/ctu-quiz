@@ -182,7 +182,9 @@ to a tenth of a second. A scored question adds a `points` column after
 
 The file name is the base name of the question file plus the date and time:
 `question.md` → `question_2026-09-21_14-05-03.csv`, written into the same
-directory unless `--output` says otherwise.
+directory unless `--output` says otherwise. `quiz ask --output-dir DIR`
+writes it into `DIR` instead, together with the CSV with the points of the
+room described below; the directory is created when it does not exist.
 
 ## The CSV file with the points of a room
 

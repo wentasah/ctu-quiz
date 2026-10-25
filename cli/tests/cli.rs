@@ -339,6 +339,8 @@ async fn reveal_in_presentation_view() {
     let teacher = User::new("sojkam1", "Michal Sojka");
     idp.login_as(&teacher);
 
+    // Not there yet, so `quiz ask` has to create it.
+    let output_dir = dir.join("results/today");
     let mut child = quiz(&dir)
         .args([
             "--server",
@@ -347,6 +349,8 @@ async fn reveal_in_presentation_view() {
             "--login-port",
             "0",
             "ask",
+            "--output-dir",
+            "results/today",
         ])
         .arg(&question)
         .stdin(Stdio::piped())
@@ -409,6 +413,24 @@ async fn reveal_in_presentation_view() {
         "{printed}"
     );
     drop(stdin);
+
+    // Both the answers and the points of the room went to --output-dir and
+    // nothing to the directory of the question.
+    let mut saved: Vec<String> = std::fs::read_dir(&output_dir)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    saved.sort();
+    assert_eq!(saved.len(), 2, "{saved:?}");
+    assert!(saved[0].starts_with("otazky_"), "{saved:?}");
+    assert!(saved[1].starts_with("room_"), "{saved:?}");
+    let next_to_question = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "csv"))
+        .count();
+    assert_eq!(next_to_question, 0);
 }
 
 #[tokio::test]

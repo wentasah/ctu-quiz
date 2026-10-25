@@ -94,32 +94,40 @@ fn points_note(points: Option<f64>) -> String {
 }
 
 /// Where the answers are stored: the base name of the question file followed
-/// by the date and time, as the assignment requires.
-pub fn csv_path(source: &Path, when: DateTime<Local>) -> PathBuf {
+/// by the date and time, as the assignment requires. It goes to `dir`, or
+/// next to the question file without one.
+pub fn csv_path(source: &Path, dir: Option<&Path>, when: DateTime<Local>) -> PathBuf {
     let stem = source
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_else(|| "question".to_owned());
-    next_to(
+    place(
         source,
+        dir,
         format!("{stem}_{}.csv", when.format("%Y-%m-%d_%H-%M-%S")),
     )
 }
 
 /// Where the points of the whole room are kept: the date and time the room
 /// was opened followed by the room code, so that every question of one
-/// lecture lands in the same file. It sits next to the question file, like
-/// the answers of the question.
-pub fn room_csv_path(source: &Path, code: &str, opened: DateTime<Local>) -> PathBuf {
-    next_to(
+/// lecture lands in the same file. It goes where the answers of the question
+/// go: to `dir`, or next to the question file.
+pub fn room_csv_path(
+    source: &Path,
+    dir: Option<&Path>,
+    code: &str,
+    opened: DateTime<Local>,
+) -> PathBuf {
+    place(
         source,
+        dir,
         format!("room_{}_{code}.csv", opened.format("%Y-%m-%d_%H-%M-%S")),
     )
 }
 
-/// `name` in the directory of `source`.
-fn next_to(source: &Path, name: String) -> PathBuf {
-    match source.parent() {
+/// `name` in `dir`, or in the directory of `source` without one.
+fn place(source: &Path, dir: Option<&Path>, name: String) -> PathBuf {
+    match dir.or(source.parent()) {
         Some(dir) if !dir.as_os_str().is_empty() => dir.join(name),
         _ => PathBuf::from(name),
     }
@@ -355,12 +363,20 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 21, 14, 5, 3)
             .unwrap();
         assert_eq!(
-            csv_path(Path::new("cviceni/01regex/otazky.md"), when),
+            csv_path(Path::new("cviceni/01regex/otazky.md"), None, when),
             Path::new("cviceni/01regex/otazky_2026-09-21_14-05-03.csv")
         );
         assert_eq!(
-            csv_path(Path::new("question.md"), when),
+            csv_path(Path::new("question.md"), None, when),
             Path::new("question_2026-09-21_14-05-03.csv")
+        );
+        assert_eq!(
+            csv_path(
+                Path::new("cviceni/01regex/otazky.md"),
+                Some(Path::new("results")),
+                when
+            ),
+            Path::new("results/otazky_2026-09-21_14-05-03.csv")
         );
     }
 
@@ -370,12 +386,26 @@ mod tests {
             .with_ymd_and_hms(2026, 9, 21, 14, 0, 7)
             .unwrap();
         assert_eq!(
-            room_csv_path(Path::new("cviceni/01regex/otazky.md"), "428173", opened),
+            room_csv_path(
+                Path::new("cviceni/01regex/otazky.md"),
+                None,
+                "428173",
+                opened
+            ),
             Path::new("cviceni/01regex/room_2026-09-21_14-00-07_428173.csv")
         );
         assert_eq!(
-            room_csv_path(Path::new("otazky.md"), "428173", opened),
+            room_csv_path(Path::new("otazky.md"), None, "428173", opened),
             Path::new("room_2026-09-21_14-00-07_428173.csv")
+        );
+        assert_eq!(
+            room_csv_path(
+                Path::new("otazky.md"),
+                Some(Path::new("results")),
+                "428173",
+                opened
+            ),
+            Path::new("results/room_2026-09-21_14-00-07_428173.csv")
         );
     }
 

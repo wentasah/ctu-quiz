@@ -59,6 +59,7 @@ async fn run(cli: &Cli) -> Result<()> {
         Command::Ask {
             file,
             output,
+            output_dir,
             close_after,
             hide_question,
             hide_answers,
@@ -69,6 +70,7 @@ async fn run(cli: &Cli) -> Result<()> {
                 cli,
                 file,
                 output.clone(),
+                output_dir.as_deref(),
                 *close_after,
                 student_view(*hide_question, *hide_answers, *labels_only),
                 *shuffle,
@@ -103,6 +105,7 @@ async fn ask(
     cli: &Cli,
     file: &Path,
     output: Option<PathBuf>,
+    output_dir: Option<&Path>,
     close_after: Option<u64>,
     view: StudentView,
     shuffle: bool,
@@ -162,11 +165,14 @@ async fn ask(
     let closed = api.close(&question.id).await?;
     let results = api.results(&question.id).await?;
 
-    let path = output.unwrap_or_else(|| report::csv_path(file, Local::now()));
+    if let Some(dir) = output_dir {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    let path = output.unwrap_or_else(|| report::csv_path(file, output_dir, Local::now()));
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
-    save_room(&api, file).await;
+    save_room(&api, file, output_dir).await;
 
     if closed.answers.iter().any(|answer| answer.points.is_some()) {
         wait_for_reveal(&api, &question.id, &mut stdin).await?;
@@ -338,24 +344,24 @@ async fn close_question(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<
     let closed = api.close(id).await?;
     let results = api.results(id).await?;
 
-    let path =
-        output.unwrap_or_else(|| report::csv_path(Path::new(&closed.source_name), Local::now()));
+    let path = output
+        .unwrap_or_else(|| report::csv_path(Path::new(&closed.source_name), None, Local::now()));
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
-    save_room(&api, Path::new(&closed.source_name)).await;
+    save_room(&api, Path::new(&closed.source_name), None).await;
     Ok(())
 }
 
-/// Rewrites the CSV with the points of the whole room, next to `source`, so
-/// that it is up to date after every question.
+/// Rewrites the CSV with the points of the whole room, in `dir` or next to
+/// `source`, so that it is up to date after every question.
 ///
 /// It is built anew from the closed scored questions the server keeps in the
 /// room, so closing a question again or out of order does no harm. Failing
 /// to write it is only reported: the answers of the question are saved by
 /// then, and the teacher may still want to reveal the correct ones.
-async fn save_room(api: &Api, source: &Path) {
-    match write_room(api, source).await {
+async fn save_room(api: &Api, source: &Path, dir: Option<&Path>) {
+    match write_room(api, source, dir).await {
         Ok(Some(path)) => println!("Points of the room saved to {}", path.display()),
         Ok(None) => {}
         Err(error) => println!("Cannot save the points of the room ({error:#})."),
@@ -364,7 +370,7 @@ async fn save_room(api: &Api, source: &Path) {
 
 /// Writes the room CSV and says where, or `None` when there is nothing to
 /// write: no room, or no closed scored question in it.
-async fn write_room(api: &Api, source: &Path) -> Result<Option<PathBuf>> {
+async fn write_room(api: &Api, source: &Path, dir: Option<&Path>) -> Result<Option<PathBuf>> {
     let Some(room) = api.room_status().await?.room else {
         return Ok(None);
     };
@@ -381,7 +387,7 @@ async fn write_room(api: &Api, source: &Path) -> Result<Option<PathBuf>> {
     }
 
     let opened = room.created_at.with_timezone(&Local);
-    let path = report::room_csv_path(source, &room.code, opened);
+    let path = report::room_csv_path(source, dir, &room.code, opened);
     report::write_room_csv(&path, &questions)?;
     Ok(Some(path))
 }

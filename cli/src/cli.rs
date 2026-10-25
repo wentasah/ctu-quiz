@@ -47,6 +47,11 @@ pub enum Command {
         /// followed by the date and time.
         #[arg(long, short)]
         output: Option<PathBuf>,
+        /// Directory to write the answers and the points of the room to,
+        /// instead of the one with the question file. It is created if it
+        /// does not exist.
+        #[arg(long, short = 'd', value_name = "DIR", conflicts_with = "output")]
+        output_dir: Option<PathBuf>,
         /// Close the question automatically after this many seconds, counted
         /// from when the presentation view first shows it.
         #[arg(long, value_name = "SECONDS")]
