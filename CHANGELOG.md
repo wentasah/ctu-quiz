@@ -2,6 +2,46 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.1.1] – 2026-10-25
+
+### Added
+
+- CLI: Add answer time in seconds to question CSV ([5284b04](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/5284b042c8ead62d848e5c6c1034bd8fc632556f))
+- Add a button closing the question to the presentation view ([3a1b19b](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/3a1b19b1f621e5ed9698b4ece0341233b73b7e52))
+- Add a button revealing the right answers to the presentation view ([5b1bfe4](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/5b1bfe45b0456b8d034eb368cc8eb1aa19539ef5))
+- Add --output-dir to quiz ask ([e17a291](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/e17a29149db3fa9c89382cb8e9127db9bef10378))
+- Add --room-dir to quiz ask ([b7b9097](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/b7b90975e28d3526b1371046d12b14a8bb233b19))
+- Count down --close-after on the presentation view ([51f0a56](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/51f0a566dcadac935adc1eaa0eb65072bda8ca3b))
+- Translate web pages to English and allow switching the language ([cbde84c](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/cbde84cde4da7dedee9bdd32f4eb3e9d7ae72fb2))
+
+### Changed
+
+- Update some crates to address security advisories ([fb04c73](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/fb04c73f23ec8b403998f4c3def8a70bb57a4abc))
+- Increase rust-version to 1.88 ([e8a1a98](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/e8a1a981aea198961cffa7c4e1986f9630dcb182))
+- Ignore the rsa advisory RUSTSEC-2023-0071 in cargo audit ([c2d845a](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/c2d845af3a0c4346d23dd2af99aa2dc0a6033563))
+- Require login for the presentation view ([a698d16](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/a698d16a8201951450e1e8215bae95e7b1e59aa0))
+- Drop unmaintained basic-toml dependency ([b3cf5a3](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/b3cf5a3e1991fe0696515fc55405b15129b81486))
+
+### Fixed
+
+- Fix security vulnerabilities in dependencies ([a45785e](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/a45785e7887aa5cce10071eed6b630a755b82010))
+- Keep the login when a token refresh is interrupted ([df50388](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/df50388cf7919e27cab73bd611dbea7c3bde70ec))
+
+### Documentation
+
+- README: Simplify the first `quiz ask` command ([064081e](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/064081e92aa142f81b40f6820e3a320bc4a0125b))
+- README: Highlight the example command ([53673f2](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/53673f2595f4bf8aa8c050175d4825c4f82dc951))
+- README: Use English names for the example question files ([6670106](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/6670106fb28abb04f46235fa5d71f6bf248b6343))
+- Improve doc of the close subcommand ([4027cc0](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/4027cc0de0840d02b1804d54aa50f729f36e7024))
+
+### Build and deployment
+
+- Add release automation script ([e248818](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/e2488188c173dcdeadfb53fea823834ba23bafef))
+- CI: Add a scheduled job proposing fixes of vulnerable crates ([6c91245](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/6c912451075e82ae3657e5a3b13b03c93ef0f0b3))
+- CI: Give the security update token only to its job ([cfcaf21](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/cfcaf210272e1aa1c7a4a1718250868b576a71eb))
+- CI: Do not build in pipelines started with "Run pipeline" ([20c67ff](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/20c67ff66bdf512da9c9cb47af5c39f0f79f267f))
+- CI: Check releases on Alpine 3.22 ([6ec219f](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/6ec219f63b2f335ae3af88ca0d70d20d1d1e9e97))
+
 ## [0.1.0] – 2026-10-22
 
 ### Added
