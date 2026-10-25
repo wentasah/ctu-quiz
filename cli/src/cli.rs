@@ -52,6 +52,13 @@ pub enum Command {
         /// does not exist.
         #[arg(long, short = 'd', value_name = "DIR", conflicts_with = "output")]
         output_dir: Option<PathBuf>,
+        /// Write the answers and the points of the room into a directory named
+        /// like the room, `room_` plus the date and time it was opened and its
+        /// code, so that every question of one lecture ends up together. It
+        /// is created next to the question file or in `--output-dir`. Should
+        /// the server know of no room, the results are saved as without it.
+        #[arg(long, conflicts_with = "output")]
+        room_dir: bool,
         /// Close the question automatically after this many seconds, counted
         /// from when the presentation view first shows it.
         #[arg(long, value_name = "SECONDS")]

@@ -464,6 +464,7 @@ async fn ask_without_stdin() {
             "ask",
             "--close-after",
             "2",
+            "--room-dir",
         ])
         .arg(&question)
         .stdin(Stdio::null())
@@ -498,6 +499,31 @@ async fn ask_without_stdin() {
         printed.contains("The correct answers were not revealed"),
         "{printed}"
     );
+
+    // --room-dir puts both CSVs into one directory named like the room CSV.
+    let room_dirs: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .filter(|path| {
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("room_")
+        })
+        .collect();
+    assert_eq!(room_dirs.len(), 1, "{room_dirs:?}");
+    let room_dir = room_dirs[0].file_name().unwrap().to_string_lossy();
+    let mut saved: Vec<String> = std::fs::read_dir(&room_dirs[0])
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    saved.sort();
+    assert_eq!(saved.len(), 2, "{saved:?}");
+    assert!(saved[0].starts_with("questions_"), "{saved:?}");
+    assert_eq!(saved[1], format!("{room_dir}.csv"));
 }
 
 #[tokio::test]

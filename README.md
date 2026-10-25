@@ -185,6 +185,10 @@ The file name is the base name of the question file plus the date and time:
 directory unless `--output` says otherwise. `quiz ask --output-dir DIR`
 writes it into `DIR` instead, together with the CSV with the points of the
 room described below; the directory is created when it does not exist.
+With `--room-dir`, both files go to a directory named like the CSV of the
+room, e.g. `room_2026-09-21_14-00-07_428173/`, created next to the question
+file or in the `--output-dir`, so that all questions of one lecture end up
+together.
 
 ## The CSV file with the points of a room
 

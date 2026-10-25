@@ -118,11 +118,22 @@ pub fn room_csv_path(
     code: &str,
     opened: DateTime<Local>,
 ) -> PathBuf {
-    place(
-        source,
-        dir,
-        format!("room_{}_{code}.csv", opened.format("%Y-%m-%d_%H-%M-%S")),
-    )
+    place(source, dir, format!("{}.csv", room_name(code, opened)))
+}
+
+/// The directory `quiz ask --room-dir` saves into, named like the CSV with
+/// the points of the room, in `dir` or next to the question file.
+pub fn room_dir_path(
+    source: &Path,
+    dir: Option<&Path>,
+    code: &str,
+    opened: DateTime<Local>,
+) -> PathBuf {
+    place(source, dir, room_name(code, opened))
+}
+
+fn room_name(code: &str, opened: DateTime<Local>) -> String {
+    format!("room_{}_{code}", opened.format("%Y-%m-%d_%H-%M-%S"))
 }
 
 /// `name` in `dir`, or in the directory of `source` without one.
@@ -342,7 +353,10 @@ fn ellipsis(text: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{CsvRow, csv_path, ellipsis, points_note, remaining, room_csv_path, room_table};
+    use super::{
+        CsvRow, csv_path, ellipsis, points_note, remaining, room_csv_path, room_dir_path,
+        room_table,
+    };
     use chrono::TimeZone;
     use quiz_common::api::{QuestionInfo, ResultRow, Results, StudentView};
     use std::path::Path;
@@ -406,6 +420,19 @@ mod tests {
                 opened
             ),
             Path::new("results/room_2026-09-21_14-00-07_428173.csv")
+        );
+        assert_eq!(
+            room_dir_path(Path::new("labs/questions.md"), None, "428173", opened),
+            Path::new("labs/room_2026-09-21_14-00-07_428173")
+        );
+        assert_eq!(
+            room_dir_path(
+                Path::new("questions.md"),
+                Some(Path::new("results")),
+                "428173",
+                opened
+            ),
+            Path::new("results/room_2026-09-21_14-00-07_428173")
         );
     }
 

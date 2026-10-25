@@ -60,6 +60,7 @@ async fn run(cli: &Cli) -> Result<()> {
             file,
             output,
             output_dir,
+            room_dir,
             close_after,
             hide_question,
             hide_answers,
@@ -69,8 +70,11 @@ async fn run(cli: &Cli) -> Result<()> {
             ask(
                 cli,
                 file,
-                output.clone(),
-                output_dir.as_deref(),
+                Destination {
+                    output: output.clone(),
+                    dir: output_dir.as_deref(),
+                    room_dir: *room_dir,
+                },
                 *close_after,
                 student_view(*hide_question, *hide_answers, *labels_only),
                 *shuffle,
@@ -100,12 +104,52 @@ fn student_view(hide_question: bool, hide_answers: bool, labels_only: bool) -> S
     }
 }
 
+/// Where `quiz ask` saves the results, as `--output`, `--output-dir` and
+/// `--room-dir` say.
+struct Destination<'a> {
+    output: Option<PathBuf>,
+    dir: Option<&'a Path>,
+    room_dir: bool,
+}
+
+impl Destination<'_> {
+    /// The directory of the results of `file`, created if needed, or `None`
+    /// to keep them next to it.
+    ///
+    /// Without a room to name it after, `--room-dir` is left out rather than
+    /// losing the answers, which are collected by then.
+    async fn dir(&self, api: &Api, file: &Path) -> Result<Option<PathBuf>> {
+        let room = if self.room_dir {
+            match api.room_status().await {
+                Ok(status) => status.room,
+                Err(error) => {
+                    println!("Cannot find out the room ({error:#}).");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let dir = match room {
+            Some(room) => {
+                let opened = room.created_at.with_timezone(&Local);
+                Some(report::room_dir_path(file, self.dir, &room.code, opened))
+            }
+            None => self.dir.map(Path::to_owned),
+        };
+        if let Some(dir) = &dir {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("cannot create {}", dir.display()))?;
+        }
+        Ok(dir)
+    }
+}
+
 /// The main workflow: publish, present, collect, save.
 async fn ask(
     cli: &Cli,
     file: &Path,
-    output: Option<PathBuf>,
-    output_dir: Option<&Path>,
+    destination: Destination<'_>,
     close_after: Option<u64>,
     view: StudentView,
     shuffle: bool,
@@ -165,14 +209,14 @@ async fn ask(
     let closed = api.close(&question.id).await?;
     let results = api.results(&question.id).await?;
 
-    if let Some(dir) = output_dir {
-        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    }
-    let path = output.unwrap_or_else(|| report::csv_path(file, output_dir, Local::now()));
+    let dir = destination.dir(&api, file).await?;
+    let path = destination
+        .output
+        .unwrap_or_else(|| report::csv_path(file, dir.as_deref(), Local::now()));
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {}", path.display());
-    save_room(&api, file, output_dir).await;
+    save_room(&api, file, dir.as_deref()).await;
 
     if closed.answers.iter().any(|answer| answer.points.is_some()) {
         wait_for_reveal(&api, &question.id, &mut stdin).await?;
