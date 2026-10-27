@@ -7,4 +7,9 @@ ignore = [
     # the CLI only verify ID tokens with the provider's public keys. Only
     # the mock identity provider in testsupport signs, with a test key.
     "RUSTSEC-2023-0071",
+
+    # Multiple timing variability issues in operations intended to be
+    # constant-time => This software is not that critical to consider
+    # timing side-channel attacks important.
+    "RUSTSEC-2026-0387",
 ]
