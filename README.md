@@ -242,8 +242,8 @@ goes like this:
   only who answered with which label and for how many points, which is
   enough for the points of the room but no longer for its detailed results.
 * A question may take at most 10 MiB of the server's memory, counting its
-  Markdown and the HTML rendered from it; a bigger one is refused with an
-  explanation.
+  Markdown and the HTML rendered from it, images included; a bigger one is
+  refused with an explanation.
 * `quiz status` shows the room — its code, URLs, how many students have it
   open — and every question still kept in it, with its id, state, number of
   answers and how long until the server drops it. That is where to find the
@@ -366,6 +366,20 @@ Details worth knowing:
   JavaScript: bash, C, C++, Rust, Python, Make, asm, diff, JSON, YAML, SQL and
   about a hundred more work out of the box. An unknown or missing language
   just means unhighlighted code.
+* The question and the answers may show **images**, written the Markdown way:
+
+  ```markdown
+  ![Venn diagram](img/diagram.svg)
+  ```
+
+  The path is relative to the question file. `quiz` sends the image files
+  along with the question and the server puts them into the page as `data:`
+  URLs, so they need no web server of their own; PNG, JPEG, GIF, WebP, AVIF
+  and SVG are supported. An image given by an `https://` URL is left for the
+  browsers to fetch. In the terminal and the CSV an image is its
+  description, or its file name when the description is empty, so that an
+  answer that is just `- ![](img/circle-blue.svg)` still reads as
+  `circle-blue.svg`. `testsupport/images.md` is an example.
 * `quiz parse question.md` shows how a file is parsed without contacting the
   server.
 * HTML written in the Markdown is **escaped**, not rendered: the question is

@@ -7,9 +7,10 @@ use std::{
     time::Duration,
 };
 
+use base64::{Engine, prelude::BASE64_STANDARD};
 use quiz_testsupport::{
-    EXAMPLE_QUESTION, EXECUTABLE_QUESTION, MockIdp, UNSCORED_QUESTION, User, question_on_page,
-    start_server,
+    EXAMPLE_QUESTION, EXECUTABLE_QUESTION, IMAGES_QUESTION, MockIdp, UNSCORED_QUESTION, User,
+    question_on_page, start_server,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -567,6 +568,124 @@ async fn parse_checks_a_question_file_without_a_server() {
         "{printed}"
     );
     assert!(printed.contains("no `---` separator found"), "{printed}");
+}
+
+#[tokio::test]
+async fn images_travel_with_the_question() {
+    tokio::time::timeout(TIMEOUT, images_flow())
+        .await
+        .expect("the CLI finished in time");
+}
+
+async fn images_flow() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let dir = scratch("images");
+    idp.login_as(&User::new("sojkam1", "Michal Sojka"));
+
+    let mut child = quiz(&dir)
+        .args([
+            "--server",
+            &base,
+            "--no-browser",
+            "--login-port",
+            "0",
+            "ask",
+            IMAGES_QUESTION,
+            // Not next to the question, which is in the source tree.
+            "--output-dir",
+        ])
+        .arg(&dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("the quiz binary is built");
+
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut printed = String::new();
+    let mut code = None;
+    while let Some(line) = lines.next_line().await.unwrap() {
+        printed.push_str(&line);
+        printed.push('\n');
+        if line.contains(&idp.issuer) && line.contains("/authorize") {
+            let response = reqwest::get(line.trim()).await.unwrap();
+            assert!(response.status().is_success());
+        }
+        if let Some(rest) = line.strip_prefix("Question code:") {
+            code = Some(rest.trim().to_owned());
+        }
+        if line.starts_with("Press Enter") {
+            break;
+        }
+    }
+    // An answer that is nothing but an image goes by its file name.
+    assert!(printed.contains("A) circle-blue.svg"), "{printed}");
+
+    idp.login_as(&User::new("novakja1", "Jan Novák"));
+    let browser = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
+    browser.get(format!("{base}/")).send().await.unwrap();
+    let page = browser
+        .post(format!("{base}/join"))
+        .form(&[("code", code.expect("the CLI prints the question code"))])
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+
+    // The files themselves are in the page, the question's and the answers'.
+    let image = |name: &str| {
+        let svg = std::fs::read(Path::new(IMAGES_QUESTION).with_file_name(name)).unwrap();
+        format!(
+            "<img src=\"data:image/svg+xml;base64,{}\"",
+            BASE64_STANDARD.encode(svg)
+        )
+    };
+    let prompt = page.split_once("class=\"prompt\"").unwrap().1;
+    let (prompt, answers) = prompt.split_once("class=\"answers").unwrap();
+    assert!(prompt.contains(&image("img/diagram.svg")), "{page}");
+    for name in ["blue", "magenta", "yellow"] {
+        let svg = image(&format!("img/circle-{name}.svg"));
+        assert!(answers.contains(&svg), "circle-{name}.svg is not in {page}");
+    }
+
+    let mut stdin = child.stdin.take().unwrap();
+    stdin.write_all(b"\n").await.unwrap();
+    drop(stdin);
+    while let Some(line) = lines.next_line().await.unwrap() {
+        printed.push_str(&line);
+        printed.push('\n');
+    }
+    assert!(child.wait().await.unwrap().success(), "{printed}");
+}
+
+#[tokio::test]
+async fn images_have_to_be_next_to_the_question() {
+    let dir = scratch("parse-images");
+
+    let output = quiz(&dir)
+        .args(["parse", IMAGES_QUESTION])
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(printed.contains("C) circle-yellow.svg"), "{printed}");
+
+    // Without its images the question cannot be asked.
+    let alone = dir.join("images.md");
+    std::fs::copy(IMAGES_QUESTION, &alone).unwrap();
+    let output = quiz(&dir).arg("parse").arg(&alone).output().await.unwrap();
+    assert!(!output.status.success());
+    let printed = String::from_utf8_lossy(&output.stderr);
+    assert!(printed.contains("cannot read the image"), "{printed}");
+    assert!(printed.contains("diagram.svg"), "{printed}");
 }
 
 #[tokio::test]

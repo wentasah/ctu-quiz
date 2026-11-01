@@ -20,12 +20,16 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use chrono::Local;
 use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command};
 use client::{Api, Events, Login};
-use quiz_common::api::{CreateQuestion, QuestionInfo, StudentView};
+use quiz_common::{
+    Image, Images, ParseError,
+    api::{CreateQuestion, QuestionInfo, StudentView},
+};
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use url::Url;
 
@@ -155,8 +159,9 @@ async fn ask(
     shuffle: bool,
 ) -> Result<()> {
     let markdown = read_question(file)?;
+    let images = read_images(file, &markdown)?;
     report::print_question(
-        &quiz_common::parse_question(&markdown)
+        &quiz_common::parse_with_images(&markdown, &images)
             .with_context(|| format!("{} is not a usable question", file.display()))?,
     );
 
@@ -168,6 +173,7 @@ async fn ask(
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "question.md".to_owned()),
             markdown,
+            images,
             view,
             shuffle,
             close_after,
@@ -295,7 +301,8 @@ fn describe(view: StudentView) -> &'static str {
 /// Shows the parsed question without publishing it.
 fn parse(file: &Path) -> Result<()> {
     let markdown = read_question(file)?;
-    let question = quiz_common::parse_question(&markdown)
+    let images = read_images(file, &markdown)?;
+    let question = quiz_common::parse_with_images(&markdown, &images)
         .with_context(|| format!("{} is not a usable question", file.display()))?;
     report::print_question(&question);
     println!(
@@ -526,6 +533,44 @@ fn read_question(file: &Path) -> Result<String> {
         return Ok(strip_shebang(&markdown).to_owned());
     }
     Ok(markdown)
+}
+
+/// Reads the local images the question shows. Their paths are relative to the
+/// question file, as they are for anything else that displays the Markdown.
+fn read_images(file: &Path, markdown: &str) -> Result<Images> {
+    let mut images = Images::new();
+    let paths = quiz_common::question::local_images(markdown);
+    if paths.is_empty() {
+        return Ok(images);
+    }
+
+    let file = std::path::absolute(file)
+        .with_context(|| format!("cannot find the directory of {}", file.display()))?;
+    let dir = file.parent().unwrap_or(Path::new("/"));
+    // A URL, so that `img/a%20b.png` is the file `a b.png` as it is for a
+    // browser.
+    let base = Url::from_directory_path(dir)
+        .map_err(|()| anyhow!("cannot refer to files in {}", dir.display()))?;
+
+    for path in paths {
+        let image = base
+            .join(&path)
+            .ok()
+            .and_then(|url| url.to_file_path().ok())
+            .with_context(|| format!("the image {path} is not a file name"))?;
+        let media_type = quiz_common::question::image_type(&image.to_string_lossy())
+            .ok_or_else(|| ParseError::BadImage(path.clone()))?;
+        let data = std::fs::read(&image)
+            .with_context(|| format!("cannot read the image {}", image.display()))?;
+        images.insert(
+            path,
+            Image {
+                media_type: media_type.to_owned(),
+                data: BASE64_STANDARD.encode(data),
+            },
+        );
+    }
+    Ok(images)
 }
 
 /// Whether the file has any of the execute bits set. On systems without file

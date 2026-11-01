@@ -139,6 +139,12 @@ pre.code {
   padding: .1em .3em;
 }
 
+/* An image never makes the page wider, and one in an answer stays small
+   enough for all the answers to fit on a screen. */
+.prompt img, .options img, .answers img, .bars img { max-width: 100%; height: auto; }
+.prompt img { max-height: 50vh; }
+.options img, .answers img, .bars img { max-height: 6em; vertical-align: middle; }
+
 /* `display: block` lets a wide table scroll on a phone instead of
    widening the page. */
 .prompt table {

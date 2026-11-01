@@ -15,6 +15,15 @@
 //! or `{-1}` at the very end of the answer sets the points explicitly. Either
 //! every answer has such a mark or none does. The marks are removed from the
 //! text, so that students do not see them.
+//!
+//! Both the question and the answers may show images, written the Markdown
+//! way: `![description](img/diagram.svg)`. The server cannot read the
+//! teacher's files, so a local image travels with the question as an
+//! [`Image`] and ends up in the HTML as a `data:` URL; [`local_images`] says
+//! which images those are. Images given by an `http(s):` URL are left to the
+//! browser to fetch.
+
+use std::collections::BTreeMap;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html};
 use rand::seq::SliceRandom;
@@ -62,6 +71,40 @@ impl Answer {
     }
 }
 
+/// An image that a question shows, sent along with the Markdown.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Image {
+    /// `image/png`, `image/svg+xml`, ...; one of those in [`IMAGE_TYPES`].
+    pub media_type: String,
+    /// The contents of the file, Base64-encoded.
+    pub data: String,
+}
+
+/// The local images of a question, keyed by the path as the Markdown has it.
+pub type Images = BTreeMap<String, Image>;
+
+/// File name extensions of the images a question may show, with their media
+/// types. Browsers display all of these in an `<img>`, and none of them can
+/// run a script there, not even an SVG.
+pub const IMAGE_TYPES: &[(&str, &str)] = &[
+    ("png", "image/png"),
+    ("jpg", "image/jpeg"),
+    ("jpeg", "image/jpeg"),
+    ("gif", "image/gif"),
+    ("webp", "image/webp"),
+    ("avif", "image/avif"),
+    ("svg", "image/svg+xml"),
+];
+
+/// The media type of an image file, judged by the extension of its name.
+pub fn image_type(path: &str) -> Option<&'static str> {
+    let (_, extension) = path.rsplit_once('.')?;
+    IMAGE_TYPES
+        .iter()
+        .find(|(known, _)| extension.eq_ignore_ascii_case(known))
+        .map(|(_, media_type)| *media_type)
+}
+
 /// Reasons why a Markdown file is not a usable question.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ParseError {
@@ -81,6 +124,10 @@ pub enum ParseError {
     EmptyPrompt,
     #[error("answer {0} is empty")]
     EmptyAnswer(String),
+    #[error("the image {0} is missing")]
+    MissingImage(String),
+    #[error("the image {0} is not a PNG, JPEG, GIF, WebP, AVIF or SVG file")]
+    BadImage(String),
     #[error(
         "answer {0} has no `[x]`, `[ ]` or `{{points}}` mark; either every answer is marked or none is"
     )]
@@ -92,8 +139,14 @@ fn options() -> Options {
     Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS
 }
 
-/// Parses a Markdown question file.
+/// Parses a Markdown question file that shows no local images.
 pub fn parse(source: &str) -> Result<Question, ParseError> {
+    parse_with_images(source, &Images::new())
+}
+
+/// Parses a Markdown question file, taking the local images it shows from
+/// `images`.
+pub fn parse_with_images(source: &str, images: &Images) -> Result<Question, ParseError> {
     let (prompt_markdown, answers_source) =
         split_at_rule(source).ok_or(ParseError::MissingSeparator)?;
 
@@ -120,7 +173,7 @@ pub fn parse(source: &str) -> Result<Question, ParseError> {
             }
             Ok(Answer {
                 label: label(i),
-                html: render_answer(markdown),
+                html: render_answer(markdown, images)?,
                 plain: plain_text(markdown),
                 markdown: markdown.to_owned(),
                 points,
@@ -138,10 +191,61 @@ pub fn parse(source: &str) -> Result<Question, ParseError> {
 
     Ok(Question {
         title: first_heading(prompt_markdown),
-        prompt_html: render(prompt_markdown),
+        prompt_html: render(prompt_markdown, images)?,
         prompt_markdown: prompt_markdown.to_owned(),
         answers,
     })
+}
+
+/// The local images the Markdown shows, i.e. the paths that have to be sent
+/// as [`Images`] with it, each once and in the order they first appear.
+pub fn local_images(source: &str) -> Vec<String> {
+    let mut paths: Vec<String> = Vec::new();
+    for event in Parser::new_ext(source, options()) {
+        if let Event::Start(Tag::Image { dest_url, .. }) = event
+            && is_local(&dest_url)
+            && !paths.iter().any(|path| *path == *dest_url)
+        {
+            paths.push(dest_url.into_string());
+        }
+    }
+    paths
+}
+
+/// Whether an image is a file next to the question, rather than something
+/// with a URL of its own: `https://...`, `data:...` or `//host/...`.
+fn is_local(url: &str) -> bool {
+    if url.starts_with("//") {
+        return false;
+    }
+    let Some((scheme, _)) = url.split_once(':') else {
+        return true;
+    };
+    // A scheme starts with a letter and goes on with letters, digits, `+`,
+    // `-` and `.`; a colon after anything else is part of a path.
+    let mut chars = scheme.chars();
+    !(chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c)))
+}
+
+/// The `data:` URL of a local image.
+fn data_url(path: &str, images: &Images) -> Result<String, ParseError> {
+    let image = images
+        .get(path)
+        .ok_or_else(|| ParseError::MissingImage(path.to_owned()))?;
+    // Both end up in an attribute of the HTML, so neither may contain
+    // anything but what it is supposed to.
+    let known = IMAGE_TYPES
+        .iter()
+        .any(|(_, known)| *known == image.media_type);
+    let base64 = image
+        .data
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b"+/=".contains(&b));
+    if !known || !base64 {
+        return Err(ParseError::BadImage(path.to_owned()));
+    }
+    Ok(format!("data:{};base64,{}", image.media_type, image.data))
 }
 
 /// Puts the possible answers in a random order.
@@ -381,10 +485,10 @@ fn bullet_len(line: &str) -> Option<usize> {
     (spaces > 0 || line.len() == after_marker).then_some(after_marker + spaces)
 }
 
-fn render(markdown: &str) -> String {
+fn render(markdown: &str, images: &Images) -> Result<String, ParseError> {
     let mut html = String::new();
-    html::push_html(&mut html, rendered_events(markdown).into_iter());
-    html
+    html::push_html(&mut html, rendered_events(markdown, images)?.into_iter());
+    Ok(html)
 }
 
 /// The Markdown event stream, with every code block replaced by the HTML from
@@ -395,7 +499,9 @@ fn render(markdown: &str) -> String {
 /// to everybody in the room, and `<script>` in a question must not run in
 /// their browsers. The only HTML in the stream is the one this function puts
 /// there itself.
-fn rendered_events(markdown: &str) -> Vec<Event<'_>> {
+///
+/// Local images get their `data:` URL from `images`.
+fn rendered_events<'a>(markdown: &'a str, images: &Images) -> Result<Vec<Event<'a>>, ParseError> {
     let mut events = Vec::new();
     // Language and contents of the code block currently being collected.
     let mut code: Option<(String, String)> = None;
@@ -427,6 +533,17 @@ fn rendered_events(markdown: &str) -> Vec<Event<'_>> {
                     ));
                 }
             }
+            Event::Start(Tag::Image {
+                link_type,
+                dest_url,
+                title,
+                id,
+            }) if is_local(&dest_url) => events.push(Event::Start(Tag::Image {
+                link_type,
+                dest_url: data_url(&dest_url, images)?.into(),
+                title,
+                id,
+            })),
             // Raw HTML, escaped rather than dropped, so that a teacher sees
             // what they wrote instead of the text silently disappearing.
             Event::Html(html) => events.push(Event::Text(html)),
@@ -434,7 +551,7 @@ fn rendered_events(markdown: &str) -> Vec<Event<'_>> {
             other => events.push(other),
         }
     }
-    events
+    Ok(events)
 }
 
 /// The Markdown event stream without HTML comments (`<!-- ... -->`), which
@@ -494,24 +611,39 @@ fn strip_comments(html: &str) -> String {
 
 /// Renders an answer, unwrapping the paragraph of a single-paragraph answer so
 /// that it can be placed inside a label or a table cell.
-fn render_answer(markdown: &str) -> String {
-    let html = render(markdown);
+fn render_answer(markdown: &str, images: &Images) -> Result<String, ParseError> {
+    let html = render(markdown, images)?;
     let trimmed = html.trim();
     if let Some(inner) = trimmed
         .strip_prefix("<p>")
         .and_then(|rest| rest.strip_suffix("</p>"))
         .filter(|inner| !inner.contains("<p>"))
     {
-        return inner.to_owned();
+        return Ok(inner.to_owned());
     }
-    trimmed.to_owned()
+    Ok(trimmed.to_owned())
 }
 
 /// Collapses Markdown to a single line of plain text.
+///
+/// An image is its description, or the name of its file when it has none,
+/// so that an answer that is nothing but an image still has a text.
 fn plain_text(markdown: &str) -> String {
     let mut text = String::new();
+    // Where the description of the current image starts, and its file name.
+    let mut image: Option<(usize, String)> = None;
     for event in events_without_comments(markdown) {
         match event {
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                image = Some((text.len(), file_name(&dest_url)));
+            }
+            Event::End(TagEnd::Image) => {
+                if let Some((start, name)) = image.take()
+                    && text[start..].trim().is_empty()
+                {
+                    text.push_str(&name);
+                }
+            }
             Event::Text(t) | Event::Code(t) | Event::Html(t) | Event::InlineHtml(t) => {
                 text.push_str(&t)
             }
@@ -521,6 +653,20 @@ fn plain_text(markdown: &str) -> String {
         }
     }
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The last segment of an image's URL, `image` for a `data:` URL.
+fn file_name(url: &str) -> String {
+    if url.starts_with("data:") {
+        return "image".to_owned();
+    }
+    let path = url.split(['?', '#']).next().unwrap_or_default();
+    let name = path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or_default();
+    if name.is_empty() { "image" } else { name }.to_owned()
 }
 
 fn first_heading(markdown: &str) -> Option<String> {
@@ -883,6 +1029,98 @@ What's wrong with it?
                 assert_eq!(answer.points, Some(expected));
             }
         }
+    }
+
+    fn svg(data: &str) -> Image {
+        Image {
+            media_type: "image/svg+xml".to_owned(),
+            data: data.to_owned(),
+        }
+    }
+
+    #[test]
+    fn local_images_become_data_urls() {
+        let source = "Which?\n\n![Diagram](img/diagram.svg)\n\n---\n\n\
+                      - ![](img/a.svg)\n- ![Blue](img/b.svg \"title\")\n\
+                      - ![](https://example.com/c.png)\n- ![again](img/a.svg)\n";
+        assert_eq!(
+            local_images(source),
+            ["img/diagram.svg", "img/a.svg", "img/b.svg"]
+        );
+
+        let images = Images::from([
+            ("img/diagram.svg".to_owned(), svg("RA==")),
+            ("img/a.svg".to_owned(), svg("QQ==")),
+            ("img/b.svg".to_owned(), svg("Qg==")),
+        ]);
+        let q = parse_with_images(source, &images).unwrap();
+        assert!(
+            q.prompt_html
+                .contains(r#"<img src="data:image/svg+xml;base64,RA==" alt="Diagram" />"#),
+            "{}",
+            q.prompt_html
+        );
+        assert_eq!(
+            q.answers[0].html,
+            r#"<img src="data:image/svg+xml;base64,QQ==" alt="" />"#
+        );
+        assert!(q.answers[1].html.contains(r#"title="title""#), "{q:?}");
+        // A remote image is the browser's business.
+        assert!(
+            q.answers[2]
+                .html
+                .contains(r#"src="https://example.com/c.png""#),
+            "{q:?}"
+        );
+        // The Markdown stays as it was written.
+        assert!(q.prompt_markdown.contains("(img/diagram.svg)"));
+
+        // An image without a description goes by its file name in plain text.
+        let plain: Vec<_> = q.answers.iter().map(|a| a.plain.as_str()).collect();
+        assert_eq!(plain, ["a.svg", "Blue", "c.png", "again"]);
+    }
+
+    #[test]
+    fn local_images_have_to_be_there_and_be_images() {
+        let source = "Q ![x](x.svg)?\n\n---\n\n- a\n- b\n";
+        assert_eq!(
+            parse(source).unwrap_err(),
+            ParseError::MissingImage("x.svg".into())
+        );
+
+        let images = |image| Images::from([("x.svg".to_owned(), image)]);
+        let html = Image {
+            media_type: "text/html".to_owned(),
+            data: "PGI+".to_owned(),
+        };
+        assert_eq!(
+            parse_with_images(source, &images(html)).unwrap_err(),
+            ParseError::BadImage("x.svg".into())
+        );
+        assert_eq!(
+            parse_with_images(source, &images(svg("\" onerror=\"alert(1)"))).unwrap_err(),
+            ParseError::BadImage("x.svg".into())
+        );
+    }
+
+    #[test]
+    fn tells_local_images_from_urls() {
+        for local in [
+            "a.png",
+            "img/a.png",
+            "../a.png",
+            "/abs/a.png",
+            "dir/a:b.png",
+        ] {
+            assert!(is_local(local), "{local}");
+        }
+        for remote in ["https://x/a.png", "data:image/png;base64,AA==", "//x/a.png"] {
+            assert!(!is_local(remote), "{remote}");
+        }
+        assert_eq!(image_type("img/a.SVG"), Some("image/svg+xml"));
+        assert_eq!(image_type("a.jpg"), Some("image/jpeg"));
+        assert_eq!(image_type("a.txt"), None);
+        assert_eq!(image_type("noextension"), None);
     }
 
     #[test]

@@ -17,6 +17,8 @@ quiz-testsupport = { path = "testsupport" }
 axum = { version = "0.8", features = ["macros"] }
 
 anyhow = "1.0"
+# Images travel with a question Base64-encoded.
+base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
 clap_complete = "4"

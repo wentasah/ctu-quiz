@@ -82,15 +82,16 @@ pub async fn create_question(
     Teacher(teacher): Teacher,
     Json(request): Json<CreateQuestion>,
 ) -> Result<(StatusCode, Json<QuestionInfo>), ApiFailure> {
-    let mut content = quiz_common::parse_question(&request.markdown).map_err(|error| {
-        tracing::info!(
-            teacher = %teacher.login,
-            source = %request.source_name,
-            %error,
-            "rejected an unparsable question"
-        );
-        ApiFailure::bad_request(error.to_string())
-    })?;
+    let mut content =
+        quiz_common::parse_with_images(&request.markdown, &request.images).map_err(|error| {
+            tracing::info!(
+                teacher = %teacher.login,
+                source = %request.source_name,
+                %error,
+                "rejected an unparsable question"
+            );
+            ApiFailure::bad_request(error.to_string())
+        })?;
 
     if let Err(error) = check_size(&content) {
         tracing::info!(

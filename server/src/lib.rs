@@ -25,6 +25,7 @@ use anyhow::{Context, Result};
 use axum::{
     Router,
     body::Body,
+    extract::DefaultBodyLimit,
     http::{Request, header},
     middleware,
     response::IntoResponse,
@@ -97,7 +98,12 @@ pub fn router(state: AppState) -> Router {
         .route("/whoami", get(api::whoami))
         .route("/room", get(api::room_status))
         .route("/room/close", post(api::close_room))
-        .route("/questions", post(api::create_question))
+        // The images of a question come with it, so the request may be as
+        // big as the question may get, not just the 2 MB axum allows.
+        .route(
+            "/questions",
+            post(api::create_question).layer(DefaultBodyLimit::max(state::MAX_QUESTION_SIZE)),
+        )
         .route("/questions/{id}", get(api::question))
         .route("/questions/{id}/events", get(api::question_events))
         .route("/questions/{id}/close", post(api::close_question))

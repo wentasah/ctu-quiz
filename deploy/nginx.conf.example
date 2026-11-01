@@ -11,6 +11,10 @@ server {
     ssl_certificate     /etc/letsencrypt/live/quiz.iid.ciirc.cvut.cz/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/quiz.iid.ciirc.cvut.cz/privkey.pem;
 
+    # Questions arrive with their images, up to the 10 MiB the server
+    # accepts; nginx would stop at 1 MiB.
+    client_max_body_size 11m;
+
     location / {
         # No trailing slash: the path is forwarded unchanged, which is what
         # QUIZ_PUBLIC_URL with a path prefix (e.g. https://host/quiz) needs.

@@ -47,6 +47,7 @@ async fn a_question_is_asked_answered_and_closed() {
         .json(&CreateQuestion {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -240,6 +241,7 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
         let request = api.post(&url).json(&CreateQuestion {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -303,6 +305,7 @@ async fn only_teachers_with_a_valid_token_may_ask_questions() {
         .json(&CreateQuestion {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -337,6 +340,7 @@ async fn a_teacher_role_in_the_access_token_allows_asking_questions() {
             .json(&CreateQuestion {
                 source_name: "question.md".to_owned(),
                 markdown: QUESTION.to_owned(),
+                images: Default::default(),
                 view: StudentView::default(),
                 shuffle: false,
                 close_after: None,
@@ -385,6 +389,7 @@ async fn html_in_a_question_reaches_the_browser_escaped() {
             markdown: "<script>alert(1)</script>\n\nQ?\n\n---\n\n\
                        - <img src=x onerror=alert(2)>\n- plain\n"
                 .to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -429,6 +434,7 @@ async fn the_next_question_reaches_a_page_that_is_already_open() {
             .json(&CreateQuestion {
                 source_name: "questions.md".to_owned(),
                 markdown,
+                images: Default::default(),
                 view: StudentView::default(),
                 shuffle: false,
                 close_after: None,
@@ -554,6 +560,7 @@ async fn one_presentation_window_serves_the_whole_lecture() {
             .json(&CreateQuestion {
                 source_name: "questions.md".to_owned(),
                 markdown: markdown.to_owned(),
+                images: Default::default(),
                 view: StudentView::default(),
                 shuffle: false,
                 close_after: None,
@@ -629,6 +636,7 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
         .json(&CreateQuestion {
             source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -719,6 +727,7 @@ async fn close_after_counts_down_from_when_the_projector_shows_the_question() {
             .json(&CreateQuestion {
                 source_name: "questions.md".to_owned(),
                 markdown: QUESTION.to_owned(),
+                images: Default::default(),
                 view: StudentView::default(),
                 shuffle: false,
                 close_after: Some(close_after),
@@ -801,6 +810,7 @@ async fn a_hidden_question_stays_on_the_projector() {
             .json(&CreateQuestion {
                 source_name: "questions.md".to_owned(),
                 markdown: markdown.to_owned(),
+                images: Default::default(),
                 view,
                 shuffle: false,
                 close_after: None,
@@ -956,6 +966,7 @@ async fn shuffled_answers_are_the_same_for_everybody() {
             .json(&CreateQuestion {
                 source_name: "questions.md".to_owned(),
                 markdown: markdown.clone(),
+                images: Default::default(),
                 view: StudentView::default(),
                 shuffle,
                 close_after: None,
@@ -1058,6 +1069,7 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
             source_name: "questions.md".to_owned(),
             markdown: "Which one?\n\n---\n\n- [ ] the wrong one {-1}\n- [x] the right one\n"
                 .to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -1177,6 +1189,7 @@ async fn pages_link_the_stylesheet_and_script_of_this_version() {
         .json(&CreateQuestion {
             source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -1236,6 +1249,7 @@ async fn logging_out_removes_the_room() {
         .json(&CreateQuestion {
             source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -1334,6 +1348,7 @@ async fn logging_out_removes_the_room() {
         .json(&CreateQuestion {
             source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -1371,6 +1386,7 @@ async fn the_teacher_sees_the_room_and_the_questions_kept_in_it() {
             .json(&CreateQuestion {
                 source_name: "questions.md".to_owned(),
                 markdown: QUESTION.to_owned(),
+                images: Default::default(),
                 view: StudentView::default(),
                 shuffle: false,
                 close_after: None,
@@ -1450,6 +1466,7 @@ async fn an_unusable_question_is_refused_with_an_explanation() {
         .json(&CreateQuestion {
             source_name: "broken.md".to_owned(),
             markdown: "A question without any answers.\n".to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -1573,6 +1590,7 @@ async fn the_teacher_sees_how_many_students_are_in_the_room() {
         .json(&CreateQuestion {
             source_name: "questions.md".to_owned(),
             markdown: "Here?\n\n---\n\n- yes\n- no\n".to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -1653,6 +1671,7 @@ async fn the_teacher_follows_a_question_without_asking_again() {
         .json(&CreateQuestion {
             source_name: "question.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -1973,6 +1992,7 @@ async fn metrics_count_questions_answers_and_who_is_connected() {
         .json(&CreateQuestion {
             source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,
@@ -2096,6 +2116,7 @@ async fn rooms_and_answers_survive_a_restart_with_a_state_file() {
         .json(&CreateQuestion {
             source_name: "questions.md".to_owned(),
             markdown: QUESTION.to_owned(),
+            images: Default::default(),
             view: StudentView::default(),
             shuffle: false,
             close_after: None,

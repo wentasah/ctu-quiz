@@ -7,6 +7,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::Images;
+
 /// Common prefix of all API endpoints.
 pub const API_PREFIX: &str = "/api/v1";
 
@@ -56,8 +58,12 @@ pub struct CreateQuestion {
     /// File name the question came from, for the log.
     pub source_name: String,
     /// The Markdown source; the server parses it with
-    /// [`quiz_common::parse_question`](crate::parse_question).
+    /// [`quiz_common::parse_with_images`](crate::parse_with_images).
     pub markdown: String,
+    /// The local images the Markdown shows, keyed by their path as written
+    /// in it; see [`crate::question::local_images`].
+    #[serde(default, skip_serializing_if = "Images::is_empty")]
+    pub images: Images,
     /// What students see on their own device; everything by default, which
     /// is also what an older CLI that does not send it gets.
     #[serde(default)]

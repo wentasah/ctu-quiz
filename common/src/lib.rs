@@ -14,4 +14,6 @@ pub mod highlight;
 pub mod question;
 
 pub use api::*;
-pub use question::{Answer, ParseError, Question, parse as parse_question};
+pub use question::{
+    Answer, Image, Images, ParseError, Question, parse as parse_question, parse_with_images,
+};
