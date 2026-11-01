@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0] – 2026-11-01
+
+### Added
+
+- Support images in questions and answers ([bb89e25](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/bb89e25e6f83a7927696bbf6a909c3330e3110aa))
+- Refuse questions whose content exceeds 10 MiB ([63e430e](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/63e430eb97c1b88afad792e7ab1914304a06c9fd))
+- Keep the content of only the question being asked ([59f7f41](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/59f7f41ff977d6b9c2ba7ecda80ea2304116ab38))
+
+### Build and deployment
+
+- CI: Delete artifacts after 2 weeks ([85555ff](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/85555ff67181cdf53ce4797a8e116d203e1f55f0))
+- Ignore RUSTSEC-2026-0387 ([bde2412](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/bde24128653350c66bd817817ee68f85669d245f))
+- security-update.sh: Change MR title ([09950de](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/09950de807c857f8bd59b47943d88e4213dbc3f8))
+
 ## [0.1.1] – 2026-10-25
 
 ### Added
