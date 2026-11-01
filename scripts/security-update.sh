@@ -57,7 +57,7 @@ fi
 if [ -n "$fixed" ]; then
     [ -n "${SECURITY_UPDATE_TOKEN:-}" ] || die "SECURITY_UPDATE_TOKEN is not set"
 
-    title="Fix security vulnerabilities in dependencies"
+    title="Update vulnerable dependencies"
     {
         echo "Updates the crates with these advisories:"
         echo
