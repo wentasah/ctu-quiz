@@ -85,8 +85,8 @@ pub fn bars(question: &Question, chosen: Option<usize>) -> Vec<Bar> {
 
     question
         .content
-        .answers
         .iter()
+        .flat_map(|content| &content.answers)
         .zip(&counts)
         .enumerate()
         .map(|(index, (answer, &count))| Bar {

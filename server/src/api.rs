@@ -123,7 +123,7 @@ pub async fn create_question(
         code = %question.code,
         teacher = %teacher.login,
         source = %question.source_name,
-        answers = question.content.answers.len(),
+        answers = question.content.as_ref().map_or(0, |c| c.answers.len()),
         show_question = question.view.show_question,
         show_answers = question.view.show_answers,
         shuffled = request.shuffle,

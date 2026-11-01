@@ -95,6 +95,13 @@ pub struct Session {
 pub struct Response {
     pub name: String,
     pub index: usize,
+    /// Label and points of the answer, copied from the question when the
+    /// student answered, so that the points of the room can still be added
+    /// up once the question has dropped its [`Question::content`].
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub points: Option<f64>,
     pub answered_at: DateTime<Utc>,
 }
 
@@ -239,7 +246,11 @@ pub struct Question {
     pub source_name: String,
     /// Order of the question in its room, starting from 1.
     pub number: usize,
-    pub content: quiz_common::Question,
+    /// Text and answers of the question. Only the question being asked in
+    /// its room keeps them: asking the next one drops them, so that big
+    /// questions do not pile up in memory. What is left of the question then
+    /// is the points of its [`Question::responses`].
+    pub content: Option<quiz_common::Question>,
     /// What of this question students see on their own device.
     pub view: StudentView,
     pub answer_url: String,
@@ -274,7 +285,7 @@ impl Question {
 
     /// How many students picked each of the possible answers.
     pub fn counts(&self) -> Vec<usize> {
-        let mut counts = vec![0; self.content.answers.len()];
+        let mut counts = vec![0; self.answers().count()];
         for response in self.responses.values() {
             if let Some(count) = counts.get_mut(response.index) {
                 *count += 1;
@@ -283,20 +294,23 @@ impl Question {
         counts
     }
 
+    /// The possible answers, none once the content is dropped.
+    fn answers(&self) -> impl Iterator<Item = &quiz_common::question::Answer> {
+        self.content.iter().flat_map(|content| &content.answers)
+    }
+
     pub fn info(&self) -> QuestionInfo {
         QuestionInfo {
             id: self.id.clone(),
             view: self.view,
             code: self.code.clone(),
-            title: self.content.title.clone(),
+            title: self.content.as_ref().and_then(|c| c.title.clone()),
             source_name: self.source_name.clone(),
             answer_url: self.answer_url.clone(),
             display_url: self.display_url.clone(),
             presented: self.presented,
             answers: self
-                .content
-                .answers
-                .iter()
+                .answers()
                 .map(|a| AnswerInfo {
                     label: a.label.clone(),
                     text: a.plain.clone(),
@@ -324,13 +338,7 @@ impl Question {
             revealed: self.revealed,
             answer_count: self.responses.len(),
             counts: closed.then(|| self.counts()),
-            labels: closed.then(|| {
-                self.content
-                    .answers
-                    .iter()
-                    .map(|a| a.label.clone())
-                    .collect()
-            }),
+            labels: closed.then(|| self.answers().map(|a| a.label.clone()).collect()),
         }
     }
 
@@ -374,13 +382,13 @@ impl Question {
             .responses
             .iter()
             .map(|(login, response)| {
-                let answer = self.content.answers.get(response.index);
+                let answer = self.answers().nth(response.index);
                 ResultRow {
                     login: login.clone(),
                     name: response.name.clone(),
-                    answer: answer.map(|a| a.label.clone()).unwrap_or_default(),
+                    answer: response.label.clone(),
                     answer_text: answer.map(|a| a.plain.clone()).unwrap_or_default(),
-                    points: answer.and_then(|a| a.points),
+                    points: response.points,
                     answered_at: response.answered_at,
                 }
             })
@@ -743,7 +751,7 @@ impl AppState {
         // the way to reach this question. Whether the presentation view is
         // open has to be known before the room is told about the question,
         // because that makes the view reload.
-        let (code, answer_url, display_url, presented, number) = {
+        let (code, answer_url, display_url, presented, number, previous) = {
             let room = store.room_mut(&room).expect("the room was just created");
             room.asked += 1;
             (
@@ -752,8 +760,13 @@ impl AppState {
                 room.display_url.clone(),
                 room.is_presented(),
                 room.asked,
+                room.current.clone(),
             )
         };
+        // Only the question being asked keeps its content.
+        if let Some(previous) = previous.and_then(|id| store.get_mut(&id)) {
+            previous.content = None;
+        }
 
         store.insert_question(Question {
             display_url,
@@ -764,7 +777,7 @@ impl AppState {
             answer_url,
             source_name,
             number,
-            content,
+            content: Some(content),
             view,
             teacher: teacher.to_owned(),
             created_at: now,
@@ -972,7 +985,7 @@ mod tests {
             code: "123456".to_owned(),
             source_name: "q.md".to_owned(),
             number,
-            content: quiz_common::parse_question("Q?\n\n---\n\n- a\n- b\n").unwrap(),
+            content: Some(quiz_common::parse_question("Q?\n\n---\n\n- a\n- b\n").unwrap()),
             view: StudentView::default(),
             answer_url: String::new(),
             display_url: String::new(),

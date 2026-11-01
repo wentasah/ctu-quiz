@@ -49,6 +49,7 @@ pub async fn display(
         state.close_at(id.clone(), at);
     }
     let question = store.get(&id).ok_or_else(not_found)?;
+    let content = question.content.as_ref().ok_or_else(not_found)?;
 
     let page = DisplayPage {
         prefix: views::prefix(),
@@ -56,10 +57,10 @@ pub async fn display(
         show_answers: true,
         question: question.id.clone(),
         title: page_title(Some(question), lang),
-        prompt_html: question.content.prompt_html.clone(),
+        prompt_html: content.prompt_html.clone(),
         open: question.is_open(),
         revealed: question.revealed,
-        scored: question.content.is_scored(),
+        scored: content.is_scored(),
         answer_count: question.responses.len(),
         code: question.code.clone(),
         answer_url: question.answer_url.clone(),

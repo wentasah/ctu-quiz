@@ -421,10 +421,16 @@ async fn write_room(api: &Api, source: &Path, dir: Option<&Path>) -> Result<Opti
     let mut questions = Vec::new();
     for question in &room.questions {
         let info = &question.info;
-        if info.open || info.answers.iter().all(|answer| answer.points.is_none()) {
+        // Only the question asked last still lists its answers; the points
+        // of the earlier ones are in their results.
+        let scored = info.answers.iter().any(|answer| answer.points.is_some());
+        if info.open || !(scored || info.answers.is_empty()) {
             continue;
         }
-        questions.push(api.results(&info.id).await?);
+        let results = api.results(&info.id).await?;
+        if scored || results.rows.iter().any(|row| row.points.is_some()) {
+            questions.push(results);
+        }
     }
     if questions.is_empty() {
         return Ok(None);

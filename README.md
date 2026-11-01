@@ -237,7 +237,10 @@ goes like this:
   own `quiz ask` — pressing Enter there still closes it and writes its CSV —
   but the students have already moved on to the new one.
 * A room keeps at most 100 questions. Asking another one drops the oldest,
-  together with its answers.
+  together with its answers. Only the question being asked keeps its text
+  and possible answers; once the next one is asked, the earlier one keeps
+  only who answered with which label and for how many points, which is
+  enough for the points of the room but no longer for its detailed results.
 * `quiz status` shows the room — its code, URLs, how many students have it
   open — and every question still kept in it, with its id, state, number of
   answers and how long until the server drops it. That is where to find the

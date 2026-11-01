@@ -1412,6 +1412,9 @@ async fn the_teacher_sees_the_room_and_the_questions_kept_in_it() {
         [(1, first.id.as_str(), false), (2, second.id.as_str(), true)]
     );
     assert!(room.questions[0].expires_at > room.questions[0].info.created_at);
+    // Only the question being asked keeps its content.
+    assert!(room.questions[0].info.answers.is_empty());
+    assert!(!room.questions[1].info.answers.is_empty());
 
     // Another teacher does not see this room.
     let other = idp.access_token(&User::new("novakja1", "Jan Novák"), CLIENT_ID);

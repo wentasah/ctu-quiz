@@ -94,24 +94,26 @@ pub async fn room(
         bars: Vec::new(),
     };
 
-    if let Some(question) = current {
+    if let Some((question, content)) =
+        current.and_then(|question| Some((question, question.content.as_ref()?)))
+    {
         let chosen = question.responses.get(&page.user.login).map(|r| r.index);
         page.question = question.id.clone();
         page.show_question = question.view.show_question;
         page.show_answers = question.view.show_answers;
         if page.show_question {
-            page.prompt_html = question.content.prompt_html.clone();
+            page.prompt_html = content.prompt_html.clone();
         }
         page.waiting = false;
         page.open = question.is_open();
         page.revealed = question.revealed;
         page.answer_count = question.responses.len();
         page.chosen_label = chosen
-            .and_then(|index| question.content.answers.get(index))
+            .and_then(|index| content.answers.get(index))
             .map(|answer| answer.label.clone())
             .unwrap_or_default();
         if question.revealed {
-            page.verdict = chosen.and_then(|index| Verdict::of(&question.content, index));
+            page.verdict = chosen.and_then(|index| Verdict::of(content, index));
         }
         page.bars = bars(question, chosen);
     }
@@ -162,16 +164,22 @@ pub async fn answer(
             ));
         }
 
-        let Some(answer) = question.content.answers.get(form.answer) else {
+        let Some(answer) = question
+            .content
+            .as_ref()
+            .and_then(|content| content.answers.get(form.answer))
+        else {
             return Err(PageError::bad_request("no-such-answer"));
         };
-        let label = answer.label.clone();
+        let (label, points) = (answer.label.clone(), answer.points);
 
         let previous = question.responses.insert(
             user.login.clone(),
             Answer {
                 name: user.name.clone(),
                 index: form.answer,
+                label: label.clone(),
+                points,
                 answered_at: Utc::now(),
             },
         );

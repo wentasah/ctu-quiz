@@ -56,7 +56,7 @@ struct SavedQuestion {
     room: String,
     source_name: String,
     number: usize,
-    content: quiz_common::Question,
+    content: Option<quiz_common::Question>,
     view: StudentView,
     presented: bool,
     teacher: String,
@@ -140,13 +140,31 @@ impl Saved {
                 room.url.clone(),
                 room.display_url.clone(),
             );
+            let current = room.current.as_ref() == Some(&question.id);
+            let mut content = question.content;
+            let mut responses = question.responses;
+            // Files of older servers have the content of every question, and
+            // responses without their label and points.
+            if let Some(content) = &content {
+                for response in responses.values_mut() {
+                    if let Some(answer) = content.answers.get(response.index)
+                        && response.label.is_empty()
+                    {
+                        response.label = answer.label.clone();
+                        response.points = answer.points;
+                    }
+                }
+            }
+            if !current {
+                content = None;
+            }
             store.insert_question(Question {
                 id: question.id,
                 room: question.room,
                 code,
                 source_name: question.source_name,
                 number: question.number,
-                content: question.content,
+                content,
                 view: question.view,
                 answer_url,
                 display_url,
@@ -157,7 +175,7 @@ impl Saved {
                 closes_at: question.closes_at,
                 closed_at: question.closed_at,
                 revealed: question.revealed,
-                responses: question.responses,
+                responses,
                 updates: broadcast::channel(16).0,
             });
         }
@@ -309,7 +327,7 @@ mod tests {
             room: room.to_owned(),
             source_name: "q.md".to_owned(),
             number: 1,
-            content: quiz_common::parse_question("Q?\n\n---\n\n- a\n- b\n").unwrap(),
+            content: Some(quiz_common::parse_question("Q?\n\n---\n\n- a\n- b\n").unwrap()),
             view: StudentView::default(),
             presented: false,
             teacher: "teacher".to_owned(),
@@ -323,6 +341,8 @@ mod tests {
                 Response {
                     name: "Student".to_owned(),
                     index: 1,
+                    label: "B".to_owned(),
+                    points: None,
                     answered_at: at,
                 },
             )]),
@@ -361,6 +381,40 @@ mod tests {
         let again = Saved::from_store(&store);
         assert_eq!(again.rooms.len(), 1);
         assert_eq!(again.questions.len(), 1);
+    }
+
+    #[test]
+    fn files_of_older_servers_are_still_read() {
+        let now = Utc::now();
+        let mut earlier = question("room", now);
+        earlier.id = "earlier".to_owned();
+        let saved = Saved {
+            version: VERSION,
+            saved_at: now,
+            rooms: vec![room("room", "teacher", "123456", now)],
+            questions: vec![earlier, question("room", now)],
+        };
+        // Older servers kept the content of every question, and wrote no
+        // label and points in the responses.
+        let mut json = serde_json::to_value(saved).unwrap();
+        for question in json["questions"].as_array_mut().unwrap() {
+            let response = question["responses"]["student"].as_object_mut().unwrap();
+            response.remove("label");
+            response.remove("points");
+        }
+
+        let mut store = Store::default();
+        serde_json::from_value::<Saved>(json)
+            .unwrap()
+            .restore(&config(), &mut store)
+            .unwrap();
+
+        // Only the question being asked keeps its content.
+        assert!(store.get("room-q").unwrap().content.is_some());
+        assert!(store.get("earlier").unwrap().content.is_none());
+        for id in ["earlier", "room-q"] {
+            assert_eq!(store.get(id).unwrap().responses["student"].label, "B");
+        }
     }
 
     #[test]
