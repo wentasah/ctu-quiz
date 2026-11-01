@@ -19,7 +19,7 @@ use crate::{
     auth::{ApiUser, Identity, Teacher},
     error::ApiFailure,
     live,
-    state::{AppState, Question, Store},
+    state::{AppState, MAX_QUESTION_SIZE, Question, Store},
 };
 
 /// `GET /api/v1/oidc` - lets the CLI discover how to log the teacher in, so
@@ -91,6 +91,16 @@ pub async fn create_question(
         );
         ApiFailure::bad_request(error.to_string())
     })?;
+
+    if let Err(error) = check_size(&content) {
+        tracing::info!(
+            teacher = %teacher.login,
+            source = %request.source_name,
+            size = content.size(),
+            "rejected a question that is too big"
+        );
+        return Err(error);
+    }
 
     if request.shuffle {
         quiz_common::question::shuffle_answers(&mut content);
@@ -273,9 +283,38 @@ fn source_name(name: &str) -> String {
     name.chars().take(100).collect()
 }
 
+/// Refuses a question whose content would take more than
+/// [`MAX_QUESTION_SIZE`] of memory.
+fn check_size(content: &quiz_common::Question) -> Result<(), ApiFailure> {
+    let size = content.size();
+    if size > MAX_QUESTION_SIZE {
+        return Err(ApiFailure::too_large(format!(
+            "the question takes {:.1} MiB with its rendered HTML, at most {} MiB are allowed",
+            size as f64 / (1024.0 * 1024.0),
+            MAX_QUESTION_SIZE / (1024 * 1024),
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::source_name;
+    use axum::{http::StatusCode, response::IntoResponse};
+
+    use super::{MAX_QUESTION_SIZE, check_size, source_name};
+
+    #[test]
+    fn a_question_may_take_at_most_the_allowed_size() {
+        let mut content = quiz_common::parse_question("Q?\n\n---\n\n- a\n- b\n").unwrap();
+        assert!(check_size(&content).is_ok());
+
+        let padding = MAX_QUESTION_SIZE - content.size();
+        content.prompt_html.push_str(&" ".repeat(padding));
+        assert!(check_size(&content).is_ok());
+        content.prompt_html.push(' ');
+        let response = check_size(&content).unwrap_err().into_response();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
 
     #[test]
     fn source_name_keeps_only_the_file_name() {

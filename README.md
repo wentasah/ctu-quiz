@@ -241,6 +241,9 @@ goes like this:
   and possible answers; once the next one is asked, the earlier one keeps
   only who answered with which label and for how many points, which is
   enough for the points of the room but no longer for its detailed results.
+* A question may take at most 10 MiB of the server's memory, counting its
+  Markdown and the HTML rendered from it; a bigger one is refused with an
+  explanation.
 * `quiz status` shows the room — its code, URLs, how many students have it
   open — and every question still kept in it, with its id, state, number of
   answers and how long until the server drops it. That is where to find the

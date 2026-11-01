@@ -49,6 +49,12 @@ pub const MAX_PENDING_LOGINS: usize = 4096;
 /// a teacher asking in a loop cannot fill the server's memory either.
 pub const MAX_ROOM_QUESTIONS: usize = 100;
 
+/// How big the content of a question may be, see
+/// [`quiz_common::Question::size`]. The rendered HTML may be several times
+/// the Markdown it comes from, so the limit on the size of the request alone
+/// would not keep a question from taking much more memory.
+pub const MAX_QUESTION_SIZE: usize = 10 * 1024 * 1024;
+
 /// A login started in a browser and not yet finished.
 pub struct PendingLogin {
     pub pkce_verifier: PkceCodeVerifier,

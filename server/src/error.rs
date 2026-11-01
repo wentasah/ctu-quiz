@@ -138,6 +138,10 @@ impl ApiFailure {
         Self::new(StatusCode::BAD_REQUEST, message)
     }
 
+    pub fn too_large(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::PAYLOAD_TOO_LARGE, message)
+    }
+
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(StatusCode::CONFLICT, message)
     }

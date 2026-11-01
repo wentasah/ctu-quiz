@@ -178,6 +178,20 @@ impl Question {
     pub fn plain_answers(&self) -> Vec<String> {
         self.answers.iter().map(|a| a.plain.clone()).collect()
     }
+
+    /// Bytes of text the question holds, in all its forms: the Markdown, the
+    /// HTML rendered from it and the plain text of the answers.
+    pub fn size(&self) -> usize {
+        let answers: usize = self
+            .answers
+            .iter()
+            .map(|a| a.label.len() + a.markdown.len() + a.html.len() + a.plain.len())
+            .sum();
+        self.title.as_ref().map_or(0, String::len)
+            + self.prompt_markdown.len()
+            + self.prompt_html.len()
+            + answers
+    }
 }
 
 /// Splits the source at the first horizontal rule that is not inside a fenced
