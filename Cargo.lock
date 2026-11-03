@@ -1816,6 +1816,8 @@ dependencies = [
 name = "quiz-cli"
 version = "0.2.0"
 dependencies = [
+ "anstream",
+ "anstyle",
  "anyhow",
  "base64 0.22.1",
  "chrono",

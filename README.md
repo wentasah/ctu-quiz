@@ -114,6 +114,14 @@ quiz close                    # end the lecture but stay logged in: close the ro
 quiz reveal <question id>     # mark the correct answers, if `quiz ask` did not
 ```
 
+The output is **colored** when it goes to a terminal. `--color never` (or
+`--no-color`) turns the colors off and `--color always` keeps them even in a
+pipe; `QUIZ_COLOR` and `color` in a [configuration file](#teacher-cli) set the
+same. A non-empty `NO_COLOR` environment variable turns the colors off too, as
+<https://no-color.org> asks, unless `--color always` says otherwise, and a
+non-zero `CLICOLOR_FORCE` keeps them in a pipe. The terminal handling is
+that of the [anstream](https://crates.io/crates/anstream) crate.
+
 `--server` (or `QUIZ_SERVER`) selects the server, `--no-browser` never opens a
 browser and only prints URLs, `--login-port` sets the port of the local
 listener used during the login. The ID token is cached in `tokens.json`

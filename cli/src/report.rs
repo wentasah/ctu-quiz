@@ -5,6 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anstream::println;
+use anstyle::Style;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
 use quiz_common::{
@@ -13,26 +15,25 @@ use quiz_common::{
 };
 use serde::Serialize;
 
+use crate::color::{BOLD, CYAN, DIM, GREEN, RED, YELLOW};
+
 /// Shows the parsed question, so that the teacher can check the Markdown was
 /// understood as intended before students see it.
 pub fn print_question(question: &Question) {
     if let Some(title) = &question.title {
-        println!("{title}");
-        println!("{}", "=".repeat(title.chars().count()));
+        println!(
+            "{BOLD}{title}\n{}{BOLD:#}",
+            "=".repeat(title.chars().count())
+        );
     }
     println!("{}\n", question.prompt_markdown.trim());
     for answer in &question.answers {
-        println!(
-            "  {}) {}{}",
-            answer.label,
-            ellipsis(&answer.plain, 100),
-            points_note(answer.points)
-        );
+        print_answer(&answer.label, &answer.plain, answer.points);
     }
     println!();
     if let Some(notes) = &question.notes {
-        println!("Teacher notes (not shown to students):");
-        println!("{notes}\n");
+        println!("{YELLOW}Teacher notes (not shown to students):{YELLOW:#}");
+        println!("{DIM}{notes}{DIM:#}\n");
     }
 }
 
@@ -40,12 +41,29 @@ pub fn print_question(question: &Question) {
 /// them, which after a shuffle is not the order of the Markdown file.
 pub fn print_answers(answers: &[AnswerInfo]) {
     for answer in answers {
-        println!(
-            "  {}) {}{}",
-            answer.label,
-            ellipsis(&answer.text, 100),
-            points_note(answer.points)
-        );
+        print_answer(&answer.label, &answer.text, answer.points);
+    }
+}
+
+/// One answer on a line of its own: the label, the text and the points,
+/// green for a correct answer and red for one that loses points.
+fn print_answer(label: &str, text: &str, points: Option<f64>) {
+    let style = points_style(points);
+    println!(
+        "  {BOLD}{label}{BOLD:#}) {}{style}{}{style:#}",
+        ellipsis(text, 100),
+        points_note(points)
+    );
+}
+
+/// The style of [`points_note`]: green for points, dimmed for none and red
+/// for a penalty.
+fn points_style(points: Option<f64>) -> Style {
+    match points {
+        Some(points) if points > 0.0 => GREEN,
+        Some(points) if points < 0.0 => RED,
+        Some(_) => DIM,
+        None => Style::new(),
     }
 }
 
@@ -54,7 +72,7 @@ pub fn print_summary(question: &QuestionInfo, results: &Results) {
     let total = results.rows.len();
     let max = question.counts.iter().copied().max().unwrap_or(0);
 
-    println!("\nAnswers: {total}");
+    println!("\n{BOLD}Answers: {total}{BOLD:#}");
     for (answer, &count) in question.answers.iter().zip(&question.counts) {
         let width = count * 30 / max.max(1);
         let share = if total == 0 {
@@ -62,8 +80,9 @@ pub fn print_summary(question: &QuestionInfo, results: &Results) {
         } else {
             count as f64 * 100.0 / total as f64
         };
+        let style = points_style(answer.points);
         println!(
-            "  {} {:<30} {count:>4} {share:>5.1} %  {}{}",
+            "  {BOLD}{}{BOLD:#} {CYAN}{:<30}{CYAN:#} {count:>4} {share:>5.1} %  {}{style}{}{style:#}",
             answer.label,
             "#".repeat(width),
             ellipsis(&answer.text, 60),
@@ -77,7 +96,7 @@ pub fn print_summary(question: &QuestionInfo, results: &Results) {
             .iter()
             .filter_map(|answer| answer.points)
             .fold(f64::NEG_INFINITY, f64::max);
-        println!("Average points: {average:.2} of {best}");
+        println!("{BOLD}Average points: {average:.2} of {best}{BOLD:#}");
     }
 }
 

@@ -9,6 +9,9 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
+use anstream::println;
+
+use crate::color::CYAN;
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{DateTime, TimeDelta, Utc};
 use openidconnect::{
@@ -249,10 +252,10 @@ async fn interactive_login(
 
     println!("Logging in at {}", info.issuer);
     if !open_browser || open::that_detached(auth_url.as_str()).is_err() {
-        println!("Open this URL in a browser to log in:\n\n    {auth_url}\n");
+        println!("Open this URL in a browser to log in:\n\n    {CYAN}{auth_url}{CYAN:#}\n");
     } else {
         println!("A browser window was opened for the login.");
-        println!("If you do not see it, open this URL:\n\n    {auth_url}\n");
+        println!("If you do not see it, open this URL:\n\n    {CYAN}{auth_url}{CYAN:#}\n");
     }
 
     let (code, state) = wait_for_redirect(&listener).await?;

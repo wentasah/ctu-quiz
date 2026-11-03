@@ -21,6 +21,8 @@ url.workspace = true
 [dependencies]
 quiz-common.workspace = true
 
+anstream = "1"
+anstyle = "1"
 anyhow.workspace = true
 base64.workspace = true
 chrono.workspace = true

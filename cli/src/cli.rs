@@ -33,8 +33,34 @@ pub struct Cli {
     #[arg(long, env = "QUIZ_LOGIN_PORT", default_value_t = 0, global = true)]
     pub login_port: u16,
 
+    /// When to color the output: `auto` colors it when it goes to a
+    /// terminal and the `NO_COLOR` environment variable is unset or empty.
+    #[arg(
+        long,
+        value_name = "WHEN",
+        env = "QUIZ_COLOR",
+        default_value = "auto",
+        global = true
+    )]
+    pub color: clap::ColorChoice,
+
+    /// Never color the output; the same as `--color never`.
+    #[arg(long, global = true)]
+    pub no_color: bool,
+
     #[command(subcommand)]
     pub command: Command,
+}
+
+impl Cli {
+    /// The color choice that `--color` and `--no-color` make together.
+    pub fn color_choice(&self) -> clap::ColorChoice {
+        if self.no_color {
+            clap::ColorChoice::Never
+        } else {
+            self.color
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]

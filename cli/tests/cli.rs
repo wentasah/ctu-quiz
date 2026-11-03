@@ -779,6 +779,40 @@ async fn the_front_matter_is_checked_and_left_out_of_the_question() {
     assert!(printed.contains("close-after = 30"), "{printed}");
 }
 
+#[tokio::test]
+async fn colors_are_used_only_when_asked_for_or_on_a_terminal() {
+    let dir = scratch("color");
+    let question = dir.join("question.md");
+    std::fs::write(&question, EXAMPLE_QUESTION).unwrap();
+    let printed = |args: &'static [&'static str], no_color: bool| {
+        let mut command = quiz(&dir);
+        command.args(args).arg("parse").arg(&question);
+        if no_color {
+            command.env("NO_COLOR", "1");
+        }
+        async move {
+            let output = command.output().await.unwrap();
+            assert!(output.status.success(), "{output:?}");
+            String::from_utf8(output.stdout).unwrap()
+        }
+    };
+
+    // The standard output is a pipe here, which `auto` leaves plain.
+    assert!(!printed(&[], false).await.contains('\x1b'));
+    assert!(
+        printed(&["--color", "always"], false)
+            .await
+            .contains("\x1b[1mA\x1b[0m)")
+    );
+    // Asking outright wins over NO_COLOR, and --no-color wins over that.
+    assert!(printed(&["--color=always"], true).await.contains('\x1b'));
+    assert!(
+        !printed(&["--color=always", "--no-color"], false)
+            .await
+            .contains('\x1b')
+    );
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn an_executable_question_loses_its_shebang_line() {
@@ -851,7 +885,9 @@ fn quiz(dir: &Path) -> Command {
     command
         .current_dir(dir)
         .env("XDG_CONFIG_HOME", dir)
-        .env_remove("QUIZ_SERVER");
+        .env_remove("QUIZ_SERVER")
+        .env_remove("QUIZ_COLOR")
+        .env_remove("NO_COLOR");
     command
 }
 

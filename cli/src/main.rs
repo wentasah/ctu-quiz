@@ -10,6 +10,7 @@ mod auth;
 /// it and generate the shell completions from it.
 mod cli;
 mod client;
+mod color;
 mod config;
 mod report;
 
@@ -21,12 +22,15 @@ use std::{
     time::Duration,
 };
 
+// Strips the colors when they are not wanted; see `color`.
+use anstream::println;
 use anyhow::{Context, Result, anyhow, bail};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use chrono::Local;
 use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command};
 use client::{Api, Events, Login};
+use color::{BOLD, CYAN, GREEN, YELLOW};
 use quiz_common::{
     Image, Images, ParseError,
     api::{CreateQuestion, QuestionInfo, StudentView},
@@ -43,6 +47,7 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    color::init(cli.color_choice());
     match run(&cli).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -146,7 +151,7 @@ impl Destination<'_> {
             match api.room_status().await {
                 Ok(status) => status.room,
                 Err(error) => {
-                    println!("Cannot find out the room ({error:#}).");
+                    println!("{YELLOW}Cannot find out the room ({error:#}).{YELLOW:#}");
                     None
                 }
             }
@@ -210,9 +215,9 @@ async fn ask(
         report::print_answers(&question.answers);
     }
 
-    println!("Question code:     {}", question.code);
-    println!("Students answer at: {}", question.answer_url);
-    println!("Presentation view:  {}", question.display_url);
+    println!("Question code:      {BOLD}{}{BOLD:#}", question.code);
+    println!("Students answer at: {CYAN}{}{CYAN:#}", question.answer_url);
+    println!("Presentation view:  {CYAN}{}{CYAN:#}", question.display_url);
     println!("Students see:       {}", describe(view));
     if question.presented {
         println!("\nThe presentation view that is already open shows the question.");
@@ -243,7 +248,7 @@ async fn ask(
         .unwrap_or_else(|| report::csv_path(file, dir.as_deref(), Local::now()));
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
-    println!("\nAnswers saved to {}", path.display());
+    println!("\nAnswers saved to {BOLD}{}{BOLD:#}", path.display());
     save_room(&api, file, dir.as_deref()).await;
 
     if closed.answers.iter().any(|answer| answer.points.is_some()) {
@@ -261,12 +266,12 @@ async fn wait_for_reveal(
 ) -> Result<()> {
     let later = format!("`quiz reveal {id}` reveals them later");
     let Some(lines) = stdin else {
-        println!("The correct answers were not revealed; {later}.");
+        println!("{YELLOW}The correct answers were not revealed; {later}.{YELLOW:#}");
         return Ok(());
     };
     println!(
-        "Press Enter to reveal the correct answers (Ctrl-C ends without them, the button \
-         in the presentation view reveals them too)."
+        "Press {BOLD}Enter{BOLD:#} to reveal the correct answers ({BOLD}Ctrl-C{BOLD:#} ends \
+         without them, the button in the presentation view reveals them too)."
     );
 
     // The teacher may reveal them in the presentation view instead. Losing
@@ -279,18 +284,18 @@ async fn wait_for_reveal(
                 match line {
                     Ok(Some(_)) => {
                         api.reveal(id).await?;
-                        println!("The correct answers are revealed.");
+                        println!("{GREEN}The correct answers are revealed.{GREEN:#}");
                     }
                     // No terminal on the standard input: nobody to press Enter.
                     Ok(None) | Err(_) => {
-                        println!("The correct answers were not revealed; {later}.");
+                        println!("{YELLOW}The correct answers were not revealed; {later}.{YELLOW:#}");
                     }
                 }
                 return Ok(());
             }
             question = next_state(api, id, &mut events), if watching => match question {
                 Ok(question) if question.revealed => {
-                    println!("The correct answers were revealed in the presentation view.");
+                    println!("{GREEN}The correct answers were revealed in the presentation view.{GREEN:#}");
                     // As below: the Enter-reading task would keep the
                     // process alive.
                     std::process::exit(0);
@@ -302,7 +307,7 @@ async fn wait_for_reveal(
             // tokio's blocking pool, which the runtime waits for on shutdown, so
             // the process would not actually exit until Enter is pressed anyway.
             _ = tokio::signal::ctrl_c() => {
-                println!("\nThe correct answers were not revealed; {later}.");
+                println!("\n{YELLOW}The correct answers were not revealed; {later}.{YELLOW:#}");
                 std::process::exit(0);
             }
         }
@@ -328,7 +333,7 @@ fn parse(file: &Path) -> Result<()> {
         .with_context(|| format!("{} is not a usable question", file.display()))?;
     report::print_question(&question);
     println!(
-        "{} is a valid {}question with {} possible answers.",
+        "{GREEN}{} is a valid {}question with {} possible answers.{GREEN:#}",
         file.display(),
         if question.is_scored() { "scored " } else { "" },
         question.answers.len()
@@ -336,7 +341,7 @@ fn parse(file: &Path) -> Result<()> {
     // Checked already, when the command line was parsed.
     if let Some(toml) = front_matter.filter(|toml| !toml.trim().is_empty()) {
         println!(
-            "Its front matter sets these options of `quiz ask`:\n{}",
+            "{BOLD}Its front matter sets these options of `quiz ask`:{BOLD:#}\n{}",
             toml.trim_end()
         );
     }
@@ -348,7 +353,9 @@ async fn login(cli: &Cli) -> Result<()> {
     let me = api.whoami().await?;
     println!("Logged in as {} ({}).", me.name, me.login);
     if !me.is_teacher {
-        println!("Note: this login is not allowed to ask questions on this server.");
+        println!(
+            "{YELLOW}Note: this login is not allowed to ask questions on this server.{YELLOW:#}"
+        );
     }
     Ok(())
 }
@@ -379,7 +386,9 @@ async fn logout(cli: &Cli, all: bool) -> Result<()> {
                 room.questions
             ),
             Ok(_) => println!("No room was open on {server}."),
-            Err(error) => println!("Cannot close the room on {server} ({error:#})."),
+            Err(error) => {
+                println!("{YELLOW}Cannot close the room on {server} ({error:#}).{YELLOW:#}")
+            }
         }
     }
 
@@ -428,7 +437,7 @@ async fn close_question(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<
         .unwrap_or_else(|| report::csv_path(Path::new(&closed.source_name), None, Local::now()));
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
-    println!("\nAnswers saved to {}", path.display());
+    println!("\nAnswers saved to {BOLD}{}{BOLD:#}", path.display());
     save_room(&api, Path::new(&closed.source_name), None).await;
     Ok(())
 }
@@ -442,9 +451,12 @@ async fn close_question(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<
 /// then, and the teacher may still want to reveal the correct ones.
 async fn save_room(api: &Api, source: &Path, dir: Option<&Path>) {
     match write_room(api, source, dir).await {
-        Ok(Some(path)) => println!("Points of the room saved to {}", path.display()),
+        Ok(Some(path)) => println!(
+            "Points of the room saved to {BOLD}{}{BOLD:#}",
+            path.display()
+        ),
         Ok(None) => {}
-        Err(error) => println!("Cannot save the points of the room ({error:#})."),
+        Err(error) => println!("{YELLOW}Cannot save the points of the room ({error:#}).{YELLOW:#}"),
     }
 }
 
@@ -487,7 +499,7 @@ async fn reveal(cli: &Cli, id: &str) -> Result<()> {
         .iter()
         .any(|answer| answer.points.is_some())
     {
-        println!("The correct answers are revealed.");
+        println!("{GREEN}The correct answers are revealed.{GREEN:#}");
     } else {
         println!("The question has no points, so there are no correct answers to reveal.");
     }
@@ -667,10 +679,10 @@ fn show_in_browser(url: &str, open_browser: bool) {
                 println!("\nThe presentation view was opened in a browser.");
                 return;
             }
-            Err(error) => println!("\nCannot open a browser ({error})."),
+            Err(error) => println!("\n{YELLOW}Cannot open a browser ({error}).{YELLOW:#}"),
         }
     }
-    println!("\nOpen the presentation view manually:\n\n    {url}\n");
+    println!("\nOpen the presentation view manually:\n\n    {CYAN}{url}{CYAN:#}\n");
 }
 
 /// The next line of the standard input, or never once it is gone.
@@ -701,8 +713,8 @@ async fn wait_for_close(
     stdin: &mut Option<Lines<BufReader<Stdin>>>,
 ) -> Result<()> {
     println!(
-        "Press Enter to close the question and save the answers (Ctrl-C or the button \
-         in the presentation view work too)."
+        "Press {BOLD}Enter{BOLD:#} to close the question and save the answers \
+         ({BOLD}Ctrl-C{BOLD:#} or the button in the presentation view work too)."
     );
 
     // Redrawing one line is for a terminal; a log file wants one line per
@@ -719,7 +731,9 @@ async fn wait_for_close(
                 // Answered out of everybody in the room.
                 let counts = (question.answer_count, question.people);
                 if terminal {
-                    print!("\r  answers: {}/{}\x1b[K", counts.0, counts.1);
+                    // `\x1b[K` clears the rest of the line, which a
+                    // terminal needs with colors or without.
+                    std::print!("\r  answers: {}/{}\x1b[K", counts.0, counts.1);
                     let _ = std::io::stdout().flush();
                 } else if last_counts != Some(counts) {
                     println!("  answers: {}/{}", counts.0, counts.1);
@@ -727,7 +741,7 @@ async fn wait_for_close(
                 last_counts = Some(counts);
 
                 if !question.open {
-                    println!("\nThe question has been closed.");
+                    println!("\n{GREEN}The question has been closed.{GREEN:#}");
                     return Ok(());
                 }
             }
