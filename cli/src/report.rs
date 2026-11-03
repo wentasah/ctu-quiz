@@ -30,6 +30,10 @@ pub fn print_question(question: &Question) {
         );
     }
     println!();
+    if let Some(notes) = &question.notes {
+        println!("Teacher notes (not shown to students):");
+        println!("{notes}\n");
+    }
 }
 
 /// Lists the answers of a published question, in the order the students see

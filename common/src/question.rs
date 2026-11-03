@@ -22,6 +22,12 @@
 //! [`Image`] and ends up in the HTML as a `data:` URL; [`local_images`] says
 //! which images those are. Images given by an `http(s):` URL are left to the
 //! browser to fetch.
+//!
+//! Whatever follows the answers is **teacher notes**: the answers end at the
+//! first top-level element below the `---` rule that is not a list, and that
+//! element and everything after it is for the teacher's terminal only, never
+//! for the browsers. A horizontal rule may separate the notes from the
+//! answers; it is not part of the notes. See [`split_notes`].
 
 use std::collections::BTreeMap;
 
@@ -45,6 +51,10 @@ pub struct Question {
     pub prompt_html: String,
     /// The possible answers, in the order they appear in the file.
     pub answers: Vec<Answer>,
+    /// Teacher notes written after the answers, as Markdown. They are shown
+    /// in the teacher's terminal, never to the students.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
 }
 
 /// One possible answer, i.e. one top-level list item after the `---` rule.
@@ -113,7 +123,7 @@ pub enum ParseError {
     )]
     MissingSeparator,
     #[error(
-        "no list item found after the `---` separator: every possible answer has to be a top-level list item"
+        "no list item found right after the `---` separator: every possible answer has to be a top-level list item, and anything else after the separator starts the teacher notes"
     )]
     NoAnswers,
     #[error("found only one possible answer, a question needs at least two")]
@@ -147,6 +157,7 @@ pub fn parse(source: &str) -> Result<Question, ParseError> {
 /// Parses a Markdown question file, taking the local images it shows from
 /// `images`.
 pub fn parse_with_images(source: &str, images: &Images) -> Result<Question, ParseError> {
+    let (source, notes) = split_notes(source);
     let (prompt_markdown, answers_source) =
         split_at_rule(source).ok_or(ParseError::MissingSeparator)?;
 
@@ -194,7 +205,58 @@ pub fn parse_with_images(source: &str, images: &Images) -> Result<Question, Pars
         prompt_html: render(prompt_markdown, images)?,
         prompt_markdown: prompt_markdown.to_owned(),
         answers,
+        notes: notes.map(str::to_owned),
     })
+}
+
+/// Splits a question file into the part the students see - the question and
+/// its answers - and the teacher notes that follow the answers, if there are
+/// any.
+///
+/// The notes start with the first top-level element after the `---` rule
+/// that is not a list. An HTML comment does not count, nor does it end the
+/// answers: it is left out of what the students see anyway. A horizontal
+/// rule that starts the notes is not part of them. A file without the `---`
+/// rule has no notes.
+pub fn split_notes(source: &str) -> (&str, Option<&str>) {
+    let Some((_, after)) = split_at_rule(source) else {
+        return (source, None);
+    };
+    let answers_start = source.len() - after.len();
+
+    let mut depth = 0usize;
+    let mut notes_start = None;
+    for (event, range) in Parser::new_ext(after, options()).into_offset_iter() {
+        match event {
+            Event::Start(Tag::List(_)) if depth == 0 => depth += 1,
+            Event::Start(Tag::HtmlBlock)
+                if depth == 0 && strip_comments(&after[range.clone()]).trim().is_empty() =>
+            {
+                depth += 1
+            }
+            Event::Start(_) | Event::Rule if depth == 0 => {
+                notes_start = Some(range.start);
+                break;
+            }
+            Event::Start(_) => depth += 1,
+            Event::End(_) => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    let Some(notes_start) = notes_start else {
+        return (source, None);
+    };
+    let mut notes = &after[notes_start..];
+    let (first, rest) = notes.split_once('\n').unwrap_or((notes, ""));
+    if is_thematic_break(first.trim_end_matches('\r')) {
+        notes = rest;
+    }
+    let notes = notes.trim();
+    (
+        &source[..answers_start + notes_start],
+        (!notes.is_empty()).then_some(notes),
+    )
 }
 
 /// The local images the Markdown shows, i.e. the paths that have to be sent
@@ -892,6 +954,46 @@ What's wrong with it?
         assert_eq!(q.answers.len(), 2);
         assert!(q.answers[0].html.starts_with("<p>one</p>"));
         assert_eq!(q.answers[0].plain, "one still one");
+    }
+
+    #[test]
+    fn whatever_follows_the_answers_is_teacher_notes() {
+        let source = "Q?\n\n---\n\n- [x] Red\n- [ ] Blue\n\nRed is ~700 nm.\n\n- not an answer\n";
+        let q = parse(source).unwrap();
+        assert_eq!(q.answers.len(), 2);
+        assert_eq!(q.answers[1].plain, "Blue");
+        assert_eq!(
+            q.notes.as_deref(),
+            Some("Red is ~700 nm.\n\n- not an answer")
+        );
+        assert!(!q.prompt_html.contains("700"));
+        assert!(q.answers.iter().all(|a| !a.html.contains("700")));
+
+        let (students, notes) = split_notes(source);
+        assert_eq!(students, "Q?\n\n---\n\n- [x] Red\n- [ ] Blue\n\n");
+        assert_eq!(notes, Some("Red is ~700 nm.\n\n- not an answer"));
+        // What the students get is a complete question without notes.
+        assert_eq!(parse(students).unwrap().notes, None);
+    }
+
+    #[test]
+    fn a_rule_may_separate_the_notes_from_the_answers() {
+        let q = parse("Q?\n\n---\n\n- a\n- b\n\n---\n\n# Notes\n\nText\n").unwrap();
+        assert_eq!(q.answers.len(), 2);
+        assert_eq!(q.notes.as_deref(), Some("# Notes\n\nText"));
+    }
+
+    #[test]
+    fn answers_without_notes() {
+        assert_eq!(parse("Q?\n\n---\n\n- a\n- b\n").unwrap().notes, None);
+        // Lists with different bullets are all answers, and a comment does
+        // not start the notes.
+        let q = parse("Q?\n\n---\n\n- a\n- b\n\n<!-- c -->\n\n* c\n").unwrap();
+        assert_eq!(q.answers.len(), 3);
+        assert_eq!(q.notes, None);
+        // A rule in a code block of the question is no separator.
+        let (_, notes) = split_notes("```\n---\n```\n\nno rule\n");
+        assert_eq!(notes, None);
     }
 
     #[test]

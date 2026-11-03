@@ -158,10 +158,13 @@ async fn ask(
     view: StudentView,
     shuffle: bool,
 ) -> Result<()> {
-    let markdown = read_question(file)?;
+    let source = read_question(file)?;
+    // The teacher notes stay in the terminal: the server, and so the
+    // browsers, get only the question and its answers.
+    let markdown = quiz_common::question::split_notes(&source).0.to_owned();
     let images = read_images(file, &markdown)?;
     report::print_question(
-        &quiz_common::parse_with_images(&markdown, &images)
+        &quiz_common::parse_with_images(&source, &images)
             .with_context(|| format!("{} is not a usable question", file.display()))?,
     );
 
@@ -301,7 +304,7 @@ fn describe(view: StudentView) -> &'static str {
 /// Shows the parsed question without publishing it.
 fn parse(file: &Path) -> Result<()> {
     let markdown = read_question(file)?;
-    let images = read_images(file, &markdown)?;
+    let images = read_images(file, quiz_common::question::split_notes(&markdown).0)?;
     let question = quiz_common::parse_with_images(&markdown, &images)
         .with_context(|| format!("{} is not a usable question", file.display()))?;
     report::print_question(&question);

@@ -340,6 +340,21 @@ Details worth knowing:
 * `---`, `***` and `___` all work as the separator, and a rule inside a fenced
   code block is ignored.
 * If the file starts with a heading, it becomes the page title.
+* Anything after the answers is **teacher notes**: the answers end with the
+  first top-level element below the `---` rule that is not a list item (a
+  paragraph, a heading, another `---`, …). `quiz parse` and `quiz ask` print
+  the notes in the terminal, but `quiz ask` does not send them to the
+  server, so students never see them:
+
+  ```markdown
+  Which color of the light has the longest wavelength?
+  ---
+  - [x] Red
+  - [ ] Green
+  - [ ] Blue
+  Red ≈ 620–750 nm, green ≈ 495–570 nm, blue ≈ 450–495 nm.
+  ```
+  The last line is the teacher notes.
 * Answers may be **scored**. `- [x] …` is a correct answer worth 1 point and
   `- [ ] …` a wrong one worth 0; `{2}`, `{0.5}` or `{-1}` at the very end of
   an answer sets its points explicitly, with or without a checkbox:
