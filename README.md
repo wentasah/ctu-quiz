@@ -138,10 +138,26 @@ hide-question = true
 close-after = 120 # seconds
 ```
 
-An environment variable or an option on the command line still wins over
-the files. A flag set to `true` in a file cannot be switched off on the
-command line, only by `false` in a nearer `quiz.toml`. The `--help` output
-shows the defaults in effect for the options that take a value.
+A question file may set options of `quiz ask` for itself, as TOML **front
+matter** between two `+++` lines at its very top. The keys are the long
+option names of `ask`, without the `[ask]` table:
+
+```markdown
++++
+shuffle = true
+close-after = 60
++++
+
+Which color of the light has the longest wavelength?
+```
+
+The front matter wins over both files; an environment variable or an
+option on the command line wins over the front matter and the files. A
+flag set to `true` in a file or in the front matter cannot be switched off
+on the command line, only by `false` in a place that wins over it. The
+`--help` output shows the defaults in effect for the options that take a
+value. `quiz parse` checks the front matter and prints it; it is never
+sent to the server.
 
 Ctrl-C does the same as Enter: the question is closed and the answers are
 saved, so a mistyped key does not lose the collected data. So does the
@@ -408,6 +424,7 @@ Details worth knowing:
   ```
 
   The shebang belongs to the script, not to the question, so `quiz` drops it.
+  Front matter, if any, goes right after it.
   This happens only for a file that really is executable: in an ordinary
   Markdown file a first line starting with `#!` stays part of the question.
   `testsupport/executable.md` is the example question in this form.

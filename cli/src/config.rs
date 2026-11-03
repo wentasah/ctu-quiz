@@ -20,8 +20,12 @@
 //!
 //! The values only replace the built-in defaults: an environment variable or
 //! an option given on the command line still wins.
+//!
+//! A question file may carry options of `ask` itself, as TOML front matter
+//! between two `+++` lines at its very top; see [`apply_front_matter`].
+//! They win over both files, but not over the command line.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use etcetera::{BaseStrategy, choose_base_strategy};
@@ -64,6 +68,29 @@ pub fn apply(command: clap::Command) -> Result<clap::Command> {
         figment = figment.merge(file);
     }
     with_defaults(&figment, command)
+}
+
+/// Gives the options of `ask` the defaults from the front matter of the
+/// question `file`, which replace those of the configuration files. The keys
+/// are the long option names of `ask`, without an `[ask]` table.
+pub fn apply_front_matter(
+    command: clap::Command,
+    file: &Path,
+    toml: &str,
+) -> Result<clap::Command> {
+    let context = || format!("in the front matter of {}", file.display());
+    let figment = Figment::from(Toml::string(toml));
+    let values = figment
+        .data()
+        .with_context(context)?
+        .remove(&Profile::Default)
+        .unwrap_or_default();
+    let ask = command
+        .find_subcommand("ask")
+        .cloned()
+        .context("no `ask` subcommand")?;
+    let ask = set_defaults(&figment, ask, values, "").with_context(context)?;
+    Ok(command.mut_subcommand("ask", |_| ask))
 }
 
 /// Gives the options of `command` the defaults that `figment` holds.
@@ -131,7 +158,7 @@ mod tests {
         providers::{Format, Toml},
     };
 
-    use super::with_defaults;
+    use super::{apply_front_matter, with_defaults};
     use crate::cli::{Cli, Command};
 
     fn parse(toml: &str, args: &[&str]) -> Cli {
@@ -184,6 +211,48 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn the_front_matter_wins_over_the_files_but_not_over_the_command_line() {
+        let toml = "[ask]\nshuffle = true\nclose-after = 120\nhide-question = true\n";
+        let figment = Figment::new().merge(Toml::string(toml));
+        let command = with_defaults(&figment, Cli::command()).unwrap();
+        let front = "close-after = 60\nshuffle = false\nlabels-only = true\n";
+        let command = apply_front_matter(command, "q.md".as_ref(), front).unwrap();
+        let matches = command
+            .try_get_matches_from(["quiz", "ask", "--close-after", "5", "q.md"])
+            .unwrap();
+        let Command::Ask {
+            shuffle,
+            close_after,
+            hide_question,
+            labels_only,
+            ..
+        } = Cli::from_arg_matches(&matches).unwrap().command
+        else {
+            panic!("not ask");
+        };
+        assert_eq!(close_after, Some(5));
+        assert!(!shuffle);
+        assert!(hide_question);
+        assert!(labels_only);
+    }
+
+    #[test]
+    fn mistakes_in_the_front_matter_are_reported() {
+        for toml in [
+            "server = 'x'",
+            "file = 'q.md'",
+            "[ask]\nshuffle = true",
+            "shuffle = [",
+        ] {
+            let error = apply_front_matter(Cli::command(), "q.md".as_ref(), toml).unwrap_err();
+            assert!(
+                format!("{error:#}").contains("front matter of q.md"),
+                "{toml}"
+            );
+        }
     }
 
     #[test]

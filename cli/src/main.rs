@@ -14,6 +14,7 @@ mod config;
 mod report;
 
 use std::{
+    ffi::OsString,
     io::{IsTerminal, Write},
     path::{Path, PathBuf},
     process::ExitCode,
@@ -52,10 +53,28 @@ async fn main() -> ExitCode {
 }
 
 /// Parses the command line, with the defaults from the configuration files
-/// in place of the built-in ones.
+/// and from the front matter of the question file in place of the built-in
+/// ones.
+///
+/// The question file is known only once the command line is parsed, so with
+/// front matter it is parsed a second time, with the new defaults.
+/// `quiz parse` reads the front matter too, to check it.
 fn parse_command_line() -> Result<Cli> {
+    let args: Vec<OsString> = std::env::args_os().collect();
     let command = config::apply(Cli::command()).context("reading the configuration failed")?;
-    Ok(Cli::from_arg_matches(&command.get_matches()).unwrap_or_else(|error| error.exit()))
+    let mut matches = command
+        .clone()
+        .try_get_matches_from(&args)
+        .unwrap_or_else(|error| error.exit());
+    if let Some(("ask" | "parse", sub)) = matches.subcommand()
+        && let Some(file) = sub.get_one::<PathBuf>("file").cloned()
+        && let (Some(toml), _) = read_source(&file)?
+    {
+        matches = config::apply_front_matter(command, &file, &toml)?
+            .try_get_matches_from(&args)
+            .unwrap_or_else(|error| error.exit());
+    }
+    Ok(Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit()))
 }
 
 async fn run(cli: &Cli) -> Result<()> {
@@ -303,7 +322,7 @@ fn describe(view: StudentView) -> &'static str {
 
 /// Shows the parsed question without publishing it.
 fn parse(file: &Path) -> Result<()> {
-    let markdown = read_question(file)?;
+    let (front_matter, markdown) = read_source(file)?;
     let images = read_images(file, quiz_common::question::split_notes(&markdown).0)?;
     let question = quiz_common::parse_with_images(&markdown, &images)
         .with_context(|| format!("{} is not a usable question", file.display()))?;
@@ -314,6 +333,13 @@ fn parse(file: &Path) -> Result<()> {
         if question.is_scored() { "scored " } else { "" },
         question.answers.len()
     );
+    // Checked already, when the command line was parsed.
+    if let Some(toml) = front_matter.filter(|toml| !toml.trim().is_empty()) {
+        println!(
+            "Its front matter sets these options of `quiz ask`:\n{}",
+            toml.trim_end()
+        );
+    }
     Ok(())
 }
 
@@ -530,12 +556,41 @@ async fn connect(cli: &Cli, force_login: bool) -> Result<Api> {
 /// Only an executable file is treated this way; in an ordinary Markdown file a
 /// first line starting with `#!` stays part of the question.
 fn read_question(file: &Path) -> Result<String> {
-    let markdown =
+    Ok(read_source(file)?.1)
+}
+
+/// Reads a question file: its TOML front matter, if it has any, and the
+/// Markdown of the question, without the front matter and the shebang.
+fn read_source(file: &Path) -> Result<(Option<String>, String)> {
+    let source =
         std::fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))?;
-    if is_executable(file) {
-        return Ok(strip_shebang(&markdown).to_owned());
+    let source = if is_executable(file) {
+        strip_shebang(&source)
+    } else {
+        &source
+    };
+    let (front_matter, markdown) = split_front_matter(source)
+        .with_context(|| format!("{} is not a usable question", file.display()))?;
+    Ok((front_matter.map(str::to_owned), markdown.to_owned()))
+}
+
+/// Splits off the TOML front matter: the lines between a `+++` line at the
+/// very top and the next `+++` line.
+fn split_front_matter(source: &str) -> Result<(Option<&str>, &str)> {
+    let is_delimiter = |line: &str| line.trim_end() == "+++";
+    let mut lines = source.split_inclusive('\n');
+    if !lines.next().is_some_and(is_delimiter) {
+        return Ok((None, source));
     }
-    Ok(markdown)
+    let start = source.find('\n').map_or(source.len(), |i| i + 1);
+    let mut offset = start;
+    for line in lines {
+        if is_delimiter(line) {
+            return Ok((Some(&source[start..offset]), &source[offset + line.len()..]));
+        }
+        offset += line.len();
+    }
+    bail!("the front matter that starts with `+++` on the first line has no closing `+++`")
 }
 
 /// Reads the local images the question shows. Their paths are relative to the
@@ -729,7 +784,22 @@ async fn next_state(api: &Api, id: &str, events: &mut Option<Events>) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{describe, read_question, strip_shebang, student_view};
+    use super::{describe, read_question, split_front_matter, strip_shebang, student_view};
+
+    #[test]
+    fn front_matter_is_split_off() {
+        assert_eq!(
+            split_front_matter("+++\nshuffle = true\n+++\nQ?\n").unwrap(),
+            (Some("shuffle = true\n"), "Q?\n")
+        );
+        assert_eq!(split_front_matter("+++ \r\n+++").unwrap(), (Some(""), ""));
+        // Only at the very top.
+        assert_eq!(
+            split_front_matter("Q?\n+++\na\n+++\n").unwrap(),
+            (None, "Q?\n+++\na\n+++\n")
+        );
+        assert!(split_front_matter("+++\nshuffle = true\nQ?\n").is_err());
+    }
 
     #[test]
     fn a_shebang_line_is_removed() {

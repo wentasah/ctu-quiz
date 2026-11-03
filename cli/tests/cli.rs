@@ -739,6 +739,46 @@ async fn a_configuration_file_is_found_in_a_parent_directory() {
     assert!(output.status.success(), "{output:?}");
 }
 
+#[tokio::test]
+async fn the_front_matter_is_checked_and_left_out_of_the_question() {
+    let dir = scratch("front-matter");
+    let question = dir.join("question.md");
+    std::fs::write(
+        &question,
+        format!("+++\nshufle = true\n+++\n{EXAMPLE_QUESTION}"),
+    )
+    .unwrap();
+    let output = quiz(&dir)
+        .arg("parse")
+        .arg(&question)
+        .output()
+        .await
+        .unwrap();
+    assert!(!output.status.success());
+    let printed = String::from_utf8_lossy(&output.stderr);
+    assert!(printed.contains("front matter of"), "{printed}");
+    assert!(printed.contains("unknown option `shufle`"), "{printed}");
+
+    std::fs::write(
+        &question,
+        format!("+++\nshuffle = true\nclose-after = 30\n+++\n{EXAMPLE_QUESTION}"),
+    )
+    .unwrap();
+    let output = quiz(&dir)
+        .arg("parse")
+        .arg(&question)
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        printed.starts_with("Consider the following BASH code:"),
+        "{printed}"
+    );
+    assert!(printed.contains("close-after = 30"), "{printed}");
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn an_executable_question_loses_its_shebang_line() {
