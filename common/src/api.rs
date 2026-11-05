@@ -217,6 +217,26 @@ pub struct RoomInfo {
     pub expires_at: DateTime<Utc>,
     /// Questions still kept in memory, in the order they were asked.
     pub questions: Vec<RoomQuestion>,
+    /// Every student who is in the room now or answered a question kept in
+    /// it, sorted by login; empty from older servers.
+    #[serde(default)]
+    pub roster: Vec<RoomStudent>,
+}
+
+/// A student in a room, see [`RoomInfo::roster`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomStudent {
+    pub login: String,
+    /// Full name, as given with an answer; empty for a student who has not
+    /// answered any of the kept questions.
+    pub name: String,
+    /// Whether the student has the room open in a browser right now.
+    pub present: bool,
+    /// How many of the questions kept in the room the student answered.
+    pub answered: usize,
+    /// Points for those answers, `None` when none of them is scored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub points: Option<f64>,
 }
 
 /// A question kept in a room, see [`RoomInfo`].

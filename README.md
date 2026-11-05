@@ -109,6 +109,7 @@ quiz login                    # log in ahead of the lecture
 quiz whoami                    # who am I, and may I ask questions?
 quiz logout [--all]          # end the lecture: close the room, forget the token
 quiz status                   # the room, and the questions the server keeps
+quiz status --students        # the students in the room, their answers and points
 quiz close <question id>      # if `quiz ask` was interrupted: close and save
 quiz close                    # end the lecture but stay logged in: close the room
 quiz reveal <question id>     # mark the correct answers, if `quiz ask` did not
@@ -271,7 +272,11 @@ goes like this:
 * `quiz status` shows the room — its code, URLs, how many students have it
   open — and every question still kept in it, with its id, state, number of
   answers and how long until the server drops it. That is where to find the
-  id for `quiz close <id>` after an interrupted `quiz ask`.
+  id for `quiz close <id>` after an interrupted `quiz ask`. With
+  `--students` it lists, instead, every student who is in the room or
+  answered a question kept in it, whether they have it open now, how many of
+  the kept questions they answered and their points; `--format json`,
+  `jsonl` or `csv` prints the same for scripts instead of the table.
 * **`quiz close` without a question id closes the room**: its questions are
   dropped, the students' pages reload and report that the room is gone, and
   the URL and the code stop working. The next question opens a new room with

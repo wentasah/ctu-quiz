@@ -2,6 +2,7 @@
 
 use std::{
     collections::BTreeMap,
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -11,11 +12,14 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
 use quiz_common::{
     Question,
-    api::{AnswerInfo, QuestionInfo, ResultRow, Results, RoomInfo},
+    api::{AnswerInfo, QuestionInfo, ResultRow, Results, RoomInfo, RoomStudent},
 };
 use serde::Serialize;
 
-use crate::color::{BOLD, CYAN, DIM, GREEN, RED, YELLOW};
+use crate::{
+    cli::Format,
+    color::{BOLD, CYAN, DIM, GREEN, RED, YELLOW},
+};
 
 /// Shows the parsed question, so that the teacher can check the Markdown was
 /// understood as intended before students see it.
@@ -342,6 +346,79 @@ pub fn print_room(room: &RoomInfo) {
              and its answers saved, by `quiz close <id>`."
         );
     }
+}
+
+/// What `quiz status --students` shows instead of the room: a line for
+/// every student who is in the room or answered a question kept in it.
+pub fn print_students(room: &RoomInfo) {
+    if room.roster.is_empty() {
+        println!("No students are in the room or have answered.");
+        return;
+    }
+    let questions = room.questions.len();
+    let login_width = room
+        .roster
+        .iter()
+        .map(|student| student.login.chars().count())
+        .chain(["Login".len()])
+        .max()
+        .unwrap_or_default();
+    println!(
+        "{BOLD}{:<login_width$}  State    Answered  Points  Name{BOLD:#}",
+        "Login"
+    );
+    for student in &room.roster {
+        let state = if student.present {
+            format!("{GREEN}{:<7}{GREEN:#}", "present")
+        } else {
+            format!("{DIM}{:<7}{DIM:#}", "left")
+        };
+        let points = student.points.map(number).unwrap_or_else(|| "-".to_owned());
+        println!(
+            "{:<login_width$}  {state}  {:>8}  {points:>6}  {}",
+            student.login,
+            format!("{}/{questions}", student.answered),
+            student.name,
+        );
+    }
+    let present = room.roster.iter().filter(|student| student.present).count();
+    println!(
+        "({} students, {present} present; answers and points of the {questions} questions kept in the room)",
+        room.roster.len()
+    );
+}
+
+/// `quiz status --students` in one of the machine-readable formats.
+pub fn write_students(roster: &[RoomStudent], format: Format) -> Result<()> {
+    let mut out = std::io::stdout().lock();
+    match format {
+        Format::Text => unreachable!("printed by print_students"),
+        Format::Json => {
+            serde_json::to_writer_pretty(&mut out, roster)?;
+            writeln!(out)?;
+        }
+        Format::Jsonl => {
+            for student in roster {
+                serde_json::to_writer(&mut out, student)?;
+                writeln!(out)?;
+            }
+        }
+        Format::Csv => {
+            let mut writer = csv::Writer::from_writer(out);
+            writer.write_record(["login", "name", "present", "answered", "points"])?;
+            for student in roster {
+                writer.write_record([
+                    student.login.clone(),
+                    student.name.clone(),
+                    student.present.to_string(),
+                    student.answered.to_string(),
+                    student.points.map(number).unwrap_or_default(),
+                ])?;
+            }
+            writer.flush()?;
+        }
+    }
+    Ok(())
 }
 
 /// How long until `when`, roughly: the server drops things every few

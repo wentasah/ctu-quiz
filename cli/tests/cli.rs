@@ -283,6 +283,52 @@ async fn ask_flow() {
     assert!(row.starts_with("*  1 "), "{row}");
     assert!(row.contains(" revealed "), "{row}");
     assert!(row.contains(" 1  "), "{row}");
+    assert!(!printed.contains("novakja1"), "{printed}");
+
+    // `--students` lists the students instead.
+    let output = quiz(&dir)
+        .args(["--server", &base, "--no-browser", "status", "--students"])
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    let row = printed
+        .lines()
+        .find(|line| line.starts_with("novakja1 "))
+        .expect("the student is listed");
+    let fields: Vec<&str> = row.split_whitespace().collect();
+    assert_eq!(fields[1..], ["left", "1/1", "1.0", "Jan", "Novák"], "{row}");
+    assert!(!printed.contains("Question code:"), "{printed}");
+
+    // The same in the machine-readable formats.
+    let students = |format: &'static str| {
+        let dir = dir.clone();
+        let base = base.clone();
+        async move {
+            let output = quiz(&dir)
+                .args(["--server", &base, "--no-browser", "status", "--students"])
+                .args(["--format", format])
+                .output()
+                .await
+                .unwrap();
+            let printed = String::from_utf8(output.stdout).unwrap();
+            assert!(output.status.success(), "{printed}");
+            printed
+        }
+    };
+    let student =
+        r#"{"login":"novakja1","name":"Jan Novák","present":false,"answered":1,"points":1.0}"#;
+    assert_eq!(students("jsonl").await, format!("{student}\n"));
+    let json: serde_json::Value = serde_json::from_str(&students("json").await).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!([serde_json::from_str::<serde_json::Value>(student).unwrap()])
+    );
+    assert_eq!(
+        students("csv").await,
+        "login,name,present,answered,points\nnovakja1,Jan Novák,false,1,1.0\n"
+    );
 
     // `quiz close` without a question id ends the lecture: the page the
     // student has open stops working, but the teacher stays logged in.

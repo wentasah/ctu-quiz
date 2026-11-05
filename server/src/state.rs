@@ -23,7 +23,8 @@ use axum_extra::extract::cookie::Key;
 use chrono::{DateTime, TimeDelta, Utc};
 use openidconnect::{Nonce, PkceCodeVerifier};
 use quiz_common::api::{
-    AnswerInfo, LiveState, QuestionInfo, ResultRow, Results, RoomInfo, RoomQuestion, StudentView,
+    AnswerInfo, LiveState, QuestionInfo, ResultRow, Results, RoomInfo, RoomQuestion, RoomStudent,
+    StudentView,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, broadcast};
@@ -487,6 +488,7 @@ impl Store {
             })
             .collect();
         questions.sort_by_key(|question| question.number);
+        let roster = self.roster(room);
 
         Some(RoomInfo {
             code: room.code.clone(),
@@ -499,7 +501,54 @@ impl Store {
             last_used_at: room.last_used_at,
             expires_at: room.last_used_at + ttl,
             questions,
+            roster,
         })
+    }
+
+    /// Every student who is in `room` now or answered a question kept in it,
+    /// sorted by login, with what they answered. Those who came and went
+    /// without answering are not remembered.
+    fn roster(&self, room: &Room) -> Vec<RoomStudent> {
+        let present = room.students.logins();
+        let student = |login: &String| RoomStudent {
+            present: present.contains(login),
+            login: login.clone(),
+            // Known only from an answer.
+            name: String::new(),
+            answered: 0,
+            points: None,
+        };
+        let mut students: BTreeMap<String, RoomStudent> = present
+            .iter()
+            .map(|login| (login.clone(), student(login)))
+            .collect();
+        let questions = self
+            .questions
+            .values()
+            .filter(|question| question.room == room.token);
+        for question in questions {
+            for (login, response) in &question.responses {
+                let student = students
+                    .entry(login.clone())
+                    .or_insert_with(|| student(login));
+                if student.name.is_empty() {
+                    student.name = response.name.clone();
+                }
+                student.answered += 1;
+                if let Some(points) = response.points {
+                    *student.points.get_or_insert(0.0) += points;
+                }
+            }
+        }
+        students
+            .into_values()
+            .map(|mut student| {
+                // Rounded, so that 0.1 + 0.2 does not end up as
+                // 0.30000000000000004.
+                student.points = student.points.map(|p| (p * 1e6).round() / 1e6);
+                student
+            })
+            .collect()
     }
 
     /// What the students in a room are shown, for the event stream.
@@ -1032,5 +1081,64 @@ mod tests {
         assert_eq!(store.room("room").unwrap().current, Some(current));
         // Other rooms are left alone.
         assert!(store.get("q1000").is_some());
+    }
+
+    #[test]
+    fn the_roster_lists_who_is_in_the_room_or_answered() {
+        let now = Utc::now();
+        let mut store = Store::default();
+        store.insert_room(room("room", now));
+        let response = |name: &str, points| Response {
+            name: name.to_owned(),
+            index: 0,
+            label: "A".to_owned(),
+            points,
+            answered_at: now,
+        };
+        let mut first = question("room", 1, now);
+        first
+            .responses
+            .insert("ann".to_owned(), response("Ann", Some(0.1)));
+        first
+            .responses
+            .insert("bob".to_owned(), response("Bob", None));
+        let mut second = question("room", 2, now);
+        second
+            .responses
+            .insert("ann".to_owned(), response("Ann", Some(0.2)));
+        store.insert_question(first);
+        store.insert_question(second);
+
+        let room = store.room("room").unwrap();
+        // Ann is still there, Bob has left and Cid is there but has not
+        // answered yet; Dan came and went without answering.
+        let _ann = room.students.enter("ann");
+        let _cid = room.students.enter("cid");
+        drop(room.students.enter("dan"));
+
+        let roster = store
+            .room_status("teacher", TimeDelta::hours(1))
+            .unwrap()
+            .roster;
+        let rows: Vec<_> = roster
+            .iter()
+            .map(|s| {
+                (
+                    s.login.as_str(),
+                    s.name.as_str(),
+                    s.present,
+                    s.answered,
+                    s.points,
+                )
+            })
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("ann", "Ann", true, 2, Some(0.3)),
+                ("bob", "Bob", false, 1, None),
+                ("cid", "", true, 0, None),
+            ]
+        );
     }
 }

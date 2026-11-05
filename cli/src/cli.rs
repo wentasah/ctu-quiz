@@ -128,7 +128,16 @@ pub enum Command {
     /// Show who this tool is logged in as.
     Whoami,
     /// Show the room students are in and the questions kept in it.
-    Status,
+    Status {
+        /// List, instead of the room, every student who is in it or answered
+        /// a question kept in it, whether they are there now, how many questions they
+        /// answered and their points.
+        #[arg(long)]
+        students: bool,
+        /// How to print the students.
+        #[arg(long, value_enum, default_value_t, requires = "students")]
+        format: Format,
+    },
     /// Close the whole room or a question and save its answers.
     Close {
         /// Question id, as printed by `quiz ask` or `quiz status`.
@@ -150,4 +159,18 @@ pub enum Command {
         /// Question id, as printed by `quiz ask`.
         id: String,
     },
+}
+
+/// Output format of `quiz status --students`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum Format {
+    /// A table for people to read.
+    #[default]
+    Text,
+    /// A JSON array of students.
+    Json,
+    /// A JSON object per student, one on each line.
+    Jsonl,
+    /// CSV with a header line.
+    Csv,
 }
