@@ -69,6 +69,9 @@ struct SavedQuestion {
     closed_at: Option<DateTime<Utc>>,
     revealed: bool,
     responses: BTreeMap<String, Response>,
+    /// Missing in the files of older servers, which had no manual points.
+    #[serde(default)]
+    manual: bool,
 }
 
 impl Saved {
@@ -102,6 +105,7 @@ impl Saved {
                 closed_at: question.closed_at,
                 revealed: question.revealed,
                 responses: question.responses.clone(),
+                manual: question.manual,
             })
             .collect();
         Self {
@@ -176,6 +180,7 @@ impl Saved {
                 closed_at: question.closed_at,
                 revealed: question.revealed,
                 responses,
+                manual: question.manual,
                 updates: broadcast::channel(16).0,
             });
         }
@@ -346,6 +351,7 @@ mod tests {
                     answered_at: at,
                 },
             )]),
+            manual: false,
         }
     }
 

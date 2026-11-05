@@ -33,7 +33,7 @@ use client::{Api, Events, Login};
 use color::{BOLD, CYAN, GREEN, YELLOW};
 use quiz_common::{
     Image, Images, ParseError,
-    api::{CreateQuestion, QuestionInfo, StudentView},
+    api::{AwardPoints, CreateQuestion, QuestionInfo, StudentView},
 };
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use url::Url;
@@ -118,6 +118,20 @@ async fn run(cli: &Cli) -> Result<()> {
             Some(id) => close_question(cli, id, output.clone()).await,
             None => close_room(cli, output.is_some()).await,
         },
+        Command::Award {
+            login,
+            points,
+            id,
+            output_dir,
+            room_dir,
+        } => {
+            let destination = Destination {
+                output: None,
+                dir: output_dir.as_deref(),
+                room_dir: *room_dir,
+            };
+            award_points(cli, login, *points, id.clone(), destination).await
+        }
         Command::Reveal { id } => reveal(cli, id).await,
     }
 }
@@ -496,6 +510,36 @@ async fn write_room(api: &Api, source: &Path, dir: Option<&Path>) -> Result<Opti
     let path = report::room_csv_path(source, dir, &room.code, opened);
     report::write_room_csv(&path, &questions)?;
     Ok(Some(path))
+}
+
+/// Awards a student points by hand and rewrites the points of the room, in
+/// the current directory unless `destination` says otherwise.
+async fn award_points(
+    cli: &Cli,
+    login: &str,
+    points: f64,
+    label: Option<String>,
+    destination: Destination<'_>,
+) -> Result<()> {
+    let api = connect(cli, false).await?;
+    let added = api
+        .award_points(&AwardPoints {
+            login: login.to_owned(),
+            points,
+            label,
+        })
+        .await?;
+    println!(
+        "{} ({login}) got {} point(s) under {BOLD}{}{BOLD:#}.",
+        added.name,
+        report::number(points),
+        added.question.source_name,
+    );
+    // No question file to put it next to: the current directory it is.
+    let here = Path::new("");
+    let dir = destination.dir(&api, here).await?;
+    save_room(&api, here, dir.as_deref()).await;
+    Ok(())
 }
 
 /// Marks the correct answers of a question whose `quiz ask` ended before.

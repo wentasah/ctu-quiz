@@ -281,6 +281,10 @@ pub struct Question {
     pub revealed: bool,
     /// Answers, keyed by login, so that answering twice replaces the answer.
     pub responses: BTreeMap<String, Response>,
+    /// Whether this is no question but points given by hand, see
+    /// [`AppState::award_points`]. It has no content and is closed from the
+    /// start.
+    pub manual: bool,
     /// Notifies the server-sent-event streams that something changed.
     pub updates: broadcast::Sender<()>,
 }
@@ -332,6 +336,7 @@ impl Question {
             created_at: self.created_at,
             closed_at: self.closed_at,
             revealed: self.revealed,
+            manual: self.manual,
         }
     }
 
@@ -534,7 +539,9 @@ impl Store {
                 if student.name.is_empty() {
                     student.name = response.name.clone();
                 }
-                student.answered += 1;
+                if !question.manual {
+                    student.answered += 1;
+                }
                 if let Some(points) = response.points {
                     *student.points.get_or_insert(0.0) += points;
                 }
@@ -549,6 +556,77 @@ impl Store {
                 student
             })
             .collect()
+    }
+
+    /// See [`AppState::award_points`]; returns the id of the manual entry and
+    /// the name of the student. `room` has to exist.
+    fn award_points(
+        &mut self,
+        room: &str,
+        login: &str,
+        points: f64,
+        label: &str,
+        now: DateTime<Utc>,
+    ) -> (String, String) {
+        let in_room = || self.questions.values().filter(|q| q.room == room);
+        let name = in_room()
+            .find_map(|question| question.responses.get(login))
+            .map_or_else(|| login.to_owned(), |response| response.name.clone());
+        let response = Response {
+            name: name.clone(),
+            index: 0,
+            label: String::new(),
+            points: Some(points),
+            answered_at: now,
+        };
+
+        for n in 1.. {
+            let source_name = match n {
+                1 => label.to_owned(),
+                n => format!("{label}#{n}"),
+            };
+            let mut same = in_room().filter(|question| question.source_name == source_name);
+            if same.clone().any(|question| !question.manual) {
+                continue;
+            }
+            if let Some(entry) = same.next() {
+                if entry.responses.contains_key(login) {
+                    continue;
+                }
+                let id = entry.id.clone();
+                let entry = self.get_mut(&id).expect("it was just found");
+                entry.responses.insert(login.to_owned(), response);
+                return (id, name);
+            }
+
+            let room = self.room_mut(room).expect("the room exists");
+            room.asked += 1;
+            let id = random_token();
+            let entry = Question {
+                id: id.clone(),
+                room: room.token.clone(),
+                code: room.code.clone(),
+                source_name,
+                number: room.asked,
+                content: None,
+                view: StudentView::default(),
+                answer_url: room.url.clone(),
+                display_url: room.display_url.clone(),
+                presented: false,
+                teacher: room.teacher.clone(),
+                created_at: now,
+                close_after: None,
+                closes_at: None,
+                closed_at: Some(now),
+                revealed: false,
+                responses: BTreeMap::from([(login.to_owned(), response)]),
+                manual: true,
+                updates: broadcast::channel(16).0,
+            };
+            self.insert_question(entry);
+            return (id, name);
+        }
+        unreachable!("some label is always free")
     }
 
     /// What the students in a room are shown, for the event stream.
@@ -841,6 +919,7 @@ impl AppState {
             closed_at: None,
             revealed: false,
             responses: BTreeMap::new(),
+            manual: false,
             updates: broadcast::channel(16).0,
         });
         store.trim_room(&room, MAX_ROOM_QUESTIONS);
@@ -885,6 +964,27 @@ impl AppState {
     /// are in progress, in which case the visitor has to try again later.
     pub async fn begin_login(&self, csrf: String, pending: PendingLogin) -> bool {
         insert_pending_login(&mut *self.logins.write().await, csrf, pending)
+    }
+
+    /// Gives `login` `points` by hand in the room of `teacher`, under
+    /// `label` or, when that is a real question or the student has points
+    /// there already, `label#2`, `label#3`, ... Returns the manual entry and
+    /// the name of the student, or `None` when the teacher has no room.
+    pub async fn award_points(
+        &self,
+        teacher: &str,
+        login: &str,
+        points: f64,
+        label: &str,
+    ) -> Option<(QuestionInfo, String)> {
+        let now = Utc::now();
+        let mut store = self.store.write().await;
+        let room = store.room_of_teacher(teacher)?.token.clone();
+        let (id, name) = store.award_points(&room, login, points, label, now);
+        store.trim_room(&room, MAX_ROOM_QUESTIONS);
+        store.room_mut(&room)?.last_used_at = now;
+        let info = store.question_info(store.get(&id)?);
+        Some((info, name))
     }
 
     /// Closes the room of `teacher`, as `quiz logout` asks the server to do
@@ -1052,6 +1152,7 @@ mod tests {
             closed_at: None,
             revealed: false,
             responses: BTreeMap::new(),
+            manual: false,
             updates: broadcast::channel(16).0,
         }
     }
@@ -1140,5 +1241,73 @@ mod tests {
                 ("cid", "", true, 0, None),
             ]
         );
+    }
+
+    #[test]
+    fn manual_points_never_change_a_real_question() {
+        let now = Utc::now();
+        let mut store = Store::default();
+        store.insert_room(room("room", now));
+        let mut asked = question("room", 1, now);
+        asked.source_name = "q1.md".to_owned();
+        asked.closed_at = Some(now);
+        asked.responses.insert(
+            "ann".to_owned(),
+            Response {
+                name: "Ann".to_owned(),
+                index: 0,
+                label: "A".to_owned(),
+                points: Some(1.0),
+                answered_at: now,
+            },
+        );
+        store.insert_question(asked);
+        store.room_mut("room").unwrap().asked = 1;
+
+        let mut give = |login, points, label| {
+            let (id, name) = store.award_points("room", login, points, label, now);
+            let entry = store.get(&id).unwrap();
+            assert!(entry.manual && !entry.is_open());
+            (entry.source_name.clone(), name)
+        };
+        // The real question is skipped even for a student who did not
+        // answer it.
+        assert_eq!(give("ann", 2.0, "q1.md"), ("q1.md#2".into(), "Ann".into()));
+        assert_eq!(give("bob", 1.0, "q1.md"), ("q1.md#2".into(), "bob".into()));
+        assert_eq!(give("ann", 0.5, "q1.md"), ("q1.md#3".into(), "Ann".into()));
+        assert_eq!(give("ann", 1.0, "manual"), ("manual".into(), "Ann".into()));
+        assert_eq!(
+            give("ann", 1.0, "manual"),
+            ("manual#2".into(), "Ann".into())
+        );
+
+        let real = store.get("q1").unwrap();
+        assert_eq!(real.responses.len(), 1);
+        assert_eq!(real.responses["ann"].points, Some(1.0));
+        let numbers: Vec<_> = store
+            .questions
+            .values()
+            .filter(|question| question.manual)
+            .map(|question| (question.number, question.source_name.as_str()))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        assert_eq!(
+            numbers,
+            [
+                (2, "q1.md#2"),
+                (3, "q1.md#3"),
+                (4, "manual"),
+                (5, "manual#2")
+            ]
+        );
+
+        // Manual points add to the total but are not answers.
+        let roster = store
+            .room_status("teacher", TimeDelta::hours(1))
+            .unwrap()
+            .roster;
+        let ann = roster.iter().find(|s| s.login == "ann").unwrap();
+        assert_eq!((ann.answered, ann.points), (1, Some(5.5)));
     }
 }

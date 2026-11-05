@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow};
 use quiz_common::api::{
-    API_PREFIX, ApiError, CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, RoomStatus,
-    WhoAmI,
+    API_PREFIX, ApiError, AwardPoints, CreateQuestion, OidcInfo, PointsAwarded, QuestionInfo,
+    Results, RoomClosed, RoomStatus, WhoAmI,
 };
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -65,6 +65,12 @@ impl Api {
     /// Asks the server to drop the room this teacher's students are in.
     pub async fn close_room(&self) -> Result<RoomClosed> {
         self.send(self.post("room/close").await?).await
+    }
+
+    /// Awards a student points by hand.
+    pub async fn award_points(&self, points: &AwardPoints) -> Result<PointsAwarded> {
+        let request = self.post("room/award").await?.json(points);
+        self.send(request).await
     }
 
     pub async fn create_question(&self, question: &CreateQuestion) -> Result<QuestionInfo> {

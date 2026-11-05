@@ -12,7 +12,8 @@ use axum::{
 };
 use chrono::Utc;
 use quiz_common::api::{
-    CreateQuestion, OidcInfo, QuestionInfo, Results, RoomClosed, RoomStatus, WhoAmI,
+    AwardPoints, CreateQuestion, DEFAULT_POINTS_LABEL, OidcInfo, PointsAwarded, QuestionInfo,
+    Results, RoomClosed, RoomStatus, WhoAmI,
 };
 
 use crate::{
@@ -59,6 +60,40 @@ pub async fn close_room(State(state): State<AppState>, ApiUser(user): ApiUser) -
         tracing::info!(teacher = %user.login, questions, "room closed");
     }
     Json(RoomClosed { closed, questions })
+}
+
+/// `POST /api/v1/room/award` - awards a student points by hand, see
+/// [`AwardPoints`].
+pub async fn award_points(
+    State(state): State<AppState>,
+    Teacher(teacher): Teacher,
+    Json(request): Json<AwardPoints>,
+) -> Result<Json<PointsAwarded>, ApiFailure> {
+    let login = request.login.trim();
+    if login.is_empty() {
+        return Err(ApiFailure::bad_request("the login is empty"));
+    }
+    if !request.points.is_finite() {
+        return Err(ApiFailure::bad_request("the points are not a number"));
+    }
+    let label = request.label.as_deref().map(str::trim);
+    let label = match label {
+        None => DEFAULT_POINTS_LABEL,
+        Some("") => return Err(ApiFailure::bad_request("the question id is empty")),
+        Some(label) => label,
+    };
+    let (question, name) = state
+        .award_points(&teacher.login, login, request.points, label)
+        .await
+        .ok_or_else(|| ApiFailure::not_found("no room is open; ask a question first"))?;
+    tracing::info!(
+        teacher = %teacher.login,
+        login,
+        points = request.points,
+        label = %question.source_name,
+        "points awarded by hand"
+    );
+    Ok(Json(PointsAwarded { question, name }))
 }
 
 /// `GET /api/v1/room` - the teacher's room and the questions kept in it, for

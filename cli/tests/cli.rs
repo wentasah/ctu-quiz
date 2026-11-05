@@ -330,6 +330,62 @@ async fn ask_flow() {
         "login,name,present,answered,points\nnovakja1,Jan Novák,false,1,1.0\n"
     );
 
+    // `quiz award` never changes the real question, but adds a column.
+    let output = quiz(&dir)
+        .args([
+            "--server",
+            &base,
+            "--no-browser",
+            "award",
+            "novakja1",
+            "-0.5",
+        ])
+        .arg("questions.md")
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    assert!(
+        printed.contains("Jan Novák (novakja1) got -0.5 point(s) under questions.md#2."),
+        "{printed}"
+    );
+    assert_eq!(
+        students("csv").await,
+        "login,name,present,answered,points\nnovakja1,Jan Novák,false,1,0.5\n"
+    );
+    // It rewrites the points of the room in the current directory, which
+    // is where the question file is here.
+    assert!(
+        printed.contains(&format!(
+            "Points of the room saved to {}",
+            room_csv.file_name().unwrap().to_string_lossy()
+        )),
+        "{printed}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&room_csv).unwrap(),
+        "login,name,questions.md,questions.md#2,total\n\
+         novakja1,Jan Novák,1.0,-0.5,0.5\n"
+    );
+
+    // `--room-dir` puts it where `quiz ask --room-dir` would.
+    let output = quiz(&dir)
+        .args(["--server", &base, "--no-browser", "award", "--room-dir"])
+        .args(["novakja1", "1"])
+        .output()
+        .await
+        .unwrap();
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{printed}");
+    let room_name = room_csv.file_stem().unwrap();
+    let in_room_dir = dir.join(room_name).join(room_csv.file_name().unwrap());
+    assert_eq!(
+        std::fs::read_to_string(&in_room_dir).unwrap(),
+        "login,name,questions.md,questions.md#2,manual,total\n\
+         novakja1,Jan Novák,1.0,-0.5,1.0,1.5\n"
+    );
+
     // `quiz close` without a question id ends the lecture: the page the
     // student has open stops working, but the teacher stays logged in.
     let output = quiz(&dir)
@@ -340,7 +396,8 @@ async fn ask_flow() {
     let printed = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{printed}");
     assert!(
-        printed.contains("Room closed (1 question(s) removed)"),
+        // The question and the two entries of manual points.
+        printed.contains("Room closed (3 question(s) removed)"),
         "{printed}"
     );
 

@@ -281,7 +281,7 @@ fn room_table(questions: &[Results]) -> Vec<Vec<String>> {
 
 /// A number written the way the question CSV writes its points: `1.0`,
 /// `-0.5`.
-fn number(value: f64) -> String {
+pub fn number(value: f64) -> String {
     format!("{value:?}")
 }
 
@@ -316,6 +316,7 @@ pub fn print_room(room: &RoomInfo) {
     for question in &room.questions {
         let info = &question.info;
         let state = match (info.open, info.revealed) {
+            _ if info.manual => "manual",
             (true, _) => "open",
             (false, false) => "closed",
             (false, true) => "revealed",
@@ -355,7 +356,11 @@ pub fn print_students(room: &RoomInfo) {
         println!("No students are in the room or have answered.");
         return;
     }
-    let questions = room.questions.len();
+    let questions = room
+        .questions
+        .iter()
+        .filter(|question| !question.info.manual)
+        .count();
     let login_width = room
         .roster
         .iter()
@@ -557,6 +562,7 @@ mod tests {
                 created_at: now,
                 closed_at: Some(now),
                 revealed: false,
+                manual: false,
             },
             rows: rows
                 .iter()

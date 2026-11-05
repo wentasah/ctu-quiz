@@ -139,6 +139,10 @@ pub struct QuestionInfo {
     /// Whether the correct answers are shown with the results.
     #[serde(default)]
     pub revealed: bool,
+    /// Whether this is no question at all but points the teacher gave by
+    /// hand with `quiz award`; see [`AwardPoints`].
+    #[serde(default)]
+    pub manual: bool,
 }
 
 /// Live state pushed to browsers over server-sent events.
@@ -184,6 +188,35 @@ pub struct RoomClosed {
     pub closed: bool,
     /// How many questions were dropped together with it.
     pub questions: usize,
+}
+
+/// `POST /api/v1/room/award` - award a student points by hand, for
+/// something done outside the quiz.
+///
+/// The points go into a manual entry of the room named `label`, which the
+/// room CSV shows as a column of its own. A real question is never changed:
+/// when `label` is the name of one, or a manual entry of that name has points
+/// of the student already, the points go to `label#2`, `label#3`, ...
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AwardPoints {
+    pub login: String,
+    pub points: f64,
+    /// [`DEFAULT_POINTS_LABEL`] when left out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// Name of the manual entry of [`AwardPoints`] without a label.
+pub const DEFAULT_POINTS_LABEL: &str = "manual";
+
+/// What became of [`AwardPoints`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PointsAwarded {
+    /// The manual entry the points went to.
+    pub question: QuestionInfo,
+    /// Name of the student, as known from their answers; the login if they
+    /// have answered nothing.
+    pub name: String,
 }
 
 /// `GET /api/v1/room` - the teacher's room and what is kept of it, as `quiz
@@ -232,9 +265,11 @@ pub struct RoomStudent {
     pub name: String,
     /// Whether the student has the room open in a browser right now.
     pub present: bool,
-    /// How many of the questions kept in the room the student answered.
+    /// How many of the questions kept in the room the student answered;
+    /// manual entries do not count.
     pub answered: usize,
-    /// Points for those answers, `None` when none of them is scored.
+    /// Points for those answers and the manual ones, `None` when none of
+    /// them is scored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub points: Option<f64>,
 }

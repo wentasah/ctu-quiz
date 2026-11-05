@@ -98,6 +98,7 @@ pub fn router(state: AppState) -> Router {
         .route("/whoami", get(api::whoami))
         .route("/room", get(api::room_status))
         .route("/room/close", post(api::close_room))
+        .route("/room/award", post(api::award_points))
         // The images of a question come with it, so the request may be as
         // big as the question may get, not just the 2 MB axum allows.
         .route(

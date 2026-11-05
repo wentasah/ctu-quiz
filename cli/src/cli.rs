@@ -151,6 +151,31 @@ pub enum Command {
         #[arg(long, short)]
         output: Option<PathBuf>,
     },
+    /// Award a student points by hand, for something done outside the quiz.
+    ///
+    /// The points show up in the room CSV in a column of their own, named
+    /// by ID. Real questions are never changed: when ID is the file name of
+    /// one, or the student has points under ID already, they go under
+    /// `ID#2`, `ID#3`, ... instead.
+    Award {
+        /// Login of the student, as `quiz status --students` lists it.
+        login: String,
+        /// Points to award; may be negative or have decimals.
+        #[arg(allow_negative_numbers = true)]
+        points: f64,
+        /// Name of the column, usually the file name of the question the
+        /// points are for; `manual` when left out.
+        id: Option<String>,
+        /// Directory to write the points of the room to, instead of the
+        /// current one. It is created if it does not exist.
+        #[arg(long, short = 'd', value_name = "DIR")]
+        output_dir: Option<PathBuf>,
+        /// Write the points of the room into the directory named like the
+        /// room, as `quiz ask --room-dir` does, in the current directory or
+        /// in `--output-dir`.
+        #[arg(long)]
+        room_dir: bool,
+    },
     /// Mark the correct answers in the results of a closed question.
     ///
     /// `quiz ask` offers this itself once the question is closed; this is

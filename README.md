@@ -113,6 +113,7 @@ quiz status --students        # the students in the room, their answers and poin
 quiz close <question id>      # if `quiz ask` was interrupted: close and save
 quiz close                    # end the lecture but stay logged in: close the room
 quiz reveal <question id>     # mark the correct answers, if `quiz ask` did not
+quiz award <login> <points> [<id>]   # award points by hand, in a column of their own
 ```
 
 The output is **colored** when it goes to a terminal. `--color never` (or
@@ -277,6 +278,14 @@ goes like this:
   answered a question kept in it, whether they have it open now, how many of
   the kept questions they answered and their points; `--format json`,
   `jsonl` or `csv` prints the same for scripts instead of the table.
+* `quiz award <login> <points> [<id>]` awards a student points by hand, for
+  something done outside the quiz. They go into the room CSV in a column
+  named by the id, `manual` without one, and count towards the total.
+  A real question is never changed: when the id is the file name of one, or
+  the student has points under it already, the points go under `<id>#2`,
+  `<id>#3`, ... instead. The room CSV is rewritten right away, in the
+  current directory, or where `--output-dir` and `--room-dir` say, as with
+  `quiz ask`.
 * **`quiz close` without a question id closes the room**: its questions are
   dropped, the students' pages reload and report that the room is gone, and
   the URL and the code stop working. The next question opens a new room with
