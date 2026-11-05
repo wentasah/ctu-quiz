@@ -60,6 +60,7 @@ total-answers = Celkem odpovědí: <strong data-count>{ $count }</strong>
 
 not-found = Nenalezeno
 bad-request = Chybný požadavek
+forbidden = Nepovoleno
 server-error = Chyba serveru
 server-error-hint = Požadavek se nepodařilo zpracovat. Zkuste to prosím znovu.
 page-gone = Tato stránka na serveru není, nebo už byla odstraněna.
@@ -67,6 +68,7 @@ question-gone = Tato otázka už na serveru není.
 question-not-accepting = Otázka už nepřijímá odpovědi.
 no-such-answer = Taková odpověď neexistuje.
 no-room = Nemáte otevřenou žádnou místnost. Otázku položíte příkazem quiz ask.
+not-a-teacher = Tato stránka je určena pro projektor vyučujícího. Na otázky odpovídejte na stránce, na kterou vás dovedl QR kód nebo kód z projektoru. Pokud jste vyučující, položte nejdříve otázku příkazem quiz ask.
 server-busy = Server je zaneprázdněn
 too-many-logins = Právě probíhá příliš mnoho přihlášení. Zkuste to prosím za chvíli znovu.
 login-failed = Přihlášení se nezdařilo

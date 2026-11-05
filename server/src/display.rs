@@ -14,7 +14,7 @@ use qrcode::{EcLevel, QrCode, render::svg};
 use serde::Deserialize;
 
 use crate::{
-    auth::User,
+    auth::{Identity, User},
     error::PageError,
     i18n::Lang,
     live,
@@ -34,7 +34,7 @@ pub async fn display(
     lang: Lang,
 ) -> Result<Response, PageError> {
     let mut store = state.store.write().await;
-    let room = room_token(&store, &user.login)?;
+    let room = room_token(&state, &store, &user)?;
     let id = store
         .current_question(&room)
         .map(|question| question.id.clone())
@@ -89,7 +89,7 @@ pub async fn close(
 ) -> Result<Response, PageError> {
     {
         let mut store = state.store.write().await;
-        let room = room_token(&store, &user.login)?;
+        let room = room_token(&state, &store, &user)?;
 
         // The teacher may have asked the next question in the meantime;
         // that one was not on the screen, so it stays open.
@@ -121,7 +121,7 @@ pub async fn reveal(
 ) -> Result<Response, PageError> {
     {
         let mut store = state.store.write().await;
-        let room = room_token(&store, &user.login)?;
+        let room = room_token(&state, &store, &user)?;
 
         // Only the question on the screen; any other one was not seen.
         if store.room(&room).and_then(|room| room.current.as_deref()) == Some(&form.question) {
@@ -145,17 +145,26 @@ pub async fn events(
     State(state): State<AppState>,
     User(user): User,
 ) -> Result<Response, PageError> {
-    let room = room_token(&*state.store.read().await, &user.login)?;
+    let room = room_token(&state, &*state.store.read().await, &user)?;
     Ok(live::stream(state, live::Source::Presentation(room)).into_response())
 }
 
-/// Token of the room of `login`. Anybody else, students included, has no
-/// room and so nothing to present.
-fn room_token(store: &Store, login: &str) -> Result<String, PageError> {
-    store
-        .room_of_teacher(login)
-        .map(|room| room.token.clone())
-        .ok_or_else(|| PageError::not_found("no-room"))
+/// Token of the room of `user`. A teacher without a room has nothing to
+/// present yet; anybody else, students included, never will.
+///
+/// A browser session carries no roles, so a teacher known only by
+/// `--teacher-roles` is taken for a student until their first question opens
+/// the room; the message tells them that as well.
+fn room_token(state: &AppState, store: &Store, user: &Identity) -> Result<String, PageError> {
+    if let Some(room) = store.room_of_teacher(&user.login) {
+        return Ok(room.token.clone());
+    }
+    if state.cfg.is_teacher(user) {
+        Err(PageError::not_found("no-room"))
+    } else {
+        tracing::info!(login = %user.login, "a non-teacher opened the presentation view");
+        Err(PageError::forbidden("not-a-teacher"))
+    }
 }
 
 /// What students have to type into a browser to reach the main page.

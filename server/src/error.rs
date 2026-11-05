@@ -50,6 +50,10 @@ impl PageError {
         Self::new(StatusCode::BAD_REQUEST, "bad-request", message)
     }
 
+    pub fn forbidden(message: &'static str) -> Self {
+        Self::new(StatusCode::FORBIDDEN, "forbidden", message)
+    }
+
     /// Logs the cause and shows a generic message, so that internal details
     /// stay in the log file.
     pub fn internal(error: impl std::fmt::Display) -> Self {

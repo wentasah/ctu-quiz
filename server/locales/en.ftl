@@ -63,6 +63,7 @@ total-answers = Answers in total: <strong data-count>{ $count }</strong>
 
 not-found = Not found
 bad-request = Bad request
+forbidden = Not allowed
 server-error = Server error
 server-error-hint = The request could not be processed. Please try again.
 page-gone = This page is not on the server, or it has been removed.
@@ -70,6 +71,7 @@ question-gone = This question is no longer on the server.
 question-not-accepting = The question no longer accepts answers.
 no-such-answer = There is no such answer.
 no-room = You have no room open. Ask a question with quiz ask.
+not-a-teacher = This page is for the teacher's projector. Answer questions on the page you reached with the QR code or the code on the projector. If you are the teacher, ask a question with quiz ask first.
 server-busy = Server busy
 too-many-logins = Too many logins are in progress. Please try again in a moment.
 login-failed = Login failed

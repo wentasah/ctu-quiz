@@ -693,7 +693,7 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
     assert!(!response.text().await.unwrap().contains(" correct\""));
     let student = browser_as(&base, &idp, &User::new("novakja1", "Jan Novák")).await;
     let response = close(&student, &question.id).await.unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert!(is_open().await);
 
     // The button closes it and shows the results.
@@ -707,7 +707,7 @@ async fn the_question_can_be_closed_in_the_presentation_view() {
     // Then another button reveals the correct answers, for the teacher only.
     assert!(page.contains("Show the correct answers"), "{page}");
     let response = reveal(&student).await.unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let page = reveal(&projector).await.unwrap().text().await.unwrap();
     assert!(page.contains(" correct\""), "{page}");
     assert!(!page.contains("Show the correct answers"), "{page}");
@@ -1525,6 +1525,49 @@ async fn a_wrong_code_is_reported_on_the_main_page() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn a_student_may_not_open_the_presentation_view() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+
+    // A teacher without a room is told to ask a question first.
+    let teacher = browser_as(&base, &idp, &User::new("sojkam1", "Michal Sojka")).await;
+    let response = teacher.get(format!("{base}/d")).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("You have no room open")
+    );
+
+    // A student is refused, and pointed back to the page to answer on.
+    let student = browser_as(&base, &idp, &User::new("novakja1", "Jan Novák")).await;
+    let response = student.get(format!("{base}/d")).send().await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = response.text().await.unwrap();
+    assert!(
+        body.contains("for the teacher&#39;s projector"),
+        "got: {body}"
+    );
+    let response = student
+        .get(format!("{base}/d/events"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    for action in ["close", "reveal"] {
+        let response = student
+            .post(format!("{base}/d/{action}"))
+            .form(&[("question", "whatever")])
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN, "{action}");
+    }
 }
 
 #[tokio::test]
