@@ -72,8 +72,10 @@ check-release:
   variables:
     # The packages to build; the server is only ever deployed on Linux.
     PACKAGES: -p quiz-cli
+    # The CLI also saves the points of a room for BRUTE.
+    FEATURES: quiz-cli/brute
   script:
-    - cargo zigbuild --release --locked $PACKAGES --target "$TARGET"
+    - cargo zigbuild --release --locked $PACKAGES --features "$FEATURES" --target "$TARGET"
     # A glibc target carries the oldest glibc to link against after a dot,
     # which is not part of the output directory.
     #
