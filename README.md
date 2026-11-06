@@ -27,7 +27,7 @@ Asking questions with the `quiz` command line tool, for teachers.
    [build it](#building) from source. Optionally set up
    [shell completions](#shell-completions).
 2. Tell it which server to use, either with `--server` or once and for all in
-   a [configuration file](#teacher-cli):
+   a [configuration file](#configuration-files):
    `server = "https://quiz.iid.ciirc.cvut.cz"` in `quiz.toml`.
 3. Write a question in Markdown as described in
    [The question format](#the-question-format) and check it with
@@ -122,7 +122,7 @@ quiz award <login> <points> [<id>]   # award points by hand, in a column of thei
 
 The output is **colored** when it goes to a terminal. `--color never` (or
 `--no-color`) turns the colors off and `--color always` keeps them even in a
-pipe; `QUIZ_COLOR` and `color` in a [configuration file](#teacher-cli) set the
+pipe; `QUIZ_COLOR` and `color` in a [configuration file](#configuration-files) set the
 same. A non-empty `NO_COLOR` environment variable turns the colors off too, as
 <https://no-color.org> asks, unless `--color always` says otherwise, and a
 non-zero `CLICOLOR_FORCE` keeps them in a pipe. The terminal handling is
@@ -131,52 +131,8 @@ that of the [anstream](https://crates.io/crates/anstream) crate.
 `--server` (or `QUIZ_SERVER`) selects the server, `--no-browser` never opens a
 browser and only prints URLs, `--login-port` sets the port of the local
 listener used during the login. The ID token is cached in `tokens.json`
-in the configuration directory (mode 0600 on Linux and macOS), so the browser
-is normally only needed once a day. The configuration directory is
-`$XDG_CONFIG_HOME/quiz` (by default `~/.config/quiz`) on Linux and macOS, and
-`%APPDATA%\quiz` on Windows.
-
-Default values of the options can be kept in TOML files, so that they need
-not be typed every time. `quiz` reads `config.toml` from the configuration
-directory and `quiz.toml` from the current directory or the nearest of its
-parents; the latter wins, so a course directory can override the teacher's own defaults.
-The keys are the long option names, with the options of a subcommand in a
-table of its name:
-
-```toml
-server = "https://quiz.iid.ciirc.cvut.cz"
-
-[ask]
-shuffle = true
-hide-question = true
-close-after = 120 # seconds
-room-dir = true    # save results to one directory per lecture
-
-[award]
-room-dir = true    # the same directory as `quiz ask`
-```
-
-A question file may set options of `quiz ask` for itself, as TOML **front
-matter** between two `+++` lines at its very top. The keys are the long
-option names of `ask`, without the `[ask]` table:
-
-```markdown
-+++
-shuffle = true
-close-after = 60
-+++
-
-Which color of the light has the longest wavelength?
-```
-
-The front matter wins over both files; an environment variable or an
-option on the command line wins over the front matter and the files. A
-flag set to `true` in a file or in the front matter cannot be switched off
-on the command line, only by `false` in a place that wins over it. The
-`--help` output shows the defaults in effect for the options that take a
-value. `quiz parse` checks the front matter and prints it; it is never
-sent to the server.
-[`testsupport/front-matter.md`](testsupport/front-matter.md) is an example.
+in the [configuration directory](#configuration-files) (mode 0600 on Linux
+and macOS), so the browser is normally only needed once a day.
 
 Ctrl-C does the same as Enter: the question is closed and the answers are
 saved, so a mistyped key does not lose the collected data. So does the
@@ -199,6 +155,61 @@ too, and `quiz ask` then ends by itself. Ctrl-C, or a standard input that is
 not a terminal, ends `quiz ask` without revealing them; `quiz reveal
 <question id>` or the button does it later. An open question cannot be
 revealed.
+
+#### Configuration files
+
+Default values of the options can be kept in TOML files, so that they need
+not be typed every time. `quiz` reads two of them, and skips those that do
+not exist:
+
+* `config.toml` in the configuration directory, for the teacher's own
+  defaults. The configuration directory is `$XDG_CONFIG_HOME/quiz` (by
+  default `~/.config/quiz`) on Linux and macOS, and `%APPDATA%\quiz` on
+  Windows. `quiz` keeps its cached login token there too.
+* `quiz.toml` in the current directory or the nearest of its parents, for
+  the defaults of one course, kept next to its questions.
+
+`quiz.toml` wins over `config.toml`, so a course directory can override the
+teacher's own defaults. The keys are the long option names, with the options
+of a subcommand in a table of its name:
+
+```toml
+server = "https://quiz.iid.ciirc.cvut.cz"
+
+[ask]
+shuffle = true
+hide-question = true
+close-after = 120 # seconds
+room-dir = true    # save results to one directory per lecture
+
+[award]
+room-dir = true    # the same directory as `quiz ask`
+```
+
+An unknown key or subcommand is an error that names the file, so a typo
+does not go unnoticed.
+
+A question file may set options of `quiz ask` for itself, as TOML **front
+matter** between two `+++` lines at its very top. The keys are the long
+option names of `ask`, without the `[ask]` table:
+
+```markdown
++++
+shuffle = true
+close-after = 60
++++
+
+Which color of the light has the longest wavelength?
+```
+
+From the weakest to the strongest, the defaults come from `config.toml`,
+`quiz.toml`, and the front matter; an environment variable or an option on
+the command line wins over all of them. A flag set to `true` in a file or
+in the front matter cannot be switched off on the command line, only by
+`false` in a place that wins over it. The `--help` output shows the
+defaults in effect for the options that take a value. `quiz parse` checks
+the front matter and prints it; it is never sent to the server.
+[`testsupport/front-matter.md`](testsupport/front-matter.md) is an example.
 
 ### The CSV file with question answers
 
@@ -307,7 +318,7 @@ goes like this:
   current directory, or where `--output-dir` and `--room-dir` say, as with
   `quiz ask`. When `quiz ask` saves into the room directory, set
   `room-dir = true` under `[award]` in `quiz.toml` too (see the
-  [example](#teacher-cli)), so that the points end up in the same room CSV.
+  [example](#configuration-files)), so that the points end up in the same room CSV.
 
   `scripts/award.sh` saves typing the login: it lets you pick the student
   from `quiz status --students` with [fzf](https://github.com/junegunn/fzf)
