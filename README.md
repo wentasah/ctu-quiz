@@ -325,7 +325,7 @@ too, unless the server runs with `--state-file` (see
   `room-dir = true` under `[award]` in `quiz.toml` too (see the
   [example](#configuration-files)), so that the points end up in the same room CSV.
 
-  `scripts/award.sh` saves typing the login: it lets you pick the student
+  [`scripts/award.sh`](scripts/award.sh) saves typing the login: it lets you pick the student
   from `quiz status --students` with [fzf](https://github.com/junegunn/fzf)
   (and [jq](https://jqlang.org)), then passes the rest of its arguments to
   `quiz award`. Nothing is awarded when fzf is left with <kbd>Esc</kbd>. Sourced
