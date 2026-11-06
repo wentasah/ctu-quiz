@@ -23,6 +23,31 @@ with, the number of answers so far and the Close the question
 button.](misc/screenshot.webp)
 
 
+## Features
+
+* **Questions in Markdown**, one file each, with syntax-highlighted code,
+  images and private teacher notes; see [The question format](#the-question-format).
+* **Students join once per lecture** with a QR code or a six-digit code and
+  get each new question on their phone automatically; see [Rooms](#rooms).
+* **A presentation view** for the projector, with the number of answers
+  while the question is open and a bar graph of the results after it closes.
+* **Scored answers** with any points, negative ones included, and the
+  correct answers revealed when the class is ready.
+* **What students see on their phones is
+  [configurable](#what-students-see-on-their-phones)**: the question,
+  the answers, or both, can be hidden.
+* **Time limits**: the server can close a question after a given time.
+* **Results in CSV**: the answers to each question, and the points of the
+  whole lecture, with points awarded by hand included; see
+  [Result files](#result-files). An optional export for [BRUTE](https://brute.fel.cvut.cz).
+* **A command line tool** for the teacher, with defaults in
+  [configuration files](#configuration-files), shell completions, and
+  integration with Midnight Commander and Yazi.
+* **Authentication via OpenID Connect** for students and teachers alike.
+* **Easy to run**: one server binary that keeps everything in memory, with
+  optional saved state, Prometheus metrics, a Docker image and a NixOS
+  module; prebuilt binaries for Linux, macOS and Windows.
+
 ## Usage
 
 Asking questions with the `quiz` command line tool, for teachers.
