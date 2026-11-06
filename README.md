@@ -538,6 +538,33 @@ when it is owned by you or root and is not world-writable:
 install -m644 misc/mc.menu ~/courses/os/questions/.mc.menu
 ```
 
+#### Yazi
+
+In the [Yazi](https://yazi-rs.github.io) file manager, <kbd>Enter</kbd> on a
+question file asks the question, and <kbd>O</kbd> (open with) offers to check
+or edit it as well, once you add this to `~/.config/yazi/yazi.toml`:
+
+```toml
+[opener]
+quiz = [
+  { run = "quiz ask %s1", block = true, desc = "Ask the question" },
+  { run = "quiz parse %s1 | less -R", block = true, desc = "Check the question" },
+]
+
+[open]
+prepend_rules = [
+  { url = "**/quiz/**/*.md", use = ["quiz", "edit"] },
+]
+```
+
+The rule applies to Markdown files anywhere below a directory named `quiz`,
+such as `os/quiz/question.md` or `os/quiz/week1/question.md`. The pattern is
+matched against the whole path, and once it contains a `/`, `*` does not
+cross directories, hence the `**`. `**/*quiz*.md` would match files with
+`quiz` in their name instead. `block = true` hands the
+terminal over to `quiz` until it ends, so that <kbd>Enter</kbd> reaches
+`quiz ask`.
+
 ### Building
 
 ```sh
