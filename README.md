@@ -286,6 +286,17 @@ goes like this:
   `<id>#3`, ... instead. The room CSV is rewritten right away, in the
   current directory, or where `--output-dir` and `--room-dir` say, as with
   `quiz ask`.
+
+  `scripts/award.sh` saves typing the login: it lets you pick the student
+  from `quiz status --students` with [fzf](https://github.com/junegunn/fzf)
+  (and [jq](https://jqlang.org)), then passes the rest of its arguments to
+  `quiz award`. Nothing is awarded when fzf is left with Esc. Sourced
+  without arguments, it defines the shell function `award` instead:
+
+  ```sh
+  scripts/award.sh 1    # pick a student, award 1 point
+  . scripts/award.sh    # e.g. in ~/.bashrc; then: award 0.5
+  ```
 * **`quiz close` without a question id closes the room**: its questions are
   dropped, the students' pages reload and report that the room is gone, and
   the URL and the code stop working. The next question opens a new room with
