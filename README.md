@@ -279,13 +279,13 @@ svobodpe,1.0
 
 ### Rooms
 
-The URL behind the QR code (`/r/<token>`) and the six-digit code are
-associated with the **teacher**, not with a single question. Together
-they form the teacher's *room*, which stays open as long as the
-teacher keeps asking questions — until `--question-ttl-hours` after
-the last question, or until the server restarts (unless it is run with
-`--state-file`, see [Deployment](#deployment)). A lecture therefore
-goes like this:
+Every teacher has a *room* with one QR code (the URL `/r/<token>`) and one
+six-digit code. Every question the teacher asks appears in it, so students
+join once per lecture. The room closes when the teacher runs `quiz logout`
+or `quiz close`, or by itself when no question has been asked for
+`--question-ttl-hours` (4 by default). A restart of the server closes it
+too, unless the server runs with `--state-file` (see
+[Deployment](#deployment)). A lecture therefore goes like this:
 
 * The first `quiz ask` opens the room. Students scan the QR code or type the
   code once and keep that page open.
