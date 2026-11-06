@@ -632,24 +632,29 @@ least 1.88 (`cargo --version`); if it is older, install the toolchain with
 
 #### Prebuilt binaries
 
-The GitLab CI (`.gitlab-ci.yml`) cross-compiles the binaries on every push
-with [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild), with the
-[`brute` feature](#whole-room-lecture-points) on, and keeps them as job
-artifacts for two weeks. The newest ones of `main` can be downloaded
-directly:
+Download the binaries of a released version, or of the development
+version:
 
-| Platform | Binaries | Download |
-|---|---|---|
-| Linux x86-64, glibc 2.28+ | `quiz`, `quiz-server` | [build-linux-gnu](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-gnu) |
-| Linux x86-64, static (musl) | `quiz`, `quiz-server` | [build-linux-musl](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-musl) |
-| macOS, Apple Silicon and Intel | `quiz` | [build-macos](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-macos) |
-| Windows x86-64 | `quiz.exe` | [build-windows](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-windows) |
+* **Released versions** are on the
+  [releases page](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/releases), where
+  they are kept for good.
+* **The development version**, the newest build of the `main` branch:
 
-The binaries of released versions are kept for good on the
-[releases page](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/releases); see
-`RELEASING.md`. The GitHub workflow (`.github/workflows/build.yml`) builds
-binaries for the same platforms, without the `brute` feature, and attaches
-them to [GitHub releases](https://github.com/wentasah/ctu-quiz/releases).
+  | Platform | Binaries | Download |
+  |---|---|---|
+  | Linux x86-64, glibc 2.28+ | `quiz`, `quiz-server` | [build-linux-gnu](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-gnu) |
+  | Linux x86-64, static (musl) | `quiz`, `quiz-server` | [build-linux-musl](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-musl) |
+  | macOS, Apple Silicon and Intel | `quiz` | [build-macos](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-macos) |
+  | Windows x86-64 | `quiz.exe` | [build-windows](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-windows) |
+
+  The GitLab CI (`.gitlab-ci.yml`) cross-compiles these on every push with
+  [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and keeps
+  them as job artifacts for two weeks.
+
+The GitLab binaries have the [`brute` feature](#whole-room-lecture-points)
+on. The GitHub workflow (`.github/workflows/build.yml`) builds binaries for
+the same platforms without it, and attaches them to
+[GitHub releases](https://github.com/wentasah/ctu-quiz/releases).
 
 The macOS binary is not signed, so Gatekeeper refuses to start it when it was
 downloaded with a browser; `xattr -d com.apple.quarantine quiz` lets it run.
