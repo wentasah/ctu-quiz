@@ -635,9 +635,11 @@ least 1.88 (`cargo --version`); if it is older, install the toolchain with
 Download the binaries of a released version, or of the development
 version:
 
-* **Released versions** are on the
-  [releases page](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/releases), where
-  they are kept for good.
+* **Released versions**, which are kept for good, in two variants:
+  * on the [GitLab releases page](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/releases)
+    with the [BRUTE support](#whole-room-lecture-points),
+  * on the [GitHub releases page](https://github.com/wentasah/ctu-quiz/releases)
+    without it.
 * **The development version**, the newest build of the `main` branch:
 
   | Platform | Binaries | Download |
@@ -648,13 +650,8 @@ version:
   | Windows x86-64 | `quiz.exe` | [build-windows](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-windows) |
 
   The GitLab CI (`.gitlab-ci.yml`) cross-compiles these on every push with
-  [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and keeps
-  them as job artifacts for two weeks.
-
-The GitLab binaries have the [`brute` feature](#whole-room-lecture-points)
-on. The GitHub workflow (`.github/workflows/build.yml`) builds binaries for
-the same platforms without it, and attaches them to
-[GitHub releases](https://github.com/wentasah/ctu-quiz/releases).
+  [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild), with the
+  BRUTE support, and keeps them as job artifacts for two weeks.
 
 The macOS binary is not signed, so Gatekeeper refuses to start it when it was
 downloaded with a browser; `xattr -d com.apple.quarantine quiz` lets it run.
