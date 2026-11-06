@@ -17,7 +17,11 @@ Everybody authenticates with **OIDC**: students in the browser, the teacher in
 the CLI. The web pages are in English or Czech, following the browser's
 language; students can switch it on the main page.
 
-## Getting started
+## Usage
+
+Asking questions with the `quiz` command line tool, for teachers.
+
+### Getting started
 
 1. Install `quiz`: download a [prebuilt binary](#prebuilt-binaries) or
    [build it](#building) from source. Optionally set up
@@ -44,7 +48,7 @@ To try everything on one machine without a real identity provider, see
 [Registering the OIDC client](#registering-the-oidc-client),
 [Running the server](#running-the-server) and [Deployment](#deployment).
 
-## How one question works
+### How one question works
 
 ```console
 $ quiz ask exercises/01regex/question1.md
@@ -93,7 +97,7 @@ and left.
    students scan or type nothing again: the page they still have open shows
    the new question by itself.
 
-## Teacher CLI
+### Teacher CLI
 
 Teacher CLI (the `quiz` command) works are described below. Let's
 start with some examples:
@@ -192,7 +196,7 @@ not a terminal, ends `quiz ask` without revealing them; `quiz reveal
 <question id>` or the button does it later. An open question cannot be
 revealed.
 
-## The CSV file with question answers
+### The CSV file with question answers
 
 The answers of every question are stored in a CSV file with one row
 per student, sorted by login:
@@ -217,7 +221,7 @@ room, e.g. `room_2026-09-21_14-00-07_428173/`, created next to the question
 file or in the `--output-dir`, so that all questions of one lecture end up
 together.
 
-## The CSV file with the points of a room
+### The CSV file with the points of a room
 
 Besides the answers of the question, every scored question closed by `quiz
 ask` or `quiz close <id>` updates a CSV with the points of the whole
@@ -242,7 +246,7 @@ long as they live in one directory. It is written anew each time from the
 questions the server still keeps in the room, so a question dropped from the
 room (see below) drops out of the file as well.
 
-## Rooms
+### Rooms
 
 The URL behind the QR code (`/r/<token>`) and the six-digit code are
 associated with the **teacher**, not with a single question. Together
@@ -318,7 +322,7 @@ browser only when none does. Each question still gets its own CSV.
 Two lectures held at the same time under the same login would share a room;
 use a second login (or log out in between) to keep them apart.
 
-## Keeping the question off the phones
+### Keeping the question off the phones
 
 Everything students need is on the projector, so their own screen does not
 have to repeat it — and what is not on their screen is a lot more work to
@@ -341,7 +345,7 @@ the results of that question as well — the bar graph on a phone then shows
 the counts without the answer texts. The presentation view, the CSV and the
 API always carry the full text.
 
-## Shuffling the answers
+### Shuffling the answers
 
 `quiz ask --shuffle` puts the possible answers in a random order before the
 question is published. The labels are handed out afterwards, so `A` is still
@@ -350,7 +354,7 @@ projector, every phone and the CSV. Asking the same file again shuffles
 anew, so the correct answer is not where it was last year, and the CLI prints
 the order it ended up with.
 
-## The question format
+### The question format
 
 A question is one Markdown file. Everything above the first horizontal rule
 (`---`) is the question; the top-level list items below it are the possible
@@ -470,7 +474,7 @@ Details worth knowing:
   [`testsupport/executable.md`](testsupport/executable.md) is the example
   question in this form.
 
-## Shell completions
+### Shell completions
 
 They are generated while the CLI is compiled, from the very command line the
 binary parses, so they never fall behind the options. `cli/build.rs` writes
@@ -487,7 +491,7 @@ install -Dm644 completions/_quiz ~/.local/share/zsh/site-functions/_quiz
 `nix build` installs the bash, zsh and fish scripts into the package itself,
 so `nix profile install` or the NixOS module brings completion along.
 
-## Building
+### Building
 
 ```sh
 cargo build --release          # target/release/quiz-server, target/release/quiz
@@ -518,7 +522,7 @@ least 1.85 (`cargo --version`), which is Debian 13 or Ubuntu 25.04 and newer;
 on older releases install the toolchain with [rustup](https://rustup.rs)
 instead.
 
-### Prebuilt binaries
+#### Prebuilt binaries
 
 The GitLab CI (`.gitlab-ci.yml`) cross-compiles the binaries on every push
 with [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and keeps
@@ -535,7 +539,11 @@ downloaded directly:
 The macOS binary is not signed, so Gatekeeper refuses to start it when it was
 downloaded with a browser; `xattr -d com.apple.quarantine quiz` lets it run.
 
-## Trying it out locally
+## Administration
+
+Running `quiz-server`, locally or in production.
+
+### Trying it out locally
 
 The repository contains a **development identity provider** so that the whole
 app can be tried out on one machine, with no credentials and nothing to
@@ -605,7 +613,7 @@ example Keycloak in development mode, create a client as described in the next
 section, and point `--oidc-issuer` at
 `http://localhost:8081/realms/<your realm>`.
 
-## Registering the OIDC client
+### Registering the OIDC client
 
 The server needs one OIDC client at your identity provider (Keycloak, the CTU
 SSO, …):
@@ -649,7 +657,7 @@ quiz-server ... --teacher-roles teacher
 
 lets every employee ask questions.
 
-## Running the server
+### Running the server
 
 ```sh
 quiz-server \
@@ -691,7 +699,7 @@ the container image use (`quiz-server --help` lists them all):
 server then serves all its pages under that prefix, so the reverse proxy has to
 forward the path unchanged — see `deploy/nginx.conf.example`.
 
-## Deployment
+### Deployment
 
 The server speaks plain HTTP and expects a reverse proxy in front of it for
 TLS. Ready-made pieces:
@@ -735,7 +743,7 @@ systemd unit in `deploy/` has the lines for this commented out, and the NixOS
 module has `services.quiz-server.saveState`. This departs from requirement 4,
 so it is off by default.
 
-## Changing the colours
+### Changing the colours
 
 The highlighter emits one CSS class per Sublime scope (`hl-keyword`,
 `hl-string`, `hl-comment`, …) instead of inline colours, so the palette lives
@@ -744,7 +752,7 @@ and once for the dark one. Only leaf scopes are coloured there: scopes such as
 `meta` or `function` wrap whole regions, and colouring them would tint entire
 function bodies.
 
-## Adding a language
+### Adding a language
 
 The texts of the web pages are [Fluent](https://projectfluent.org/) messages
 in `server/locales`, one file per language. To add one, translate
@@ -764,7 +772,7 @@ The language selector on the main page then offers it, browsers asking for it
 get it, and `--default-lang de` makes it the default. `cargo test` fails while
 the new file lacks a message of `en.ftl` or has one more.
 
-## Logging
+### Logging
 
 All operations go to the log file **and** to the standard error output: logins,
 created questions (with code and URLs), every recorded answer, closing a
@@ -780,7 +788,7 @@ question, exported results, refused tokens and one line per HTTP request.
 Use `--log-filter` or `RUST_LOG` (e.g. `RUST_LOG=info,quiz_server=debug`) to
 change the verbosity. The log is append-only and never read back by the server.
 
-## Metrics
+### Metrics
 
 `GET /metrics` serves Prometheus metrics in the text format:
 
@@ -794,7 +802,7 @@ change the verbosity. The log is append-only and never read back by the server.
 
 The counters start from zero whenever the server restarts.
 
-## Security notes
+### Security notes
 
 * Every student-facing page and every API endpoint requires an OIDC login. The
   only exceptions are `/healthz`, `/metrics` (aggregate numbers only), the two
@@ -818,7 +826,25 @@ The counters start from zero whenever the server restarts.
 * A question is Markdown, but HTML written in it is escaped rather than
   rendered, so a question cannot bring scripts into the students' browsers.
 
-## Where each requirement is implemented
+### Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| `OIDC discovery at … failed` at startup | wrong `--oidc-issuer`, or the provider is unreachable; the issuer must be the URL *without* `/.well-known/openid-configuration` |
+| Login ends with `redirect_uri` mismatch | `<public URL>/auth/callback` is not registered with the provider |
+| `not logged in: the ID token is not valid` | the cached token expired and could not be refreshed — `quiz login` |
+| `not allowed: … is not allowed to ask questions` | the login is missing from `--teachers` |
+| `no --teachers given` | list the teachers, or pass `--allow-any-teacher` |
+| Asked to log in again and again, or the code form comes back after submitting | the server is being reached under a different host name than `--public-url`, so the session cookie does not come back |
+| The answer count does not move | the reverse proxy buffers the event streams; see `deploy/nginx.conf.example` |
+| The QR code leads nowhere | `--public-url` does not match how students reach the server |
+| ``no `---` separator found`` | the Markdown file has no horizontal rule before the answers |
+
+## Development
+
+For those working on the code.
+
+### Where each requirement is implemented
 
 | # | Requirement | Implementation |
 | --- | --- | --- |
@@ -835,7 +861,7 @@ The counters start from zero whenever the server restarts.
 | 11 | Live update of the number of answers | `server/src/live.rs` (server-sent events), followed by `server/static/app.js` and by `quiz ask` (`/api/v1/questions/{id}/events`) |
 | 12 | Closing shows a bar graph and writes a CSV of logins and answers | `api::close_question`, `templates/results.html`, `cli/src/report.rs` |
 
-## How the code is organized
+### How the code is organized
 
 | Path | What is in it |
 | --- | --- |
@@ -860,7 +886,7 @@ The counters start from zero whenever the server restarts.
 | `cli/src/report.rs` | terminal output and the CSV export |
 | `testsupport/` | mock OIDC provider: the tests' fixture and the `mock-idp` binary |
 
-## Tests
+### Tests
 
 ```sh
 cargo test                                  # everything
@@ -882,17 +908,3 @@ saves its state over a restart.
 `QUIZ_DUMP_PAGES=/tmp/pages cargo test -p quiz-server --test e2e` additionally
 saves the rendered pages with the stylesheet inlined, so they can be opened
 straight from disc to check the styling and the highlighting.
-
-## Troubleshooting
-
-| Symptom | Cause |
-| --- | --- |
-| `OIDC discovery at … failed` at startup | wrong `--oidc-issuer`, or the provider is unreachable; the issuer must be the URL *without* `/.well-known/openid-configuration` |
-| Login ends with `redirect_uri` mismatch | `<public URL>/auth/callback` is not registered with the provider |
-| `not logged in: the ID token is not valid` | the cached token expired and could not be refreshed — `quiz login` |
-| `not allowed: … is not allowed to ask questions` | the login is missing from `--teachers` |
-| `no --teachers given` | list the teachers, or pass `--allow-any-teacher` |
-| Asked to log in again and again, or the code form comes back after submitting | the server is being reached under a different host name than `--public-url`, so the session cookie does not come back |
-| The answer count does not move | the reverse proxy buffers the event streams; see `deploy/nginx.conf.example` |
-| The QR code leads nowhere | `--public-url` does not match how students reach the server |
-| ``no `---` separator found`` | the Markdown file has no horizontal rule before the answers |
