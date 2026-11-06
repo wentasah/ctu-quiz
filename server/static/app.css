@@ -129,11 +129,12 @@ pre.code {
   tab-size: 8;
 }
 
-.prompt code, .options code, .answers code, .bars code {
+.prompt code, .options code, .answers code, .bars code, body.message code {
   font-family: ui-monospace, SFMono-Regular, monospace;
 }
 
-.prompt :not(pre) > code, .options code, .answers code, .bars code {
+.prompt :not(pre) > code, .options code, .answers code, .bars code,
+body.message code {
   background: var(--code-bg);
   border-radius: 4px;
   padding: .1em .3em;

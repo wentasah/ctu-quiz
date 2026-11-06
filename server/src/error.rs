@@ -77,7 +77,9 @@ impl PageError {
             prefix: prefix(),
             lang,
             title: lang.t(self.title),
-            message: message.to_string(),
+            // The messages are ours and may contain markup; `html` escapes
+            // their arguments.
+            message: message.html(),
         };
         match page.render() {
             Ok(html) => (self.status, Html(html)).into_response(),

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="card">
   <h1>{{ title }}</h1>
-  <p>{{ message }}</p>
+  <p>{{ message|safe }}</p>
   <p><a class="button" href="{{ prefix }}/">{{ lang.t("back-home") }}</a></p>
 </div>
 {% endblock %}

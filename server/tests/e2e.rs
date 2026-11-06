@@ -1565,13 +1565,10 @@ async fn a_student_may_not_open_the_presentation_view() {
     let teacher = browser_as(&base, &idp, &User::new("sojkam1", "Michal Sojka")).await;
     let response = teacher.get(format!("{base}/d")).send().await.unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    assert!(
-        response
-            .text()
-            .await
-            .unwrap()
-            .contains("You have no room open")
-    );
+    let body = response.text().await.unwrap();
+    assert!(body.contains("You have no room open"), "got: {body}");
+    // The command is marked up as code, not escaped.
+    assert!(body.contains("<code>quiz ask</code>"), "got: {body}");
 
     // A student is refused, and pointed back to the page to answer on.
     let student = browser_as(&base, &idp, &User::new("novakja1", "Jan Novák")).await;
@@ -1579,7 +1576,7 @@ async fn a_student_may_not_open_the_presentation_view() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = response.text().await.unwrap();
     assert!(
-        body.contains("for the teacher&#39;s projector"),
+        body.contains("for the teacher's projector"),
         "got: {body}"
     );
     let response = student
