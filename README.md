@@ -250,6 +250,17 @@ long as they live in one directory. It is written anew each time from the
 questions the server still keeps in the room, so a question dropped from the
 room (see below) drops out of the file as well.
 
+When the CLI is built with the `brute` feature (`cargo install --features
+brute …`), the points of the room are also written in the format
+[BRUTE](https://brute.fel.cvut.cz) imports: next to the CSV above, a
+CSV without a header with just the login and the total, zipped into
+`room_2026-09-21_14-00-07_428173.brute.zip`:
+
+```csv
+novakja1,0.5
+svobodpe,1.0
+```
+
 ### Rooms
 
 The URL behind the QR code (`/r/<token>`) and the six-digit code are

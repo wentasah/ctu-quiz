@@ -148,6 +148,13 @@ pub fn room_csv_path(
     place(source, dir, format!("{}.csv", room_name(code, opened)))
 }
 
+/// The zipped CSV BRUTE imports the points of the room from, next to the
+/// room CSV at `csv`: `room_….brute.zip`.
+#[cfg(feature = "brute")]
+pub fn brute_path(csv: &Path) -> PathBuf {
+    csv.with_extension("brute.zip")
+}
+
 /// The directory `quiz ask --room-dir` saves into, named like the CSV with
 /// the points of the room, in `dir` or next to the question file.
 pub fn room_dir_path(
@@ -220,17 +227,34 @@ pub fn write_csv(path: &Path, results: &Results) -> Result<()> {
 /// Writes the points of every student in the room: one column per scored
 /// question, in the order they were asked, and the total in the last one.
 pub fn write_room_csv(path: &Path, questions: &[Results]) -> Result<()> {
-    let mut writer =
-        csv::Writer::from_path(path).with_context(|| format!("cannot write {}", path.display()))?;
-    for record in room_table(questions) {
-        writer
-            .write_record(&record)
-            .with_context(|| format!("cannot write {}", path.display()))?;
-    }
-    writer
-        .flush()
+    let csv = to_csv(room_table(questions))
         .with_context(|| format!("cannot write {}", path.display()))?;
-    Ok(())
+    std::fs::write(path, csv).with_context(|| format!("cannot write {}", path.display()))
+}
+
+/// Writes the points of every student in the room the way BRUTE imports
+/// them: a CSV without a header, with only the login and the total, zipped
+/// to `path` as `brute.csv`.
+#[cfg(feature = "brute")]
+pub fn write_brute_zip(path: &Path, questions: &[Results]) -> Result<()> {
+    use std::io::{Cursor, Write};
+    let zip = to_csv(brute_table(room_table(questions))).and_then(|csv| {
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("brute.csv", zip::write::SimpleFileOptions::default())?;
+        zip.write_all(&csv)?;
+        Ok(zip.finish()?.into_inner())
+    });
+    let zip = zip.with_context(|| format!("cannot write {}", path.display()))?;
+    std::fs::write(path, zip).with_context(|| format!("cannot write {}", path.display()))
+}
+
+/// The records as CSV.
+fn to_csv(table: Vec<Vec<String>>) -> Result<Vec<u8>> {
+    let mut writer = csv::Writer::from_writer(Vec::new());
+    for record in table {
+        writer.write_record(&record)?;
+    }
+    Ok(writer.into_inner()?)
 }
 
 /// The records of the room CSV, the header first. Students are sorted by
@@ -277,6 +301,22 @@ fn room_table(questions: &[Results]) -> Vec<Vec<String>> {
         table.push(record);
     }
     table
+}
+
+/// The room table the way BRUTE imports it: no header, and only the login
+/// and the total, with a decimal point.
+#[cfg(feature = "brute")]
+fn brute_table(table: Vec<Vec<String>>) -> Vec<Vec<String>> {
+    table
+        .into_iter()
+        .skip(1)
+        .map(|mut record| {
+            let total = record.pop().unwrap_or_default();
+            record.truncate(1);
+            record.push(total);
+            record
+        })
+        .collect()
 }
 
 /// A number written the way the question CSV writes its points: `1.0`,
@@ -597,6 +637,29 @@ mod tests {
             ]
         );
         assert_eq!(room_table(&[]), [vec!["login", "name", "total"]]);
+    }
+
+    #[cfg(feature = "brute")]
+    #[test]
+    fn brute_path_is_next_to_the_room_csv() {
+        assert_eq!(
+            super::brute_path(Path::new("labs/room_2026-09-21_14-00-07_428173.csv")),
+            Path::new("labs/room_2026-09-21_14-00-07_428173.brute.zip")
+        );
+    }
+
+    #[cfg(feature = "brute")]
+    #[test]
+    fn brute_table_has_only_login_and_total_without_header() {
+        let table = super::brute_table(room_table(&[
+            results(
+                "q1.md",
+                &[("svobodpe", "Petra", 1.0), ("novakja1", "Jan", 0.1)],
+            ),
+            results("q2.md", &[("novakja1", "Jan", 0.2)]),
+        ]));
+        assert_eq!(table, [vec!["novakja1", "0.3"], vec!["svobodpe", "1.0"]]);
+        assert!(super::brute_table(room_table(&[])).is_empty());
     }
 
     #[test]

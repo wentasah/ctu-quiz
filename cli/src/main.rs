@@ -473,16 +473,24 @@ async fn close_question(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<
 /// then, and the teacher may still want to reveal the correct ones.
 async fn save_room(api: &Api, source: &Path, dir: Option<&Path>) {
     match write_room(api, source, dir).await {
-        Ok(Some(path)) => println!(
-            "Points of the room saved to {BOLD}{}{BOLD:#}",
-            path.display()
-        ),
+        Ok(Some(path)) => {
+            println!(
+                "Points of the room saved to {BOLD}{}{BOLD:#}",
+                path.display()
+            );
+            #[cfg(feature = "brute")]
+            println!(
+                "Points for BRUTE saved to {BOLD}{}{BOLD:#}",
+                report::brute_path(&path).display()
+            );
+        }
         Ok(None) => {}
         Err(error) => println!("{YELLOW}Cannot save the points of the room ({error:#}).{YELLOW:#}"),
     }
 }
 
-/// Writes the room CSV and says where, or `None` when there is nothing to
+/// Writes the room CSV, and with the `brute` feature the zip for BRUTE
+/// next to it, and says where the CSV is, or `None` when there is nothing to
 /// write: no room, or no closed scored question in it.
 async fn write_room(api: &Api, source: &Path, dir: Option<&Path>) -> Result<Option<PathBuf>> {
     let Some(room) = api.room_status().await?.room else {
@@ -509,6 +517,8 @@ async fn write_room(api: &Api, source: &Path, dir: Option<&Path>) -> Result<Opti
     let opened = room.created_at.with_timezone(&Local);
     let path = report::room_csv_path(source, dir, &room.code, opened);
     report::write_room_csv(&path, &questions)?;
+    #[cfg(feature = "brute")]
+    report::write_brute_zip(&report::brute_path(&path), &questions)?;
     Ok(Some(path))
 }
 

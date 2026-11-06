@@ -239,6 +239,22 @@ async fn ask_flow() {
         csv,
         "login,name,questions.md,total\nnovakja1,Jan Novák,1.0,1.0\n"
     );
+    // With the `brute` feature, the points also go to a zip for BRUTE.
+    #[cfg(feature = "brute")]
+    {
+        let zip = room_csv.with_extension("brute.zip");
+        let zip_name = zip.file_name().unwrap().to_string_lossy();
+        assert!(
+            printed.lines().any(|line| {
+                line.starts_with("Points for BRUTE saved to ") && line.ends_with(&*zip_name)
+            }),
+            "{printed}"
+        );
+        assert_eq!(
+            read_brute_zip(&zip),
+            ("brute.csv".to_owned(), "novakja1,1.0\n".to_owned())
+        );
+    }
 
     // The token was cached, so the next command needs no browser at all.
     let cache = dir.join("quiz").join("tokens.json");
@@ -385,6 +401,11 @@ async fn ask_flow() {
         "login,name,questions.md,questions.md#2,manual,total\n\
          novakja1,Jan Novák,1.0,-0.5,1.0,1.5\n"
     );
+    #[cfg(feature = "brute")]
+    assert_eq!(
+        read_brute_zip(&in_room_dir.with_extension("brute.zip")).1,
+        "novakja1,1.5\n"
+    );
 
     // `quiz close` without a question id ends the lecture: the page the
     // student has open stops working, but the teacher stays logged in.
@@ -530,9 +551,13 @@ async fn reveal_in_presentation_view() {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     saved.sort();
-    assert_eq!(saved.len(), 2, "{saved:?}");
+    let brute = cfg!(feature = "brute");
+    assert_eq!(saved.len(), if brute { 3 } else { 2 }, "{saved:?}");
     assert!(saved[0].starts_with("questions_"), "{saved:?}");
-    assert!(saved[1].starts_with("room_"), "{saved:?}");
+    assert!(
+        saved[1..].iter().all(|name| name.starts_with("room_")),
+        "{saved:?}"
+    );
     let next_to_question = std::fs::read_dir(&dir)
         .unwrap()
         .flatten()
@@ -625,9 +650,13 @@ async fn ask_without_stdin() {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     saved.sort();
-    assert_eq!(saved.len(), 2, "{saved:?}");
+    let brute = cfg!(feature = "brute");
+    assert_eq!(saved.len(), if brute { 3 } else { 2 }, "{saved:?}");
     assert!(saved[0].starts_with("questions_"), "{saved:?}");
-    assert_eq!(saved[1], format!("{room_dir}.csv"));
+    if brute {
+        assert_eq!(saved[1], format!("{room_dir}.brute.zip"));
+    }
+    assert_eq!(saved.last(), Some(&format!("{room_dir}.csv")));
 }
 
 #[tokio::test]
@@ -1000,4 +1029,16 @@ fn scratch(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+/// The name and contents of the only file in the zip for BRUTE.
+#[cfg(feature = "brute")]
+fn read_brute_zip(path: &Path) -> (String, String) {
+    use std::io::Read;
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+    assert_eq!(zip.len(), 1);
+    let mut file = zip.by_index(0).unwrap();
+    let mut csv = String::new();
+    file.read_to_string(&mut csv).unwrap();
+    (file.name().unwrap().into_owned(), csv)
 }
