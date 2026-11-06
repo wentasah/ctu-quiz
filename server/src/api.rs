@@ -69,18 +69,23 @@ pub async fn award_points(
     Teacher(teacher): Teacher,
     Json(request): Json<AwardPoints>,
 ) -> Result<Json<PointsAwarded>, ApiFailure> {
-    let login = request.login.trim();
-    if login.is_empty() {
-        return Err(ApiFailure::bad_request("the login is empty"));
-    }
+    let login = check_award_name("login", &request.login).map_err(ApiFailure::bad_request)?;
     if !request.points.is_finite() {
         return Err(ApiFailure::bad_request("the points are not a number"));
     }
-    let label = request.label.as_deref().map(str::trim);
-    let label = match label {
+    let label = match request.label.as_deref() {
         None => DEFAULT_POINTS_LABEL,
-        Some("") => return Err(ApiFailure::bad_request("the question id is empty")),
-        Some(label) => label,
+        Some(label) => {
+            let label = check_award_name("question id", label).map_err(ApiFailure::bad_request)?;
+            // It becomes the source name of the manual entry, which the CLI
+            // takes for a file name, as it does that of a real question.
+            if label.contains(['/', '\\']) || label.trim_matches('.').is_empty() {
+                return Err(ApiFailure::bad_request(format!(
+                    "the question id {label:?} is not a file name"
+                )));
+            }
+            label
+        }
     };
     let (question, name) = state
         .award_points(&teacher.login, login, request.points, label)
@@ -319,6 +324,28 @@ fn source_name(name: &str) -> String {
     name.chars().take(100).collect()
 }
 
+/// Longest login or question id [`award_points`] accepts, in characters.
+const MAX_AWARD_NAME: usize = 100;
+
+/// `value` trimmed, or why [`award_points`] refuses it as `what`: it ends up
+/// in the log, the state file and the room CSV, so it has to be short and
+/// on one line.
+fn check_award_name<'a>(what: &str, value: &'a str) -> Result<&'a str, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(format!("the {what} is empty"));
+    }
+    if value.chars().count() > MAX_AWARD_NAME {
+        return Err(format!(
+            "the {what} is longer than {MAX_AWARD_NAME} characters"
+        ));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(format!("the {what} contains control characters"));
+    }
+    Ok(value)
+}
+
 /// Refuses a question whose content would take more than
 /// [`MAX_QUESTION_SIZE`] of memory.
 fn check_size(content: &quiz_common::Question) -> Result<(), ApiFailure> {
@@ -337,7 +364,18 @@ fn check_size(content: &quiz_common::Question) -> Result<(), ApiFailure> {
 mod tests {
     use axum::{http::StatusCode, response::IntoResponse};
 
-    use super::{MAX_QUESTION_SIZE, check_size, source_name};
+    use super::{MAX_AWARD_NAME, MAX_QUESTION_SIZE, check_award_name, check_size, source_name};
+
+    #[test]
+    fn award_names_are_short_single_lines() {
+        assert_eq!(check_award_name("login", "  novakja1 "), Ok("novakja1"));
+        assert!(check_award_name("login", " ").is_err());
+        assert!(check_award_name("login", "a\nb").is_err());
+        assert!(check_award_name("login", "a\u{1b}[31m").is_err());
+        let long = "x".repeat(MAX_AWARD_NAME);
+        assert!(check_award_name("login", &long).is_ok());
+        assert!(check_award_name("login", &format!("{long}x")).is_err());
+    }
 
     #[test]
     fn a_question_may_take_at_most_the_allowed_size() {

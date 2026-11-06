@@ -1455,6 +1455,35 @@ async fn the_teacher_sees_the_room_and_the_questions_kept_in_it() {
 }
 
 #[tokio::test]
+async fn points_are_awarded_only_under_a_file_name() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let token = idp.access_token(&User::new("sojkam1", "Michal Sojka"), CLIENT_ID);
+    let api = reqwest::Client::new();
+    let award = |login: &str, label: &str| {
+        api.post(format!("{base}/api/v1/room/award"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "login": login, "points": 1.0, "label": label }))
+            .send()
+    };
+
+    for (login, label) in [
+        ("novakja1", "../../x"),
+        ("novakja1", "labs\\q1.md"),
+        ("novakja1", ".."),
+        ("novakja1", "q1\nfake log line"),
+        ("novakja1", &"x".repeat(101)),
+        ("nova\nkja1", "q1.md"),
+    ] {
+        let response = award(login, label).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{label:?}");
+    }
+    // A good one only fails for want of a room.
+    let response = award("novakja1", "q1.md").await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn an_unusable_question_is_refused_with_an_explanation() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &[]).await;
