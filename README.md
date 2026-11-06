@@ -54,9 +54,9 @@ To try everything on one machine without a real identity provider, see
 $ quiz ask exercises/01regex/question1.md
 Consider the following BASH code: ...
 
-  A) In Bash, every stage of a pipeline runs in its own subshell. ...
-  B) It doesn't handle errors.
-  C) It will work only in BASH 4.0 and newer.
+  A) The loop runs in a subshell, so sum stays 0 in the parent shell.
+  B) Inside $((...)) the variables need a $, so sum + num is always 0 + 0.
+  C) It works only in Bash 4.0 and newer, because older versions lack the $((...)) arithmetic expansion.
 
 Question code:     428173
 Students answer at: https://quiz.iid.ciirc.cvut.cz/r/4f3c...c1
@@ -223,8 +223,8 @@ per student, sorted by login:
 
 ```csv
 login,name,points,answer,answer_text,answered_at,seconds
-novakja1,Jan Novák,0.0,B,It doesn't handle errors.,2026-09-21T12:05:41.881Z,18.4
-svobodpe,Petra Svobodová,-1.0,C,It will work only in BASH 4.0 and newer.,2026-09-21T12:05:44.102Z,20.6
+novakja1,Jan Novák,0.0,B,"Inside $((...)) the variables need a $, so sum + num is always 0 + 0.",2026-09-21T12:05:41.881Z,18.4
+svobodpe,Petra Svobodová,-1.0,C,"It works only in Bash 4.0 and newer, because older versions lack the $((...)) arithmetic expansion.",2026-09-21T12:05:44.102Z,20.6
 ```
 
 `points` holds the points of the chosen answer; a question without points
@@ -409,13 +409,13 @@ What's wrong with it?
 
 ---
 
-- [x] In Bash, every stage of a pipeline runs in its own subshell.
-  Modifications to variables inside the `while` loop affect the
-  subshell, not the parent shell environment.
+- [x] The loop runs in a subshell, so `sum` stays 0 in the parent shell.
 
-- [ ] It doesn't handle errors.
+- [ ] Inside `$((...))` the variables need a `$`, so `sum + num` is always
+  0 + 0.
 
-- [ ] It will work only in BASH 4.0 and newer. {-1}
+- [ ] It works only in Bash 4.0 and newer, because older versions lack the
+  `$((...))` arithmetic expansion. {-1}
 ````
 
 Details worth knowing:
@@ -449,9 +449,9 @@ Details worth knowing:
   an answer sets its points explicitly, with or without a checkbox:
 
   ```markdown
-  - [x] In Bash, every stage of a pipeline runs in its own subshell.
-  - [ ] It doesn't handle errors.
-  - [ ] It will work only in BASH 4.0 and newer. {-1}
+  - [x] The loop runs in a subshell, so `sum` stays 0 in the parent shell.
+  - [ ] Inside `$((...))` the variables need a `$`.
+  - [ ] It works only in Bash 4.0 and newer. {-1}
   ```
 
   Either every answer is marked or none is, so a forgotten mark is an error

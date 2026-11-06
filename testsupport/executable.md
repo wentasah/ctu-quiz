@@ -14,10 +14,10 @@ What's wrong with it?
 
 ---
 
-- [x] In Bash, every stage of a pipeline runs in its own subshell.
-  Modifications to variables inside the `while` loop affect the
-  subshell, not the parent shell environment.
+- [x] The loop runs in a subshell, so `sum` stays 0 in the parent shell.
 
-- [ ] It doesn't handle errors.
+- [ ] Inside `$((...))` the variables need a `$`, so `sum + num` is always
+  0 + 0.
 
-- [ ] It will work only in BASH 4.0 and newer.
+- [ ] It works only in Bash 4.0 and newer, because older versions lack the
+  `$((...))` arithmetic expansion.
