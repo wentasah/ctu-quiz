@@ -497,6 +497,18 @@ install -Dm644 completions/_quiz ~/.local/share/zsh/site-functions/_quiz
 `nix build` installs the bash, zsh and fish scripts into the package itself,
 so `nix profile install` or the NixOS module brings completion along.
 
+### Midnight Commander
+
+[`misc/mc.menu`](misc/mc.menu) is a user menu for
+[Midnight Commander](https://midnight-commander.org) that asks the question
+under the cursor with F2 `q`, or checks it with F2 `p`. Copy it into the
+directory with the questions as `.mc.menu`; mc uses it only there, and only
+when it is owned by you or root and is not world-writable:
+
+```sh
+install -m644 misc/mc.menu ~/courses/os/questions/.mc.menu
+```
+
 ### Building
 
 ```sh
@@ -891,6 +903,7 @@ For those working on the code.
 | `cli/src/auth.rs` | the loopback OIDC login and the token cache |
 | `cli/src/report.rs` | terminal output and the CSV export |
 | `testsupport/` | mock OIDC provider: the tests' fixture and the `mock-idp` binary |
+| `scripts/`, `misc/` | helper scripts, and the Midnight Commander menu |
 
 ### Tests
 

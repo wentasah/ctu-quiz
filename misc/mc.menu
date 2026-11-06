@@ -1,0 +1,16 @@
+shell_patterns=0
+# Midnight Commander user menu (F2) for a directory with questions.
+# shell_patterns=0 above makes \.md$ a regular expression; it works
+# only on the very first line.
+#
+# Copy it there as .mc.menu; mc uses it only if it is owned by you or
+# root and is not world-writable. Then F2 q asks the question under
+# the cursor.
+
++ f \.md$ & t r
+q       Ask the question
+	quiz ask %f
+
++ f \.md$ & t r
+p       Check the question
+	quiz parse %f | less -R
