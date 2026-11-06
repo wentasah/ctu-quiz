@@ -36,9 +36,9 @@ Asking questions with the `quiz` command line tool, for teachers.
    is out of the way.
 5. Ask the question with `quiz ask question.md` — see
    [How one question works](#how-one-question-works) for what happens next.
-6. Find the answers in the [CSV file](#the-csv-file-with-question-answers)
+6. Find the answers in the [CSV file](#single-question-answers)
    next to the question, and the points of the whole lecture in the
-   [room CSV](#the-csv-file-with-the-points-of-a-room).
+   [room CSV](#whole-room-lecture-points).
 7. Optionally end the lecture with `quiz logout` (or `quiz close`), which
    closes the [room](#rooms). Rooms left open are closed automatically after
    a few hours.
@@ -211,7 +211,12 @@ defaults in effect for the options that take a value. `quiz parse` checks
 the front matter and prints it; it is never sent to the server.
 [`testsupport/front-matter.md`](testsupport/front-matter.md) is an example.
 
-### The CSV file with question answers
+### Result files
+
+`quiz` saves the results in CSV files: the answers of each question, and
+the points of the whole room.
+
+#### Single question answers
 
 The answers of every question are stored in a CSV file with one row
 per student, sorted by login:
@@ -236,7 +241,7 @@ room, e.g. `room_2026-09-21_14-00-07_428173/`, created next to the question
 file or in the `--output-dir`, so that all questions of one lecture end up
 together.
 
-### The CSV file with the points of a room
+#### Whole room (lecture) points
 
 Besides the answers of the question, every scored question closed by `quiz
 ask` or `quiz close <id>` updates a CSV with the points of the whole
