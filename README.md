@@ -89,7 +89,7 @@ and left.
 4. Students either scan the QR code or go to the main page, log in and type the
    code — both ways land on the same answer URL. They tap one of the answers and
    may correct it while the question is open.
-5. Pressing Enter, or the *Close the question* button in the presentation view,
+5. Pressing <kbd>Enter</kbd>, or the *Close the question* button in the presentation view,
    closes the question. Every open browser switches over to a bar graph with
    the results, and the CLI writes
    `question1_2026-09-21_14-05-03.csv` next to `question1.md`.
@@ -134,7 +134,7 @@ listener used during the login. The ID token is cached in `tokens.json`
 in the [configuration directory](#configuration-files) (mode 0600 on Linux
 and macOS), so the browser is normally only needed once a day.
 
-Ctrl-C does the same as Enter: the question is closed and the answers are
+<kbd>Ctrl-C</kbd> does the same as <kbd>Enter</kbd>: the question is closed and the answers are
 saved, so a mistyped key does not lose the collected data. So does the
 *Close the question* button in the presentation view, for a teacher who stands
 at the projector rather than at the keyboard: `quiz ask` notices the
@@ -148,10 +148,10 @@ opened at all, it counts from when the question is asked. The button
 empties from right to left like a progress bar, so the class sees how much
 time is left.
 
-A scored question then waits for one more Enter before the correct answers are
+A scored question then waits for one more <kbd>Enter</kbd> before the correct answers are
 marked in the results, so that the class can talk about the bar graph first.
 The *Show the correct answers* button in the presentation view reveals them
-too, and `quiz ask` then ends by itself. Ctrl-C, or a standard input that is
+too, and `quiz ask` then ends by itself. <kbd>Ctrl-C</kbd>, or a standard input that is
 not a terminal, ends `quiz ask` without revealing them; `quiz reveal
 <question id>` or the button does it later. An open question cannot be
 revealed.
@@ -291,7 +291,7 @@ goes like this:
 * Between questions, the page shows the results of the previous question
   until the next one arrives.
 * A question that is still open when the next one is asked stays open for its
-  own `quiz ask` — pressing Enter there still closes it and writes its CSV —
+  own `quiz ask` — pressing <kbd>Enter</kbd> there still closes it and writes its CSV —
   but the students have already moved on to the new one.
 * A room keeps at most 100 questions. Asking another one drops the oldest,
   together with its answers. Only the question being asked keeps its text
@@ -323,7 +323,7 @@ goes like this:
   `scripts/award.sh` saves typing the login: it lets you pick the student
   from `quiz status --students` with [fzf](https://github.com/junegunn/fzf)
   (and [jq](https://jqlang.org)), then passes the rest of its arguments to
-  `quiz award`. Nothing is awarded when fzf is left with Esc. Sourced
+  `quiz award`. Nothing is awarded when fzf is left with <kbd>Esc</kbd>. Sourced
   without arguments, it defines the shell function `award` instead:
 
   ```sh
@@ -451,7 +451,7 @@ Details worth knowing:
 
   Either every answer is marked or none is, so a forgotten mark is an error
   rather than a silent zero. The marks are removed from what students see;
-  once the question is closed and the teacher presses Enter once more, the
+  once the question is closed and the teacher presses <kbd>Enter</kbd> once more, the
   results mark the answers worth points with a ✓, on the projector and the
   phones alike. `quiz parse` and `quiz ask`
   print the points of each answer, the summary adds the average, and the CSV
@@ -622,7 +622,7 @@ What happens then:
    `novakja1`, type the code and pick an answer. The counter in the
    presentation view and in terminal 3 goes up immediately. Repeat in further
    private windows for more students.
-4. Press Enter in terminal 3. The question closes, every open page switches to
+4. Press <kbd>Enter</kbd> in terminal 3. The question closes, every open page switches to
    the bar graph, and `question_<date>_<time>.csv` appears next to the
    Markdown file.
 
