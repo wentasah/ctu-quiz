@@ -2070,7 +2070,7 @@ dependencies = [
 
 [[package]]
 name = "quiz-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2096,7 +2096,7 @@ dependencies = [
 
 [[package]]
 name = "quiz-common"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "pulldown-cmark",
@@ -2108,7 +2108,7 @@ dependencies = [
 
 [[package]]
 name = "quiz-server"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2142,7 +2142,7 @@ dependencies = [
 
 [[package]]
 name = "quiz-testsupport"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "axum",
  "chrono",

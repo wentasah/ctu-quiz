@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] – 2026-11-06
+
+### Added
+
+- Add support for teacher notes after the answers ([0fdc070](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/0fdc070b82dbf67fbd38237c9400c438427a5471))
+- Add `quiz award` for awarding students points by hand ([75cd7eb](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/75cd7ebd109eb648232ca1f0ac057fc7b8061657))
+- Add scripts/award.sh for picking the student with fzf ([2b3e9bf](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/2b3e9bfa3e0b131d7c47ac89c2e95b7dc221926a))
+- Add a Midnight Commander user menu for asking questions ([5f674f8](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/5f674f87fa6256f544f311f9c5c692bd26c716c9))
+- Add the brute feature to save the points of a room for BRUTE import ([e65aae5](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/e65aae586e6da347154f721a4e75add0e16bef12))
+- Support TOML front matter in question files ([411cb7a](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/411cb7ad43335316505055f7dbc9685150bc0d0e))
+- Color the CLI output on a terminal ([442359a](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/442359aa9c4bfc7a208269ed0afc3c816fc87aa0))
+- Add `quiz status --students` with `--format` ([7fb82dd](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/7fb82ddbc22b2a596e0087fd587afc8ea651962e))
+
+### Changed
+
+- Refuse the presentation view to students with a 403 ([3ff4328](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/3ff4328c92a7e83dad44f99b8b7a309e444e0876))
+- gitlab-ci: Build the CLI with the brute feature enabled ([4d83be3](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/4d83be3f9ecc8ea3b9756c984afcc56f4d82aad0))
+
+### Documentation
+
+- README: Many updates and clarifications; addition of a screenshot.
+
+### Build and deployment
+
+- CI: Add a GitHub workflow that builds and releases the binaries ([a000a59](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/a000a59ac6f542286b51ce4511efe7b2d85e6943))
+
 ## [0.2.0] – 2026-11-01
 
 ### Added
