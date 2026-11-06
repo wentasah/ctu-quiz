@@ -507,7 +507,9 @@ Details worth knowing:
   [`testsupport/executable.md`](testsupport/executable.md) is the example
   question in this form.
 
-### Shell completions
+### Integration with other tools
+
+#### Shell completions
 
 They are generated while the CLI is compiled, from the very command line the
 binary parses, so they never fall behind the options. `cli/build.rs` writes
@@ -524,7 +526,7 @@ install -Dm644 completions/_quiz ~/.local/share/zsh/site-functions/_quiz
 `nix build` installs the bash, zsh and fish scripts into the package itself,
 so `nix profile install` or the NixOS module brings completion along.
 
-### Midnight Commander
+#### Midnight Commander
 
 [`misc/mc.menu`](misc/mc.menu) is a user menu for
 [Midnight Commander](https://midnight-commander.org) that asks the question
