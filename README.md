@@ -355,7 +355,7 @@ browser only when none does. Each question still gets its own CSV.
 Two lectures held at the same time under the same login would share a room;
 use a second login (or log out in between) to keep them apart.
 
-### Keeping the question off the phones
+### What students see on their phones
 
 Everything students need is on the projector, so their own screen does not
 have to repeat it — and what is not on their screen is a lot more work to
