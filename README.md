@@ -213,8 +213,8 @@ the front matter and prints it; it is never sent to the server.
 
 ### Result files
 
-`quiz` saves the results in CSV files: the answers of each question, and
-the points of the whole room.
+`quiz` saves the results in CSV files: the answers to each question, and a
+summary of the points from all questions in the room (lecture).
 
 #### Single question answers
 
@@ -222,14 +222,14 @@ The answers of every question are stored in a CSV file with one row
 per student, sorted by login:
 
 ```csv
-login,name,answer,answer_text,answered_at,seconds
-novakja1,Jan Novák,B,It doesn't handle errors.,2026-09-21T12:05:41.881Z,18.4
-svobodpe,Petra Svobodová,C,It will work only in BASH 4.0 and newer.,2026-09-21T12:05:44.102Z,20.6
+login,name,points,answer,answer_text,answered_at,seconds
+novakja1,Jan Novák,0.0,B,It doesn't handle errors.,2026-09-21T12:05:41.881Z,18.4
+svobodpe,Petra Svobodová,-1.0,C,It will work only in BASH 4.0 and newer.,2026-09-21T12:05:44.102Z,20.6
 ```
 
-`seconds` is how long after the question was asked the student answered,
-to a tenth of a second. A scored question adds a `points` column after
-`name`, holding the points of the chosen answer.
+`points` holds the points of the chosen answer; a question without points
+has no such column. `seconds` is how long after the question was asked the
+student answered, to a tenth of a second.
 
 The file name is the base name of the question file plus the date and time:
 `question.md` → `question_2026-09-21_14-05-03.csv`, written into the same
