@@ -15,7 +15,8 @@
 award() {
   local login
   login=$(quiz status --students --format jsonl | jq -r '"\(.login)\t\(.name)"' | fzf --tac | cut -f1)
-  [ -n "$login" ] && quiz award "$login" "$@"
+  # `--`, so that a login starting with a dash is not taken for an option.
+  [ -n "$login" ] && quiz award -- "$login" "$@"
 }
 
 # Run, with the points, rather than sourced without arguments: award right
