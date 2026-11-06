@@ -91,7 +91,7 @@ Consider the following BASH code: ...
   B) Inside $((...)) the variables need a $, so sum + num is always 0 + 0.
   C) It works only in Bash 4.0 and newer, because older versions lack the $((...)) arithmetic expansion.
 
-Question code:     428173
+Question code:      428173
 Students answer at: https://quiz.iid.ciirc.cvut.cz/r/4f3c...c1
 Presentation view:  https://quiz.iid.ciirc.cvut.cz/d
 
@@ -111,14 +111,14 @@ and left.
    question is noticed before the students see it.
 2. It logs the teacher in (once; the token is cached) and publishes the
    question over the API.
-3. It opens the **presentation view** in a browser. That page shows the
-   question, a QR code with the answer URL, the six-digit question code and a
-   live count of the answers. It is only shown to the teacher who asked the
-   question, logged in in that browser, so the first visit there asks for
-   the same login as the CLI. If no browser can be opened, the URL is printed
-   for opening by hand. The window stays open for the whole lecture: every
-   further question appears in it by itself, and a new window is only opened
-   when the old one has been closed.
+3. It opens the **presentation view** in a browser. That page shows
+   the question, a QR code with the answer URL, the six-digit question
+   code and a live count of the answers. Only the teacher who asked
+   the question can see it, so on the first visit the browser may ask
+   for the same login as the CLI. If no browser can be opened, the URL
+   is printed for opening by hand. The window stays open for the whole
+   lecture: every further question appears in it by itself, and a new
+   window is only opened when the old one has been closed.
 4. Students either scan the QR code or go to the main page, log in and type the
    code — both ways land on the same answer URL. They tap one of the answers and
    may correct it while the question is open.
@@ -132,25 +132,25 @@ and left.
 
 ### Teacher CLI
 
-Teacher CLI (the `quiz` command) works are described below. Let's
-start with some examples:
+This section describes the teacher's command line tool, `quiz`. Some
+examples first:
 
 ```sh
-quiz ask question.md          # publish, present, collect, save (the main one)
+quiz ask question.md                # publish, present, collect, save (the main one)
 quiz ask question.md -o answers.csv --close-after 120
 quiz ask question.md --hide-question   # question only on the projector
 quiz ask question.md --labels-only     # phones show A, B, C only
 quiz ask question.md --shuffle         # answers in a random order
-quiz parse question.md        # check the Markdown, no server needed
-quiz login                    # log in ahead of the lecture
-quiz whoami                    # who am I, and may I ask questions?
-quiz logout [--all]          # end the lecture: close the room, forget the token
-quiz status                   # the room, and the questions the server keeps
-quiz status --students        # the students in the room, their answers and points
-quiz close <question id>      # if `quiz ask` was interrupted: close and save
-quiz close                    # end the lecture but stay logged in: close the room
-quiz reveal <question id>     # mark the correct answers, if `quiz ask` did not
-quiz award <login> <points> [<id>]   # award points by hand, in a column of their own
+quiz parse question.md              # check the Markdown, no server needed
+quiz login                          # log in ahead of the lecture
+quiz whoami                         # who am I, and may I ask questions?
+quiz logout [--all]                 # end the lecture: close the room, forget the token
+quiz status                         # the room, and the questions the server keeps
+quiz status --students              # the students in the room, their answers and points
+quiz close <question id>            # if `quiz ask` was interrupted: close and save
+quiz close                          # end the lecture but stay logged in: close the room
+quiz reveal <question id>           # mark the correct answers, if `quiz ask` did not
+quiz award <login> <points> [<id>]  # award points by hand, in a column of their own
 ```
 
 The output is **colored** when it goes to a terminal. `--color never` (or
@@ -181,8 +181,9 @@ opened at all, it counts from when the question is asked. The button
 empties from right to left like a progress bar, so the class sees how much
 time is left.
 
-A scored question then waits for one more <kbd>Enter</kbd> before the correct answers are
-marked in the results, so that the class can talk about the bar graph first.
+Once a scored question is closed, `quiz ask` waits for one more
+<kbd>Enter</kbd> before the correct answers are marked in the results, so
+that the class can talk about the bar graph first.
 The *Show the correct answers* button in the presentation view reveals them
 too, and `quiz ask` then ends by itself. <kbd>Ctrl-C</kbd>, or a standard input that is
 not a terminal, ends `quiz ask` without revealing them; `quiz reveal
@@ -232,7 +233,7 @@ shuffle = true
 close-after = 60
 +++
 
-Which color of the light has the longest wavelength?
+Which color of light has the longest wavelength?
 ```
 
 From the weakest to the strongest, the defaults come from `config.toml`,
@@ -371,8 +372,9 @@ too, unless the server runs with `--state-file` (see
 * **`quiz close` without a question id closes the room**: its questions are
   dropped, the students' pages reload and report that the room is gone, and
   the URL and the code stop working. The next question opens a new room with
-  a new code. This ends a lecture deliberately instead of waiting for the
-  TTL, and the teacher stays logged in.
+  a new code. This ends a lecture deliberately instead of waiting until the
+  room closes by itself after `--question-ttl-hours`, and the teacher stays
+  logged in.
 * **`quiz logout` does the same and also forgets the token**, which is the
   way to end a lecture for good on a shared machine.
 * Each answer carries the id of the question that was on the student's
@@ -380,10 +382,10 @@ too, unless the server runs with `--state-file` (see
   of being counted for the wrong question.
 
 The presentation view (`/d`) shows the room of the teacher logged in in
-the browser, and always the current question in it. Its URL is the same
-for everybody, and anybody else gets a page saying they have no room. The server keeps an event stream to each open
-presentation view, so it knows whether one exists, and `quiz ask` opens a
-browser only when none does. Each question still gets its own CSV.
+the browser, always with its current question. Its URL is the same for
+everybody; anybody without a room gets a page saying so. The server keeps
+an event stream to each open presentation view, so it knows whether one
+exists, and `quiz ask` opens a browser only when none does.
 
 Two lectures held at the same time under the same login would share a room;
 use a second login (or log out in between) to keep them apart.
@@ -453,7 +455,7 @@ What's wrong with it?
 
 Details worth knowing:
 
-* Answers are labelled `A`, `B`, `C`, … in the order they appear, and there may
+* Answers are labeled `A`, `B`, `C`, … in the order they appear, and there may
   be at most 26 of them. At least two are required.
 * An answer may span several lines and contain any inline Markdown; nested
   lists stay part of the answer they belong to.
@@ -467,7 +469,7 @@ Details worth knowing:
   server, so students never see them:
 
   ```markdown
-  Which color of the light has the longest wavelength?
+  Which color of light has the longest wavelength?
   ---
   - [x] Red
   - [ ] Green
@@ -498,7 +500,7 @@ Details worth knowing:
   part of the text.
 
   [`testsupport/unscored.md`](testsupport/unscored.md) is an example
-  of unscored question without any points.
+  of an unscored question without any points.
 * Fenced code blocks are **syntax highlighted**, in the question and in the
   answers alike, from the language of the fence (```` ``` bash ````). The
   highlighter is [syntect](https://crates.io/crates/syntect) with the Sublime
@@ -563,7 +565,8 @@ so `nix profile install` or the NixOS module brings completion along.
 
 [`misc/mc.menu`](misc/mc.menu) is a user menu for
 [Midnight Commander](https://midnight-commander.org) that asks the question
-under the cursor with F2 `q`, or checks it with F2 `p`. Copy it into the
+under the cursor with <kbd>F2</kbd> <kbd>q</kbd>, or checks it with
+<kbd>F2</kbd> <kbd>p</kbd>. Copy it into the
 directory with the questions as `.mc.menu`; mc uses it only there, and only
 when it is owned by you or root and is not world-writable:
 
@@ -605,10 +608,9 @@ cargo build --release          # target/release/quiz-server, target/release/quiz
 cargo test                     # unit tests plus end-to-end tests
 ```
 
-Built and tested with Rust 1.98; edition 2024 needs at least 1.85. No C
-libraries are needed: TLS is provided
-by rustls, and the stylesheet, the script and the HTML templates are compiled
-into the binaries.
+Built and tested with Rust 1.99; at least 1.88 is needed. No C libraries
+are needed: TLS is provided by rustls, and the stylesheet, the script and
+the HTML templates are compiled into the binaries.
 
 With Nix: `nix build` builds both binaries, `nix develop` gives a shell with
 the toolchain.
@@ -625,16 +627,16 @@ cargo install --git https://gitlab.fel.cvut.cz/sojkam1/quiz.git quiz-cli
 ```
 
 This puts `quiz` into `~/.cargo/bin`. The distribution's Cargo has to be at
-least 1.85 (`cargo --version`), which is Debian 13 or Ubuntu 25.04 and newer;
-on older releases install the toolchain with [rustup](https://rustup.rs)
-instead.
+least 1.88 (`cargo --version`); if it is older, install the toolchain with
+[rustup](https://rustup.rs) instead.
 
 #### Prebuilt binaries
 
 The GitLab CI (`.gitlab-ci.yml`) cross-compiles the binaries on every push
-with [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and keeps
-them as job artifacts for three months. The newest ones of `main` can be
-downloaded directly:
+with [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild), with the
+[`brute` feature](#whole-room-lecture-points) on, and keeps them as job
+artifacts for two weeks. The newest ones of `main` can be downloaded
+directly:
 
 | Platform | Binaries | Download |
 |---|---|---|
@@ -642,6 +644,12 @@ downloaded directly:
 | Linux x86-64, static (musl) | `quiz`, `quiz-server` | [build-linux-musl](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-musl) |
 | macOS, Apple Silicon and Intel | `quiz` | [build-macos](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-macos) |
 | Windows x86-64 | `quiz.exe` | [build-windows](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-windows) |
+
+The binaries of released versions are kept for good on the
+[releases page](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/releases); see
+`RELEASING.md`. The GitHub workflow (`.github/workflows/build.yml`) builds
+binaries for the same platforms, without the `brute` feature, and attaches
+them to [GitHub releases](https://github.com/wentasah/ctu-quiz/releases).
 
 The macOS binary is not signed, so Gatekeeper refuses to start it when it was
 downloaded with a browser; `xattr -d com.apple.quarantine quiz` lets it run.
@@ -682,8 +690,8 @@ What happens then:
 2. The CLI publishes the question and opens the presentation view: the
    question, a QR code, the six-digit code and a live counter. The browser
    usually still has the session from step 1; if not, log in as `sojkam1`
-   again. Add
-   `--no-browser` if you would rather open the printed URLs yourself.
+   again. Add `--no-browser` if you would rather open the printed URLs
+   yourself.
 3. To act as a student, open <http://localhost:8080/> **in a private window**
    (so it gets a session of its own), log in as somebody else, for example
    `novakja1`, type the code and pick an answer. The counter in the
@@ -740,7 +748,7 @@ the access token it gets, and the server only accepts access tokens whose
 audience (`aud`) contains the server's client ID, so tokens issued to the CLI
 client have to carry it; in Keycloak, add an audience mapper for the server's
 client to the CLI's client. `--oidc-audiences` names further audiences that
-the server accepts instead. Providers that follow
+the server accepts as well. Providers that follow
 RFC 8252 accept any loopback port; for stricter ones, register
 `http://127.0.0.1:28191/callback` and set `--oidc-cli-redirect-uri`. The CLI
 asks the server which client to use, so teachers only ever configure
@@ -800,7 +808,7 @@ the container image use (`quiz-server --help` lists them all):
 | `--session-ttl-hours` | `QUIZ_SESSION_TTL_HOURS` | `12` |
 | `--state-file` | `QUIZ_STATE_FILE` | none (state in memory only) |
 | `--trust-proxy` | `QUIZ_TRUST_PROXY` | off |
-| `--default-lang` | `QUIZ_DEFAULT_LANG` | `en` (or `cs`) |
+| `--default-lang` | `QUIZ_DEFAULT_LANG` | `en`; `cs` is the other choice |
 
 `--public-url` may contain a path prefix (`https://osy.fel.cvut.cz/quiz`); the
 server then serves all its pages under that prefix, so the reverse proxy has to
@@ -834,11 +842,12 @@ TLS. Ready-made pieces:
   }
   ```
 
-Restarting the server is cheap: nothing is stored on disc, so only questions
-that are open at that moment are lost, and browser sessions have to log in
-again (the cookie signing key is new).
+By default nothing is stored on disk, so a restart loses all rooms,
+questions and answers: students need the code of a new room, and browser
+sessions have to log in again (the cookie signing key is new). The CSV files
+that `quiz` has already written are not affected.
 
-To restart it, e.g. for an update, in the middle of a lecture without losing
+To restart the server, e.g. for an update, in the middle of a lecture without losing
 anything, give it `--state-file` (`QUIZ_STATE_FILE`). On SIGTERM or SIGINT the
 server then writes the rooms, questions and answers to that file, and reads
 them back the next time it starts, dropping what has outlived
@@ -847,16 +856,17 @@ and only have to log in again, as sessions are not saved. A state file that
 cannot be read is only warned about in the log, and the server starts from
 scratch, overwriting the file when it stops next time. The
 systemd unit in `deploy/` has the lines for this commented out, and the NixOS
-module has `services.quiz-server.saveState`. This departs from requirement 4,
-so it is off by default.
+module has `services.quiz-server.saveState`. This departs from
+[requirement 4](#where-each-requirement-is-implemented), so it is off by
+default.
 
-### Changing the colours
+### Changing the colors
 
 The highlighter emits one CSS class per Sublime scope (`hl-keyword`,
-`hl-string`, `hl-comment`, …) instead of inline colours, so the palette lives
+`hl-string`, `hl-comment`, …) instead of inline colors, so the palette lives
 in `server/static/app.css` in the `--hl-*` variables, once for the light theme
-and once for the dark one. Only leaf scopes are coloured there: scopes such as
-`meta` or `function` wrap whole regions, and colouring them would tint entire
+and once for the dark one. Only leaf scopes are colored there: scopes such as
+`meta` or `function` wrap whole regions, and coloring them would tint entire
 function bodies.
 
 ### Adding a language
@@ -926,10 +936,10 @@ The counters start from zero whenever the server restarts.
   signing keys, with issuer, audience (the server's client ID) and expiry
   checked. ID tokens are refused: they are meant for the client that logged
   in, not for the API.
-* Only logins on the `--teachers` list may ask questions, and a question can
-  only be closed or exported by the teacher who asked it. The server refuses to
-  start with an empty list unless `--allow-any-teacher` says that everybody who
-  can log in may ask.
+* Only teachers, given by `--teachers` or `--teacher-roles`, may ask
+  questions, and a question can only be closed or exported by the teacher who
+  asked it. The server refuses to start with neither of them unless
+  `--allow-any-teacher` says that everybody who can log in may ask.
 * A question is Markdown, but HTML written in it is escaped rather than
   rendered, so a question cannot bring scripts into the students' browsers.
 
@@ -940,8 +950,8 @@ The counters start from zero whenever the server restarts.
 | `OIDC discovery at … failed` at startup | wrong `--oidc-issuer`, or the provider is unreachable; the issuer must be the URL *without* `/.well-known/openid-configuration` |
 | Login ends with `redirect_uri` mismatch | `<public URL>/auth/callback` is not registered with the provider |
 | `not logged in: the ID token is not valid` | the cached token expired and could not be refreshed — `quiz login` |
-| `not allowed: … is not allowed to ask questions` | the login is missing from `--teachers` |
-| `no --teachers given` | list the teachers, or pass `--allow-any-teacher` |
+| `not allowed: … is not allowed to ask questions` | the login is not in `--teachers` and has none of the `--teacher-roles` |
+| `neither --teachers nor --teacher-roles given` at startup | list the teachers or their roles, or pass `--allow-any-teacher` |
 | Asked to log in again and again, or the code form comes back after submitting | the server is being reached under a different host name than `--public-url`, so the session cookie does not come back |
 | The answer count does not move | the reverse proxy buffers the event streams; see `deploy/nginx.conf.example` |
 | The QR code leads nowhere | `--public-url` does not match how students reach the server |
@@ -958,7 +968,7 @@ For those working on the code.
 | 1 | HTTP server plus a CLI for teachers | `quiz-server` (`server/`) and `quiz` (`cli/`) |
 | 2 | Server reachable under a public URL | `--public-url`, plus `deploy/` for the reverse proxy, systemd, Docker and NixOS |
 | 3 | The CLI talks to the server over an HTTP API | `common/src/api.rs`, `cli/src/client.rs`, routes under `/api/v1` |
-| 4 | No state on disc | `server/src/state.rs` keeps questions, answers and sessions in memory only; `--state-file` (off by default, `server/src/persist.rs`) opts out |
+| 4 | No state on disk | `server/src/state.rs` keeps questions, answers and sessions in memory only; `--state-file` (off by default, `server/src/persist.rs`) opts out |
 | 5 | All operations logged to a file by a logging framework | `tracing` with a file and a stderr layer, set up in `init_logging` (`server/src/lib.rs`) |
 | 6 | Authorization via OIDC | `server/src/auth.rs` (browser sessions, ID-token checks), `cli/src/auth.rs` (loopback login) |
 | 7 | Question read from Markdown, shown in a browser, URL printed otherwise | `cli/src/main.rs`: `ask` and `show_in_browser` |
@@ -1015,4 +1025,4 @@ saves its state over a restart.
 
 `QUIZ_DUMP_PAGES=/tmp/pages cargo test -p quiz-server --test e2e` additionally
 saves the rendered pages with the stylesheet inlined, so they can be opened
-straight from disc to check the styling and the highlighting.
+straight from disk to check the styling and the highlighting.
