@@ -1,0 +1,165 @@
+# The GitHub counterpart of .gitlab-ci.yml, with these differences:
+#
+# - The CLI is built without the brute feature, which is only of use at the
+#   CTU FEE.
+# - The macOS and Windows binaries are built natively on their runners;
+#   only the Linux ones are cross-compiled with cargo-zigbuild, for the
+#   oldest glibc and for musl.
+# - A release is a GitHub release with the binaries attached to it, created
+#   by pushing a tag vX.Y.Z (see RELEASING.md).
+#
+# The binaries of every build are kept as workflow artifacts, packed in a
+# tar.gz, which keeps them executable, and the Windows one as it is.
+
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs before the builds, so a tag that does not match the version or
+  # lacks a changelog section builds and releases nothing.
+  check-release:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the version and extract the release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=${TAG#v}
+          if ! grep -qx "version = \"$version\"" Cargo.toml; then
+            echo "The version in Cargo.toml is not $version" >&2
+            exit 1
+          fi
+          # The section of the release, without its heading, up to the next one.
+          awk -v v="$version" '/^## \[/ { p = index($0, "## [" v "]") == 1; next } p' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "CHANGELOG.md has no section for $version" >&2
+            exit 1
+          fi
+          cat release-notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  build:
+    needs: check-release
+    # Also when check-release was skipped, i.e. for a branch.
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Runs on any distribution with glibc 2.28 or newer (Debian 10,
+          # RHEL 8, Ubuntu 18.10).
+          - platform: linux-x86_64-gnu
+            os: ubuntu-latest
+            container: ghcr.io/rust-cross/cargo-zigbuild:0.23.4
+            target: x86_64-unknown-linux-gnu.2.28
+            # The server is only ever deployed on Linux.
+            packages: -p quiz-cli -p quiz-server
+            binaries: quiz quiz-server
+          # Statically linked, runs on any Linux, Alpine included.
+          - platform: linux-x86_64-musl
+            os: ubuntu-latest
+            container: ghcr.io/rust-cross/cargo-zigbuild:0.23.4
+            target: x86_64-unknown-linux-musl
+            packages: -p quiz-cli -p quiz-server
+            binaries: quiz quiz-server
+          # One binary for both Apple Silicon and Intel Macs.
+          - platform: macos-universal
+            os: macos-latest
+            container: ""
+            packages: -p quiz-cli
+            binaries: quiz
+          - platform: windows-x86_64
+            os: windows-latest
+            container: ""
+            packages: -p quiz-cli
+            binaries: quiz.exe
+    runs-on: ${{ matrix.os }}
+    # An empty image runs the job directly on the runner.
+    container: ${{ matrix.container }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      PLATFORM: ${{ matrix.platform }}
+      TARGET: ${{ matrix.target }}
+      PACKAGES: ${{ matrix.packages }}
+      BINARIES: ${{ matrix.binaries }}
+      # The version in the file names of a release.
+      TAG: ${{ github.ref_type == 'tag' && format('-{0}', github.ref_name) || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          case $PLATFORM in
+            linux-*)
+              cargo zigbuild --release --locked $PACKAGES --target "$TARGET"
+              # A glibc target carries the oldest glibc to link against
+              # after a dot, which is not part of the output directory.
+              for binary in $BINARIES; do
+                cp "target/${TARGET%%.*}/release/$binary" .
+              done
+              ;;
+            macos-*)
+              rustup target add aarch64-apple-darwin x86_64-apple-darwin
+              for target in aarch64-apple-darwin x86_64-apple-darwin; do
+                cargo build --release --locked $PACKAGES --target $target
+              done
+              lipo -create -output quiz \
+                target/aarch64-apple-darwin/release/quiz \
+                target/x86_64-apple-darwin/release/quiz
+              ;;
+            windows-*)
+              cargo build --release --locked $PACKAGES
+              cp target/release/quiz.exe .
+              ;;
+          esac
+          ls -l $BINARIES
+      - name: Pack
+        run: |
+          case $PLATFORM in
+            windows-*) file=quiz$TAG-$PLATFORM.exe; cp quiz.exe "$file" ;;
+            *) file=quiz$TAG-$PLATFORM.tar.gz; tar czf "$file" $BINARIES ;;
+          esac
+          echo "FILE=$file" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quiz-${{ matrix.platform }}
+          path: ${{ env.FILE }}
+          retention-days: 14
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [check-release, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: quiz-*
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l dist
+          gh release create "$TAG" dist/* --verify-tag --title "$TAG" \
+            --notes-file release-notes.md
