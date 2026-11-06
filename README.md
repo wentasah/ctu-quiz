@@ -150,6 +150,10 @@ server = "https://quiz.iid.ciirc.cvut.cz"
 shuffle = true
 hide-question = true
 close-after = 120 # seconds
+room-dir = true    # save results to one directory per lecture
+
+[award]
+room-dir = true    # the same directory as `quiz ask`
 ```
 
 A question file may set options of `quiz ask` for itself, as TOML **front
@@ -290,7 +294,9 @@ goes like this:
   the student has points under it already, the points go under `<id>#2`,
   `<id>#3`, ... instead. The room CSV is rewritten right away, in the
   current directory, or where `--output-dir` and `--room-dir` say, as with
-  `quiz ask`.
+  `quiz ask`. When `quiz ask` saves into the room directory, set
+  `room-dir = true` under `[award]` in `quiz.toml` too (see the
+  [example](#teacher-cli)), so that the points end up in the same room CSV.
 
   `scripts/award.sh` saves typing the login: it lets you pick the student
   from `quiz status --students` with [fzf](https://github.com/junegunn/fzf)
