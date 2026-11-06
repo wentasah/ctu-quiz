@@ -6,8 +6,9 @@ lecture, and for collecting their answers.
 It has two parts:
 
 * **`quiz-server`** — an HTTP server that shows the question to students,
-  collects their answers and serves an API for the CLI. It keeps everything in
-  memory; the only file it writes is its log.
+  collects their answers and serves an API for the CLI. It needs no database:
+  it keeps everything in memory, optionally saved to a file to survive a
+  restart.
 * **`quiz`** — the teacher's command line tool. It reads a question from a
   Markdown file, publishes it on the server, opens the presentation view in a
   browser and, when the teacher closes the question, saves the collected
@@ -44,9 +45,10 @@ button.](misc/screenshot.webp)
   [configuration files](#configuration-files), shell completions, and
   integration with Midnight Commander and Yazi.
 * **Authentication via OpenID Connect** for students and teachers alike.
-* **Easy to run**: one server binary that keeps everything in memory, with
-  optional saved state, Prometheus metrics, a Docker image and a NixOS
-  module; prebuilt binaries for Linux, macOS and Windows.
+* **Easy to run**: a single server binary and no database. It keeps
+  everything in memory, optionally saved to a file so that no data is lost
+  on a restart. Prometheus metrics, a NixOS module, and prebuilt binaries
+  for Linux, macOS and Windows.
 
 ## Usage
 
