@@ -168,6 +168,7 @@ on the command line, only by `false` in a place that wins over it. The
 `--help` output shows the defaults in effect for the options that take a
 value. `quiz parse` checks the front matter and prints it; it is never
 sent to the server.
+[`testsupport/front-matter.md`](testsupport/front-matter.md) is an example.
 
 Ctrl-C does the same as Enter: the question is closed and the answers are
 saved, so a mistyped key does not lose the collected data. So does the
@@ -353,8 +354,8 @@ the order it ended up with.
 
 A question is one Markdown file. Everything above the first horizontal rule
 (`---`) is the question; the top-level list items below it are the possible
-answers. `testsupport/question.md` is a working example, and the one the
-tests use:
+answers. [`testsupport/question.md`](testsupport/question.md) is a working
+example, and the one the tests use:
 
 ````markdown
 Consider the following BASH code:
@@ -403,7 +404,9 @@ Details worth knowing:
   - [ ] Blue
   Red ≈ 620–750 nm, green ≈ 495–570 nm, blue ≈ 450–495 nm.
   ```
-  The last line is the teacher notes.
+  The last line is the teacher notes;
+  [`testsupport/teacher-notes.md`](testsupport/teacher-notes.md) is a longer
+  example.
 * Answers may be **scored**. `- [x] …` is a correct answer worth 1 point and
   `- [ ] …` a wrong one worth 0; `{2}`, `{0.5}` or `{-1}` at the very end of
   an answer sets its points explicitly, with or without a checkbox:
@@ -423,6 +426,9 @@ Details worth knowing:
   gets a `points` column. Braces count only as the last word of an answer
   and only around a plain number, so `a{2}` in a regular expression stays
   part of the text.
+
+  [`testsupport/unscored.md`](testsupport/unscored.md) is an example
+  of unscored question without any points.
 * Fenced code blocks are **syntax highlighted**, in the question and in the
   answers alike, from the language of the fence (```` ``` bash ````). The
   highlighter is [syntect](https://crates.io/crates/syntect) with the Sublime
@@ -443,7 +449,8 @@ Details worth knowing:
   browsers to fetch. In the terminal and the CSV an image is its
   description, or its file name when the description is empty, so that an
   answer that is just `- ![](img/circle-blue.svg)` still reads as
-  `circle-blue.svg`. `testsupport/images.md` is an example.
+  `circle-blue.svg`. [`testsupport/images.md`](testsupport/images.md) is an
+  example.
 * `quiz parse question.md` shows how a file is parsed without contacting the
   server.
 * HTML written in the Markdown is **escaped**, not rendered: the question is
@@ -460,8 +467,8 @@ Details worth knowing:
   Front matter, if any, goes right after it.
   This happens only for a file that really is executable: in an ordinary
   Markdown file a first line starting with `#!` stays part of the question.
-  `testsupport/executable.md` is the example question in this form.
-  `testsupport/unscored.md` is a question in C without any points.
+  [`testsupport/executable.md`](testsupport/executable.md) is the example
+  question in this form.
 
 ## Shell completions
 
