@@ -1575,10 +1575,7 @@ async fn a_student_may_not_open_the_presentation_view() {
     let response = student.get(format!("{base}/d")).send().await.unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = response.text().await.unwrap();
-    assert!(
-        body.contains("for the teacher's projector"),
-        "got: {body}"
-    );
+    assert!(body.contains("for the teacher's projector"), "got: {body}");
     let response = student
         .get(format!("{base}/d/events"))
         .send()

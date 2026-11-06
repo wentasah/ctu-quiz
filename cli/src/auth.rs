@@ -155,24 +155,23 @@ pub async fn token(
 ) -> Result<Token> {
     let mut cache = load_cache();
 
-    if !force_login {
-        if let Some(token) = cache.tokens.get(server) {
-            if token.is_usable(info) {
-                return Ok(token.clone());
-            }
-            // An expired token may still be refreshable without a browser.
-            if token.issuer == info.issuer && token.client_id == info.client_id {
-                if let Some(refresh) = token.refresh_token.clone() {
-                    match refresh_token(http, info, &refresh, &token.login).await {
-                        Ok(token) => {
-                            cache.tokens.insert(server.to_owned(), token.clone());
-                            store_cache(&cache)?;
-                            return Ok(token);
-                        }
-                        Err(error) => {
-                            eprintln!("Refreshing the login failed ({error:#}), logging in again.");
-                        }
-                    }
+    if !force_login && let Some(token) = cache.tokens.get(server) {
+        if token.is_usable(info) {
+            return Ok(token.clone());
+        }
+        // An expired token may still be refreshable without a browser.
+        if token.issuer == info.issuer
+            && token.client_id == info.client_id
+            && let Some(refresh) = token.refresh_token.clone()
+        {
+            match refresh_token(http, info, &refresh, &token.login).await {
+                Ok(token) => {
+                    cache.tokens.insert(server.to_owned(), token.clone());
+                    store_cache(&cache)?;
+                    return Ok(token);
+                }
+                Err(error) => {
+                    eprintln!("Refreshing the login failed ({error:#}), logging in again.");
                 }
             }
         }

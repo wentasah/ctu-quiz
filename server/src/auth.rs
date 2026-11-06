@@ -396,10 +396,10 @@ impl FromRequestParts<AppState> for User {
             .await
             .expect("extracting a cookie jar cannot fail");
 
-        if let Some(cookie) = jar.get(SESSION_COOKIE) {
-            if let Some(identity) = state.session(cookie.value()).await {
-                return Ok(Self(identity));
-            }
+        if let Some(cookie) = jar.get(SESSION_COOKIE)
+            && let Some(identity) = state.session(cookie.value()).await
+        {
+            return Ok(Self(identity));
         }
 
         let query = url::form_urlencoded::Serializer::new(String::new())
