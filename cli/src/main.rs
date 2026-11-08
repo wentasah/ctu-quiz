@@ -94,6 +94,7 @@ async fn run(cli: &Cli) -> Result<()> {
             hide_answers,
             labels_only,
             shuffle,
+            no_bell,
         } => {
             ask(
                 cli,
@@ -106,6 +107,7 @@ async fn run(cli: &Cli) -> Result<()> {
                 *close_after,
                 student_view(*hide_question, *hide_answers, *labels_only),
                 *shuffle,
+                !*no_bell,
             )
             .await
         }
@@ -195,6 +197,7 @@ async fn ask(
     close_after: Option<u64>,
     view: StudentView,
     shuffle: bool,
+    bell: bool,
 ) -> Result<()> {
     let source = read_question(file)?;
     // The teacher notes stay in the terminal: the server, and so the
@@ -251,7 +254,7 @@ async fn ask(
             );
         }
     }
-    wait_for_close(&api, &question.id, &mut stdin).await?;
+    wait_for_close(&api, &question.id, &mut stdin, bell).await?;
 
     let closed = api.close(&question.id).await?;
     let results = api.results(&question.id).await?;
@@ -768,11 +771,15 @@ const STREAM_SILENCE: Duration = Duration::from_secs(45);
 /// The counts come over server-sent events, so they show up as soon as
 /// somebody answers and nothing is sent while nothing happens.
 ///
+/// With `bell`, the terminal bell rings whenever everybody in the room has
+/// answered, which they had not before.
+///
 /// `stdin` becomes `None` once the standard input turns out to be closed.
 async fn wait_for_close(
     api: &Api,
     id: &str,
     stdin: &mut Option<Lines<BufReader<Stdin>>>,
+    bell: bool,
 ) -> Result<()> {
     println!(
         "Press {BOLD}Enter{BOLD:#} to close the question and save the answers \
@@ -783,6 +790,7 @@ async fn wait_for_close(
     // change instead of escape sequences.
     let terminal = std::io::stdout().is_terminal();
     let mut last_counts = None;
+    let mut all_answered = false;
     let mut events = None;
 
     loop {
@@ -801,6 +809,14 @@ async fn wait_for_close(
                     println!("  answers: {}/{}", counts.0, counts.1);
                 }
                 last_counts = Some(counts);
+
+                // Once per time everybody is done, not on every update.
+                let everybody = counts.1 > 0 && counts.0 >= counts.1;
+                if bell && terminal && everybody && !all_answered {
+                    std::print!("\x07");
+                    let _ = std::io::stdout().flush();
+                }
+                all_answered = everybody;
 
                 if !question.open {
                     println!("\n{GREEN}The question has been closed.{GREEN:#}");

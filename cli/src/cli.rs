@@ -111,6 +111,10 @@ pub enum Command {
         /// correct answer is not in the same place as last year.
         #[arg(long)]
         shuffle: bool,
+        /// Do not ring the terminal bell when every student in the room has
+        /// answered.
+        #[arg(long)]
+        no_bell: bool,
     },
     /// Show how a Markdown file is parsed, without contacting the server.
     Parse {

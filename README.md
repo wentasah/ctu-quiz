@@ -181,6 +181,11 @@ opened at all, it counts from when the question is asked. The button
 empties from right to left like a progress bar, so the class sees how much
 time is left.
 
+When every student in the room has answered, `quiz ask` rings the terminal
+bell, so the teacher notices without watching the count; `--no-bell` (or
+`no-bell = true` in a [configuration file](#configuration-files)) keeps it
+quiet.
+
 Once a scored question is closed, `quiz ask` waits for one more
 <kbd>Enter</kbd> before the correct answers are marked in the results, so
 that the class can talk about the bar graph first.
