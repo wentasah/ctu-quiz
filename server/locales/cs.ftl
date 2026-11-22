@@ -15,6 +15,7 @@ question-code = Kód otázky
 question-code-hint = Zadejte kód, který vyučující zobrazil vedle QR kódu.
 show-question = Zobrazit otázku
 unknown-code = Kód { $code } nepatří k žádné otázce. Zkuste to prosím znovu.
+too-many-codes = Příliš mnoho chybných kódů. Počkejte prosím minutu a zkuste to znovu.
 source-code = Zdrojový kód:
 language = Jazyk
 change-language = Změnit

@@ -1564,6 +1564,69 @@ async fn an_unusable_question_is_refused_with_an_explanation() {
 }
 
 #[tokio::test]
+async fn guessing_room_codes_stops_after_a_few_wrong_ones() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let question: QuestionInfo = reqwest::Client::new()
+        .post(format!("{base}/api/v1/questions"))
+        .bearer_auth(idp.access_token(&teacher, CLIENT_ID))
+        .json(&CreateQuestion {
+            source_name: "questions.md".to_owned(),
+            markdown: QUESTION.to_owned(),
+            images: Default::default(),
+            view: StudentView::default(),
+            shuffle: false,
+            close_after: None,
+            start_countdown: false,
+        })
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let join = |client: &reqwest::Client, code: &str| {
+        client
+            .post(format!("{base}/join"))
+            .form(&[("code", code)])
+            .send()
+    };
+
+    let guesser = browser_as(&base, &idp, &User::new("guesser1", "Guesser")).await;
+    let mut wrong = 0;
+    for code in 0..1_000_000 {
+        let code = format!("{code:06}");
+        if code == question.code {
+            continue;
+        }
+        let response = join(&guesser, &code).await.unwrap();
+        if response.status() == StatusCode::TOO_MANY_REQUESTS {
+            let body = response.text().await.unwrap();
+            assert!(body.contains("Too many wrong codes"), "{body}");
+            break;
+        }
+        wrong += 1;
+        assert!(wrong <= 10, "still guessing after {wrong} wrong codes");
+    }
+    assert_eq!(wrong, 10);
+
+    // Not even the right code gets the guesser in now.
+    let response = join(&guesser, &question.code).await.unwrap();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    // Somebody else still does.
+    let student = browser_as(&base, &idp, &User::new("novakja1", "Jan Novák")).await;
+    let response = join(&student, &question.code).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(
+        response.url().path().starts_with("/r/"),
+        "{}",
+        response.url()
+    );
+}
+
+#[tokio::test]
 async fn a_wrong_code_is_reported_on_the_main_page() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &[]).await;

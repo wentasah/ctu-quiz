@@ -1013,6 +1013,9 @@ The counters start from zero whenever the server restarts.
   only from the server itself and forbids showing the pages in frames of
   other sites, and a `Referrer-Policy` that keeps the URL of a room, which
   is enough to enter it, from going to the sites a question links to.
+* A room code has only six digits, so after 10 wrong codes in a minute, a
+  login cannot enter any code, not even the right one, until the minute is
+  over. Guessing every code would take one login about 70 days.
 
 ### Troubleshooting
 

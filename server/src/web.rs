@@ -42,6 +42,20 @@ pub async fn join(
     // Be forgiving about spaces and dashes in a code read off a projector.
     let code: String = form.code.chars().filter(char::is_ascii_digit).collect();
 
+    // Guessing codes stops after a few wrong ones, a right one included.
+    let now = Utc::now();
+    let allowed = state
+        .wrong_codes
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .allows(&user.login, now);
+    if !allowed {
+        tracing::warn!(login = %user.login, %code, "too many wrong question codes");
+        let error = lang.t("too-many-codes");
+        let page = Html(code_page(user, lang, error)?);
+        return Ok((axum::http::StatusCode::TOO_MANY_REQUESTS, page).into_response());
+    }
+
     let Some(room) = state
         .store
         .read()
@@ -50,6 +64,11 @@ pub async fn join(
         .map(|room| room.token.clone())
     else {
         tracing::info!(login = %user.login, %code, "unknown question code");
+        state
+            .wrong_codes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .record(&user.login, now);
         let error = lang
             .msg("unknown-code")
             .arg("code", code.as_str())

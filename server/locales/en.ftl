@@ -18,6 +18,7 @@ question-code = Question code
 question-code-hint = Enter the code the teacher shows next to the QR code.
 show-question = Show the question
 unknown-code = Code { $code } does not belong to any question. Please try again.
+too-many-codes = Too many wrong codes. Please wait a minute and try again.
 source-code = Source code:
 language = Language
 change-language = Change

@@ -46,6 +46,49 @@ pub const LOGIN_TTL_MINUTES: i64 = 15;
 /// for logins they never finish.
 pub const MAX_PENDING_LOGINS: usize = 4096;
 
+/// Wrong room codes one login may enter per [`WRONG_CODES_WINDOW_SECONDS`].
+/// A room code has only six digits, so without a limit, anybody who can log
+/// in could try them all and get into every room that is open.
+pub const MAX_WRONG_CODES: u32 = 10;
+pub const WRONG_CODES_WINDOW_SECONDS: i64 = 60;
+
+/// Wrong room codes entered per login, to stop guessing them; see
+/// [`MAX_WRONG_CODES`].
+#[derive(Debug, Default)]
+pub struct WrongCodes(HashMap<String, (DateTime<Utc>, u32)>);
+
+impl WrongCodes {
+    /// Whether `login` may enter a code at `now`: not when it entered too
+    /// many wrong ones in the current window, even if this one were right.
+    pub fn allows(&self, login: &str, now: DateTime<Utc>) -> bool {
+        match self.0.get(login) {
+            Some(&(start, count)) if now < start + wrong_codes_window() => count < MAX_WRONG_CODES,
+            _ => true,
+        }
+    }
+
+    /// Counts a wrong code that `login` entered at `now`.
+    pub fn record(&mut self, login: &str, now: DateTime<Utc>) {
+        let entry = self.0.entry(login.to_owned()).or_insert((now, 0));
+        if now >= entry.0 + wrong_codes_window() {
+            *entry = (now, 0);
+        }
+        entry.1 += 1;
+    }
+
+    /// Forgets the windows that are over at `now`; returns how many.
+    pub fn prune(&mut self, now: DateTime<Utc>) -> usize {
+        let before = self.0.len();
+        self.0
+            .retain(|_, (start, _)| now < *start + wrong_codes_window());
+        before - self.0.len()
+    }
+}
+
+fn wrong_codes_window() -> TimeDelta {
+    TimeDelta::seconds(WRONG_CODES_WINDOW_SECONDS)
+}
+
 /// How many questions a room keeps. Asking one more drops the oldest, so that
 /// a teacher asking in a loop cannot fill the server's memory either.
 pub const MAX_ROOM_QUESTIONS: usize = 100;
@@ -816,6 +859,7 @@ pub struct Inner {
     pub store: RwLock<Store>,
     pub sessions: RwLock<HashMap<String, Session>>,
     pub logins: RwLock<HashMap<String, PendingLogin>>,
+    pub wrong_codes: Mutex<WrongCodes>,
     pub metrics: Metrics,
 }
 
@@ -843,6 +887,7 @@ impl AppState {
             store: RwLock::new(Store::default()),
             sessions: RwLock::new(HashMap::new()),
             logins: RwLock::new(HashMap::new()),
+            wrong_codes: Mutex::new(WrongCodes::default()),
             metrics: Metrics::default(),
         }))
     }
@@ -1064,11 +1109,17 @@ impl AppState {
             before - logins.len()
         };
         let questions = self.store.write().await.prune(now - self.question_ttl());
-        if sessions + logins + questions > 0 {
+        let wrong_codes = self
+            .wrong_codes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .prune(now);
+        if sessions + logins + questions + wrong_codes > 0 {
             tracing::info!(
                 sessions,
                 logins,
                 questions,
+                wrong_codes,
                 "dropped expired state from memory"
             );
         }
@@ -1091,6 +1142,28 @@ mod tests {
             next: "/".to_owned(),
             created_at,
         }
+    }
+
+    #[test]
+    fn too_many_wrong_codes_stop_a_login_for_a_while() {
+        let now = Utc::now();
+        let mut wrong = WrongCodes::default();
+        for _ in 0..MAX_WRONG_CODES {
+            assert!(wrong.allows("guesser", now));
+            wrong.record("guesser", now);
+        }
+        assert!(!wrong.allows("guesser", now));
+        // Others are not affected.
+        assert!(wrong.allows("student", now));
+
+        // Once the window is over, it starts again.
+        let later = now + wrong_codes_window();
+        assert!(wrong.allows("guesser", later));
+        wrong.record("guesser", later);
+        assert!(wrong.allows("guesser", later));
+
+        assert_eq!(wrong.prune(later), 0);
+        assert_eq!(wrong.prune(later + wrong_codes_window()), 1);
     }
 
     #[test]
