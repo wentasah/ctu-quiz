@@ -674,15 +674,18 @@ so it can be installed without cloning the repository. Use one of these
 commands:
 
 ```sh
-cargo install ctu-quiz         # the latest release, compiled from source
-cargo binstall ctu-quiz        # the latest release, prebuilt
-cargo install --git https://gitlab.fel.cvut.cz/sojkam1/quiz.git ctu-quiz  # main
+cargo install --locked ctu-quiz  # the latest release, compiled from source
+cargo binstall ctu-quiz          # the latest release, prebuilt
+cargo install --locked --git https://gitlab.fel.cvut.cz/sojkam1/quiz.git ctu-quiz  # main
 ```
 
-[`cargo binstall`](https://github.com/cargo-bins/cargo-binstall), which has
-to be installed first, downloads the [prebuilt binaries](#prebuilt-binaries)
-of the release and compiles only on platforms that have none. All three
-commands put `quiz` into `~/.cargo/bin`.
+`--locked` builds with exactly the versions of the dependencies the release
+was tested with; without it, Cargo picks their newest versions, which may
+not build. [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall),
+which has to be installed first, downloads the
+[prebuilt binaries](#prebuilt-binaries) of the release and compiles only on
+platforms that have none. All three commands put `quiz` into
+`~/.cargo/bin`.
 
 To compile, Cargo 1.88 or newer is needed (check with `cargo --version`).
 On Debian or Ubuntu, `sudo apt install cargo` installs it; if the
