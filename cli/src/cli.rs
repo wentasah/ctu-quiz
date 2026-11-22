@@ -131,6 +131,9 @@ pub enum Command {
         /// answered.
         #[arg(long)]
         no_bell: bool,
+        /// Do not clear the terminal before showing the question.
+        #[arg(long)]
+        no_clear: bool,
     },
     /// Show how a Markdown file is parsed, without contacting the server.
     Parse {

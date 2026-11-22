@@ -186,6 +186,10 @@ bell, so the teacher notices without watching the count; `--no-bell` (or
 `no-bell = true` in a [configuration file](#configuration-files)) keeps it
 quiet.
 
+In a terminal, `quiz ask` clears the screen before it shows the question,
+so that only the current question is on it; `--no-clear` (or
+`no-clear = true`) keeps what was there.
+
 Once a scored question is closed, `quiz ask` waits for one more
 <kbd>Enter</kbd> before the correct answers are marked in the results, so
 that the class can talk about the bar graph first.

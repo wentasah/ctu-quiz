@@ -95,6 +95,7 @@ async fn run(cli: &Cli) -> Result<()> {
             labels_only,
             shuffle,
             no_bell,
+            no_clear,
         } => {
             ask(
                 cli,
@@ -107,7 +108,10 @@ async fn run(cli: &Cli) -> Result<()> {
                 *close_after,
                 student_view(*hide_question, *hide_answers, *labels_only),
                 *shuffle,
-                !*no_bell,
+                Terminal {
+                    bell: !*no_bell,
+                    clear: !*no_clear,
+                },
             )
             .await
         }
@@ -189,6 +193,14 @@ impl Destination<'_> {
     }
 }
 
+/// What `quiz ask` does to the terminal, when its output goes to one.
+struct Terminal {
+    /// Ring the bell when everybody has answered.
+    bell: bool,
+    /// Clear the screen before showing the question.
+    clear: bool,
+}
+
 /// The main workflow: publish, present, collect, save.
 async fn ask(
     cli: &Cli,
@@ -197,17 +209,23 @@ async fn ask(
     close_after: Option<u64>,
     view: StudentView,
     shuffle: bool,
-    bell: bool,
+    terminal: Terminal,
 ) -> Result<()> {
     let source = read_question(file)?;
     // The teacher notes stay in the terminal: the server, and so the
     // browsers, get only the question and its answers.
     let markdown = quiz_common::question::split_notes(&source).0.to_owned();
     let images = read_images(file, &markdown)?;
-    report::print_question(
-        &quiz_common::parse_with_images(&source, &images)
-            .with_context(|| format!("{} is not a usable question", file.display()))?,
-    );
+    let question = quiz_common::parse_with_images(&source, &images)
+        .with_context(|| format!("{} is not a usable question", file.display()))?;
+    // Each question starts on an empty screen, with only what belongs to
+    // it; a log file gets no escape sequences. What scrolled away is
+    // still in the scrollback.
+    if terminal.clear && std::io::stdout().is_terminal() {
+        std::print!("\x1b[H\x1b[2J");
+        let _ = std::io::stdout().flush();
+    }
+    report::print_question(&question);
 
     let api = connect(cli, false).await?;
     let question = api
@@ -254,7 +272,7 @@ async fn ask(
             );
         }
     }
-    wait_for_close(&api, &question.id, &mut stdin, bell).await?;
+    wait_for_close(&api, &question.id, &mut stdin, terminal.bell).await?;
 
     let closed = api.close(&question.id).await?;
     let results = api.results(&question.id).await?;
