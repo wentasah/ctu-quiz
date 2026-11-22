@@ -701,6 +701,8 @@ version:
   |---|---|---|
   | Linux x86-64, glibc 2.28+ | `quiz`, `quiz-server` | [build-linux-gnu](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-gnu) |
   | Linux x86-64, static (musl) | `quiz`, `quiz-server` | [build-linux-musl](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-musl) |
+  | Linux ARM64, glibc 2.28+ | `quiz`, `quiz-server` | [build-linux-aarch64-gnu](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-aarch64-gnu) |
+  | Linux ARM64, static (musl) | `quiz`, `quiz-server` | [build-linux-aarch64-musl](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-linux-aarch64-musl) |
   | macOS, Apple Silicon and Intel | `quiz` | [build-macos](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-macos) |
   | Windows x86-64 | `quiz.exe` | [build-windows](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-windows) |
 

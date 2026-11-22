@@ -2,7 +2,7 @@
 #
 # - The macOS and Windows binaries are built natively on their runners;
 #   only the Linux ones are cross-compiled with cargo-zigbuild, for the
-#   oldest glibc and for musl.
+#   oldest glibc and for musl, on x86_64 and ARM64.
 # - A release is a GitHub release with the binaries attached to it, created
 #   by pushing a tag vX.Y.Z (see RELEASING.md).
 #
@@ -70,6 +70,21 @@ jobs:
             os: ubuntu-latest
             container: ghcr.io/rust-cross/cargo-zigbuild:0.23.4
             target: x86_64-unknown-linux-musl
+            packages: -p ctu-quiz -p quiz-server
+            binaries: quiz quiz-server
+          # ARM64, e.g. a Raspberry Pi 3 or newer with a 64-bit system, or
+          # an ARM server; glibc 2.28 or newer, as above.
+          - platform: linux-aarch64-gnu
+            os: ubuntu-latest
+            container: ghcr.io/rust-cross/cargo-zigbuild:0.23.4
+            target: aarch64-unknown-linux-gnu.2.28
+            packages: -p ctu-quiz -p quiz-server
+            binaries: quiz quiz-server
+          # ARM64, statically linked.
+          - platform: linux-aarch64-musl
+            os: ubuntu-latest
+            container: ghcr.io/rust-cross/cargo-zigbuild:0.23.4
+            target: aarch64-unknown-linux-musl
             packages: -p ctu-quiz -p quiz-server
             binaries: quiz quiz-server
           # One binary for both Apple Silicon and Intel Macs.

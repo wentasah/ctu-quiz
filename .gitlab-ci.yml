@@ -121,6 +121,25 @@ build-linux-musl:
     PACKAGES: -p ctu-quiz -p quiz-server
     BINARIES: quiz quiz-server
 
+build-linux-aarch64-gnu:
+  extends: .build
+  variables:
+    # ARM64, e.g. a Raspberry Pi 3 or newer with a 64-bit system, or an ARM
+    # server; glibc 2.28 or newer, as above.
+    TARGET: aarch64-unknown-linux-gnu.2.28
+    PLATFORM: linux-aarch64-gnu
+    PACKAGES: -p ctu-quiz -p quiz-server
+    BINARIES: quiz quiz-server
+
+build-linux-aarch64-musl:
+  extends: .build
+  variables:
+    # ARM64, statically linked.
+    TARGET: aarch64-unknown-linux-musl
+    PLATFORM: linux-aarch64-musl
+    PACKAGES: -p ctu-quiz -p quiz-server
+    BINARIES: quiz quiz-server
+
 build-macos:
   extends: .build
   variables:
@@ -148,6 +167,10 @@ release:
       artifacts: false
     - job: build-linux-musl
       artifacts: false
+    - job: build-linux-aarch64-gnu
+      artifacts: false
+    - job: build-linux-aarch64-musl
+      artifacts: false
     - job: build-macos
       artifacts: false
     - job: build-windows
@@ -165,6 +188,12 @@ release:
           link_type: package
         - name: Linux x86_64, static (quiz, quiz-server)
           url: $PACKAGE_URL/quiz-$CI_COMMIT_TAG-linux-x86_64-musl.tar.gz
+          link_type: package
+        - name: Linux ARM64, glibc 2.28+ (quiz, quiz-server)
+          url: $PACKAGE_URL/quiz-$CI_COMMIT_TAG-linux-aarch64-gnu.tar.gz
+          link_type: package
+        - name: Linux ARM64, static (quiz, quiz-server)
+          url: $PACKAGE_URL/quiz-$CI_COMMIT_TAG-linux-aarch64-musl.tar.gz
           link_type: package
         - name: macOS, Apple Silicon and Intel (quiz)
           url: $PACKAGE_URL/quiz-$CI_COMMIT_TAG-macos-universal.tar.gz

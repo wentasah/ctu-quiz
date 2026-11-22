@@ -30,6 +30,12 @@ pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/q
 [package.metadata.binstall.overrides.x86_64-unknown-linux-musl]
 pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-linux-x86_64-musl.tar.gz"
 
+[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
+pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-linux-aarch64-gnu.tar.gz"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-musl]
+pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-linux-aarch64-musl.tar.gz"
+
 [package.metadata.binstall.overrides.aarch64-apple-darwin]
 pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-macos-universal.tar.gz"
 
