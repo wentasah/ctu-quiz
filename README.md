@@ -314,12 +314,24 @@ Next to it, and rewritten along with it, the OpenDocument spreadsheet
 applications) has two sheets, both with the same students and questions as
 the CSV:
 
-* *Points*: the points, each question colored separately from red (fewest
-  points) to green (most), and the total, a `SUM` formula shown with a
-  data bar.
+* *Points*: the points for each question, and a total computed with a
+  `SUM` formula and shown as a data bar. Each question has its own
+  color scale, from red for the points of its worst answer to green
+  for its best one. Points given by hand range from red at 0 to green
+  at the highest number given.
 * *Time*: the seconds each student took to answer, counted from when the
-  question was asked, each question colored separately from green
-  (fastest) to red (slowest). Columns of points given by hand stay empty.
+  question was asked. Each question has its own color scale, from green
+  at 0 seconds to red at its `--close-after` limit, or, without a limit,
+  from its fastest answer to its slowest. Columns of points given by hand
+  stay empty.
+
+  The `--close-after` countdown starts only when the presentation view
+  first shows the question, so a student can take slightly longer than
+  the limit. Such a cell is fully red.
+
+These color scales need a server newer than 0.3.0. With an older server,
+each question's scale runs from its lowest points to its highest, and
+from its fastest answer to its slowest.
 
 The question file names in the header are rotated by 90°, so that the
 columns stay narrow. The colors and data bars are a LibreOffice extension
