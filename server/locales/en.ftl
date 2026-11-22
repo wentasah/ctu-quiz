@@ -29,6 +29,8 @@ wait-for-question-hint =
     It appears here by itself once the teacher asks it.
     Do not close this page.
 room-code = Code of this room: <strong>{ $code }</strong>
+question-scored = Scored question
+question-unscored = Not scored
 question-on-screen = The question is on the screen only.
 options-on-screen = The options are on the screen; choose the letter of your answer.
 answer-recorded =

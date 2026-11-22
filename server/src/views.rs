@@ -157,6 +157,9 @@ pub struct AnswerPage {
     pub show_question: bool,
     /// Whether the answers are shown with their text, or as bare labels.
     pub show_answers: bool,
+    /// Whether the answers carry points, so that students know whether the
+    /// question counts.
+    pub scored: bool,
     /// Whether the teacher has yet to ask the next question.
     pub waiting: bool,
     pub open: bool,

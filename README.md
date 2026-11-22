@@ -426,6 +426,11 @@ the results of that question as well — the bar graph on a phone then shows
 the counts without the answer texts. The presentation view, the CSV and the
 API always carry the full text.
 
+Whatever they see, a badge at the top of the phone screen says whether the
+question is *scored* (its answers carry points) or *not scored*, so students
+know whether it counts. Which answer earns the points stays hidden until the
+teacher reveals it. The presentation view does not show the badge.
+
 ### Shuffling the answers
 
 `quiz ask --shuffle` puts the possible answers in a random order before the

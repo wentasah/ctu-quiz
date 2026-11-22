@@ -85,6 +85,7 @@ pub async fn room(
         prompt_html: String::new(),
         show_question: true,
         show_answers: true,
+        scored: false,
         waiting: true,
         open: false,
         revealed: false,
@@ -101,6 +102,7 @@ pub async fn room(
         page.question = question.id.clone();
         page.show_question = question.view.show_question;
         page.show_answers = question.view.show_answers;
+        page.scored = content.is_scored();
         if page.show_question {
             page.prompt_html = content.prompt_html.clone();
         }

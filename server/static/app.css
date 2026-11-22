@@ -87,6 +87,19 @@ a { color: var(--accent); }
 .status.wrong { color: var(--error); }
 .error { color: var(--error); font-weight: 600; }
 
+/* Whether the question counts, at the top of the student's page. */
+.scoring {
+  display: inline-block;
+  margin: 0;
+  padding: .1rem .6rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: .8rem;
+  font-weight: 600;
+}
+.scoring.scored { color: var(--accent); }
+.scoring.unscored { color: var(--muted); }
+
 /* `display` below would otherwise show elements a script has hidden. */
 [hidden] { display: none !important; }
 

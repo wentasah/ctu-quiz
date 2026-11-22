@@ -13,6 +13,11 @@
   <p class="status">{{ lang.t("wait-for-question-hint") }}</p>
   <p class="status count">{{ lang.msg("room-code").arg("code", code.as_str()).html()|safe }}</p>
   {% else %}
+  {% if scored %}
+  <p class="scoring scored">{{ lang.t("question-scored") }}</p>
+  {% else %}
+  <p class="scoring unscored">{{ lang.t("question-unscored") }}</p>
+  {% endif %}
   {% if show_question %}
   <div class="prompt">{{ prompt_html|safe }}</div>
   {% else %}

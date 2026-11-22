@@ -26,6 +26,8 @@ wait-for-question-hint =
     Až vyučující položí otázku, objeví se zde sama.
     Tuto stránku nezavírejte.
 room-code = Kód této místnosti: <strong>{ $code }</strong>
+question-scored = Bodovaná otázka
+question-unscored = Nebodovaná otázka
 question-on-screen = Otázka je jen na plátně.
 options-on-screen = Možnosti jsou na plátně; vyberte písmeno své odpovědi.
 answer-recorded =

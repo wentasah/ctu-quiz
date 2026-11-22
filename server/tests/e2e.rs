@@ -859,6 +859,8 @@ async fn a_hidden_question_stays_on_the_projector() {
         "{page}"
     );
     assert!(page.contains("a subshell swallows the variable"), "{page}");
+    // The question has no points, which the students are told.
+    assert!(page.contains("Not scored"), "{page}");
 
     // The teacher's screen shows everything, which is the whole point.
     let display = browser_as(&base, &idp, &teacher)
@@ -872,6 +874,8 @@ async fn a_hidden_question_stays_on_the_projector() {
         .unwrap();
     assert!(display.contains("wrong with the pipeline"), "{display}");
     assert!(display.contains("a subshell swallows the variable"));
+    // Whether it is scored is for the students' page only.
+    assert!(!display.contains("Not scored"), "{display}");
 
     // Nothing but the labels: the phone is a keypad with A and B on it.
     let question = ask(StudentView {
@@ -1094,6 +1098,13 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
     let page = |client: reqwest::Client, url: String| async move {
         client.get(url).send().await.unwrap().text().await.unwrap()
     };
+
+    // The students know the question counts, but the projector does not
+    // say so.
+    let student_page = page(student.clone(), question.answer_url.clone()).await;
+    assert!(student_page.contains("Scored question"), "{student_page}");
+    let display = page(projector.clone(), question.display_url.clone()).await;
+    assert!(!display.contains("Scored question"), "{display}");
 
     // While the question is open, nothing tells which answer is correct.
     for open in [
