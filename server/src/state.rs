@@ -285,6 +285,9 @@ pub struct Question {
     /// [`AppState::award_points`]. It has no content and is closed from the
     /// start.
     pub manual: bool,
+    /// Points of each possible answer, kept when the content is dropped;
+    /// empty for points given by hand.
+    pub answer_points: Vec<Option<f64>>,
     /// Notifies the server-sent-event streams that something changed.
     pub updates: broadcast::Sender<()>,
 }
@@ -337,6 +340,8 @@ impl Question {
             closed_at: self.closed_at,
             revealed: self.revealed,
             manual: self.manual,
+            answer_points: self.answer_points.clone(),
+            close_after: self.close_after,
         }
     }
 
@@ -621,6 +626,7 @@ impl Store {
                 revealed: false,
                 responses: BTreeMap::from([(login.to_owned(), response)]),
                 manual: true,
+                answer_points: Vec::new(),
                 updates: broadcast::channel(16).0,
             };
             self.insert_question(entry);
@@ -901,6 +907,7 @@ impl AppState {
             previous.content = None;
         }
 
+        let answer_points = content.answers.iter().map(|a| a.points).collect();
         store.insert_question(Question {
             display_url,
             presented,
@@ -911,6 +918,7 @@ impl AppState {
             source_name,
             number,
             content: Some(content),
+            answer_points,
             view,
             teacher: teacher.to_owned(),
             created_at: now,
@@ -1141,6 +1149,7 @@ mod tests {
             source_name: "q.md".to_owned(),
             number,
             content: Some(quiz_common::parse_question("Q?\n\n---\n\n- a\n- b\n").unwrap()),
+            answer_points: vec![None, None],
             view: StudentView::default(),
             answer_url: String::new(),
             display_url: String::new(),

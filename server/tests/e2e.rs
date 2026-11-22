@@ -764,6 +764,7 @@ async fn close_after_counts_down_from_when_the_projector_shows_the_question() {
 
     // The time the teacher takes to log in at the projector does not count.
     let question = ask(1, false).await;
+    assert_eq!(question.close_after, Some(1));
     tokio::time::sleep(Duration::from_millis(1500)).await;
     assert!(is_open(&question).await, "it closed before it was shown");
 
@@ -1439,9 +1440,12 @@ async fn the_teacher_sees_the_room_and_the_questions_kept_in_it() {
         [(1, first.id.as_str(), false), (2, second.id.as_str(), true)]
     );
     assert!(room.questions[0].expires_at > room.questions[0].info.created_at);
-    // Only the question being asked keeps its content.
+    // Only the question being asked keeps its content, but the points of
+    // the answers stay.
     assert!(room.questions[0].info.answers.is_empty());
     assert!(!room.questions[1].info.answers.is_empty());
+    assert_eq!(first.answer_points, [Some(1.0), Some(0.0), Some(-1.0)]);
+    assert_eq!(room.questions[0].info.answer_points, first.answer_points);
 
     // Another teacher does not see this room.
     let other = idp.access_token(&User::new("novakja1", "Jan Novák"), CLIENT_ID);

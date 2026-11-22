@@ -656,6 +656,8 @@ mod tests {
                 closed_at: Some(now),
                 revealed: false,
                 manual: false,
+                answer_points: Vec::new(),
+                close_after: None,
             },
             rows: rows
                 .iter()

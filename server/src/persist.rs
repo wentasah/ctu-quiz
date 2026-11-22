@@ -72,6 +72,10 @@ struct SavedQuestion {
     /// Missing in the files of older servers, which had no manual points.
     #[serde(default)]
     manual: bool,
+    /// Missing in the files of older servers, which kept no points once
+    /// the content was dropped.
+    #[serde(default)]
+    answer_points: Vec<Option<f64>>,
 }
 
 impl Saved {
@@ -106,6 +110,7 @@ impl Saved {
                 revealed: question.revealed,
                 responses: question.responses.clone(),
                 manual: question.manual,
+                answer_points: question.answer_points.clone(),
             })
             .collect();
         Self {
@@ -146,10 +151,14 @@ impl Saved {
             );
             let current = room.current.as_ref() == Some(&question.id);
             let mut content = question.content;
+            let mut answer_points = question.answer_points;
             let mut responses = question.responses;
             // Files of older servers have the content of every question, and
             // responses without their label and points.
             if let Some(content) = &content {
+                if answer_points.is_empty() {
+                    answer_points = content.answers.iter().map(|a| a.points).collect();
+                }
                 for response in responses.values_mut() {
                     if let Some(answer) = content.answers.get(response.index)
                         && response.label.is_empty()
@@ -181,6 +190,7 @@ impl Saved {
                 revealed: question.revealed,
                 responses,
                 manual: question.manual,
+                answer_points,
                 updates: broadcast::channel(16).0,
             });
         }
@@ -352,6 +362,7 @@ mod tests {
                 },
             )]),
             manual: false,
+            answer_points: vec![None, None],
         }
     }
 
@@ -407,6 +418,7 @@ mod tests {
             let response = question["responses"]["student"].as_object_mut().unwrap();
             response.remove("label");
             response.remove("points");
+            question.as_object_mut().unwrap().remove("answer_points");
         }
 
         let mut store = Store::default();
@@ -415,6 +427,9 @@ mod tests {
             .restore(&config(), &mut store)
             .unwrap();
 
+        // The points of the answers come from the content, which every
+        // question still had.
+        assert_eq!(store.get("earlier").unwrap().answer_points, [None, None]);
         // Only the question being asked keeps its content.
         assert!(store.get("room-q").unwrap().content.is_some());
         assert!(store.get("earlier").unwrap().content.is_none());

@@ -143,6 +143,18 @@ pub struct QuestionInfo {
     /// hand with `quiz award`; see [`AwardPoints`].
     #[serde(default)]
     pub manual: bool,
+    /// Points of each possible answer, in the order of `answers`; `None`
+    /// for an unscored question. Unlike `answers`, they stay once the next
+    /// question is asked, so that the points of a question can be put in
+    /// proportion to what it gives. Empty for points given by hand, and
+    /// from older servers.
+    #[serde(default)]
+    pub answer_points: Vec<Option<f64>>,
+    /// Seconds the question stays open once the presentation view shows
+    /// it, if it was asked with `--close-after`; `None` also from older
+    /// servers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub close_after: Option<u64>,
 }
 
 /// Live state pushed to browsers over server-sent events.

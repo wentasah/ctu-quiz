@@ -403,6 +403,8 @@ mod tests {
                 closed_at: Some(asked),
                 revealed: false,
                 manual,
+                answer_points: Vec::new(),
+                close_after: None,
             },
             rows: rows
                 .iter()
