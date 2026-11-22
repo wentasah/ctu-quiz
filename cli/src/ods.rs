@@ -35,6 +35,7 @@ enum Threshold {
     Maximum,
     AutoMinimum,
     AutoMaximum,
+    Number(f64),
     Percentile(f64),
 }
 
@@ -45,6 +46,7 @@ impl Threshold {
             Threshold::Maximum => ("maximum", 0.0),
             Threshold::AutoMinimum => ("auto-minimum", 0.0),
             Threshold::AutoMaximum => ("auto-maximum", 0.0),
+            Threshold::Number(value) => ("number", value),
             Threshold::Percentile(value) => ("percentile", value),
         }
     }
@@ -73,22 +75,54 @@ const YELLOW: &str = "#ffeb84";
 const GREEN: &str = "#63be7b";
 const BLUE: &str = "#638ec6";
 
-/// Points: the worst red, the best green.
-fn points_scale() -> CondFormat {
-    CondFormat::ColorScale(vec![
-        (Threshold::Minimum, RED),
-        (Threshold::Percentile(50.0), YELLOW),
-        (Threshold::Maximum, GREEN),
-    ])
+/// A scale from `low` to `high` through yellow halfway, or from the lowest
+/// value in the cells to the highest through the median without `bounds`.
+fn scale(bounds: Option<(f64, f64)>, low: &'static str, high: &'static str) -> CondFormat {
+    CondFormat::ColorScale(match bounds {
+        Some((min, max)) => vec![
+            (Threshold::Number(min), low),
+            (Threshold::Number((min + max) / 2.0), YELLOW),
+            (Threshold::Number(max), high),
+        ],
+        None => vec![
+            (Threshold::Minimum, low),
+            (Threshold::Percentile(50.0), YELLOW),
+            (Threshold::Maximum, high),
+        ],
+    })
 }
 
-/// Time to answer: the fastest green, the slowest red.
-fn seconds_scale() -> CondFormat {
-    CondFormat::ColorScale(vec![
-        (Threshold::Minimum, GREEN),
-        (Threshold::Percentile(50.0), YELLOW),
-        (Threshold::Maximum, RED),
-    ])
+/// Points of the question in `column`: red for its worst answer, green
+/// for its best, so that a question everybody got wrong is all red. Points
+/// given by hand go from 0 to the most anybody got.
+fn points_scale(room: &Room, column: usize) -> CondFormat {
+    let question = room.questions[column];
+    let bounds = if question.manual {
+        let most = room
+            .students
+            .iter()
+            .filter_map(|student| student.points[column])
+            .fold(f64::NEG_INFINITY, f64::max);
+        Some((0.0, most))
+    } else {
+        let points = question.answer_points.iter().flatten();
+        let worst = points.clone().copied().fold(f64::INFINITY, f64::min);
+        let best = points.copied().fold(f64::NEG_INFINITY, f64::max);
+        Some((worst, best))
+    };
+    // Without a range, as from an older server, the cells give it.
+    scale(bounds.filter(|(min, max)| min < max), RED, GREEN)
+}
+
+/// Time to answer the question in `column`: green for at once, red for
+/// the whole `--close-after`, or the fastest and the slowest answer without
+/// it.
+fn seconds_scale(room: &Room, column: usize) -> CondFormat {
+    let bounds = room.questions[column]
+        .close_after
+        .filter(|&seconds| seconds > 0)
+        .map(|seconds| (0.0, seconds as f64));
+    scale(bounds, GREEN, RED)
 }
 
 const POINTS_SHEET: &str = "Points";
@@ -194,16 +228,16 @@ fn sheet(name: &str, room: &Room, styles: &Styles) -> Sheet {
 
 /// One color scale per question, so that each is colored by its own range
 /// of values; none without students, where there are no cells to color.
-fn column_scales(room: &Room, scale: fn() -> CondFormat) -> Vec<CondRule> {
+fn column_scales(room: &Room, scale: fn(&Room, usize) -> CondFormat) -> Vec<CondRule> {
     let last = room.students.len() as u32;
     if last == 0 {
         return Vec::new();
     }
-    (FIRST..)
-        .take(room.columns.len())
-        .map(|column| CondRule {
+    (0..room.columns.len())
+        .zip(FIRST..)
+        .map(|(index, column)| CondRule {
             range: CellRange::local(1, column, last, column),
-            format: scale(),
+            format: scale(room, index),
         })
         .collect()
 }
@@ -527,6 +561,61 @@ mod tests {
             .read_to_string(&mut content)
             .unwrap();
         content
+    }
+
+    /// The points of the color scale of every rule: (type, value, color).
+    fn entries(rule: &CondRule) -> Vec<(&'static str, f64, &'static str)> {
+        match &rule.format {
+            CondFormat::ColorScale(points) => points
+                .iter()
+                .map(|(threshold, color)| {
+                    let (kind, value) = threshold.type_and_value();
+                    (kind, value, *color)
+                })
+                .collect(),
+            CondFormat::DataBar { .. } => panic!("not a color scale"),
+        }
+    }
+
+    #[test]
+    fn the_colors_go_as_far_as_the_question_allows() {
+        let mut questions = vec![
+            // Everybody got it wrong, but it gives up to 2 points.
+            results("wrong.md", false, &[("a", "A", 0.0, 5), ("b", "B", 0.0, 9)]),
+            results("manual", true, &[("a", "A", 3.0, 0)]),
+            // From an older server, which reports neither.
+            results("old.md", false, &[("a", "A", 1.0, 4)]),
+        ];
+        questions[0].question.answer_points = vec![Some(2.0), Some(0.0), Some(-1.0)];
+        questions[0].question.close_after = Some(30);
+        let room = room(&questions);
+        let (_, rules) = workbook(&room);
+        let points: Vec<_> = rules[&0].iter().take(3).map(entries).collect();
+        let seconds: Vec<_> = rules[&1].iter().map(entries).collect();
+
+        let fixed = |min, max, low, high| {
+            vec![
+                ("number", min, low),
+                ("number", (min + max) / 2.0, YELLOW),
+                ("number", max, high),
+            ]
+        };
+        let auto = |low, high| {
+            vec![
+                ("minimum", 0.0, low),
+                ("percentile", 50.0, YELLOW),
+                ("maximum", 0.0, high),
+            ]
+        };
+        // From the worst answer to the best; from 0 to the most given by
+        // hand.
+        assert_eq!(points[0], fixed(-1.0, 2.0, RED, GREEN));
+        assert_eq!(points[1], fixed(0.0, 3.0, RED, GREEN));
+        assert_eq!(points[2], auto(RED, GREEN));
+        // Up to --close-after, or as the answers came without it.
+        assert_eq!(seconds[0], fixed(0.0, 30.0, GREEN, RED));
+        assert_eq!(seconds[1], auto(GREEN, RED));
+        assert_eq!(seconds[2], auto(GREEN, RED));
     }
 
     #[test]

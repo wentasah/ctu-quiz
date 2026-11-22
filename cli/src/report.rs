@@ -269,6 +269,9 @@ pub(crate) struct Room<'a> {
     /// One heading per question, in the order they were asked: the name of
     /// its file, with ` (2)` and so on for a file asked again.
     pub columns: Vec<String>,
+    /// The question of each column, for the colors of the spreadsheet.
+    #[cfg_attr(not(feature = "ods"), allow(dead_code))]
+    pub questions: Vec<&'a QuestionInfo>,
     /// Sorted by login.
     pub students: Vec<Student<'a>>,
 }
@@ -328,6 +331,7 @@ pub(crate) fn room(questions: &[Results]) -> Room<'_> {
     }
     Room {
         columns,
+        questions: questions.iter().map(|results| &results.question).collect(),
         students: students.into_values().collect(),
     }
 }
