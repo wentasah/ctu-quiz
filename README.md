@@ -18,9 +18,11 @@ Everybody authenticates with **OIDC**: students in the browser, the teacher in
 the CLI. The web pages are in English or Czech, following the browser's
 language; students can switch it on the main page.
 
-![The presentation view on the projector: the question with its answers A,
-B and C, and next to it the QR code and the six-digit code students join
-with, the number of answers so far and the Close the question
+*Screenshot of the presentation view on the projector:*
+
+![Screenshot of the presentation view on the projector: the question with
+its answers A, B and C, and next to it the QR code and the six-digit code
+students join with, the number of answers so far and the Close the question
 button.](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/raw/main/misc/screenshot.webp)
 
 
