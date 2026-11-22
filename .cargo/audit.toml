@@ -17,4 +17,20 @@ ignore = [
     # comes in through syntect, whose parsing feature requires it, and the
     # latest syntect still depends on it.
     "RUSTSEC-2025-0141",
+
+    # zip 6 and quick-xml 0.38 come in through spreadsheet-ods (the ods
+    # feature of the CLI), whose latest version still depends on them.
+    # The CLI only writes spreadsheets: spreadsheet-ods uses zip only to
+    # create the archive, and quick-xml only to read a spreadsheet, which
+    # the CLI does only in its tests, of files it wrote itself. The
+    # advisories are about reading or extracting untrusted archives and XML.
+    "RUSTSEC-2026-0194", # quick-xml: quadratic duplicate-attribute check
+    "RUSTSEC-2026-0195", # quick-xml: unbounded namespace declarations
+    "RUSTSEC-2026-0367", # zip: SUID/SGID bits kept when extracting
+    "RUSTSEC-2026-0368", # zip: symlinks out of the extraction directory
+    "RUSTSEC-2026-0369", # zip: permissions applied through symlinks
+    "RUSTSEC-2026-0429", # zip: abort on a large symlink entry
+    "RUSTSEC-2026-0545", # zip: AES entries without authentication check
+    "RUSTSEC-2026-0547", # zip: legacy decoders preallocate declared size
+    "RUSTSEC-2026-0548", # zip: local-header names differ when streaming
 ]
