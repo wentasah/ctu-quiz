@@ -48,6 +48,13 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub no_color: bool,
 
+    /// Write the points of the room also as a zip that BRUTE
+    /// (https://brute.fel.cvut.cz) imports, next to the room CSV. Needs a
+    /// CLI built with the `brute` feature, which is on by default.
+    #[cfg(feature = "brute")]
+    #[arg(long, env = "QUIZ_BRUTE", global = true)]
+    pub brute: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -60,6 +67,15 @@ impl Cli {
         } else {
             self.color
         }
+    }
+
+    /// Whether to write the points of the room also for BRUTE; never
+    /// without the `brute` feature.
+    pub fn brute(&self) -> bool {
+        #[cfg(feature = "brute")]
+        return self.brute;
+        #[cfg(not(feature = "brute"))]
+        return false;
     }
 }
 

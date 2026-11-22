@@ -266,7 +266,7 @@ async fn ask(
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {BOLD}{}{BOLD:#}", path.display());
-    save_room(&api, file, dir.as_deref()).await;
+    save_room(cli, &api, file, dir.as_deref()).await;
 
     if closed.answers.iter().any(|answer| answer.points.is_some()) {
         wait_for_reveal(&api, &question.id, &mut stdin).await?;
@@ -463,7 +463,7 @@ async fn close_question(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<
     report::write_csv(&path, &results)?;
     report::print_summary(&closed, &results);
     println!("\nAnswers saved to {BOLD}{}{BOLD:#}", path.display());
-    save_room(&api, Path::new(&closed.source_name), None).await;
+    save_room(cli, &api, Path::new(&closed.source_name), None).await;
     Ok(())
 }
 
@@ -474,28 +474,37 @@ async fn close_question(cli: &Cli, id: &str, output: Option<PathBuf>) -> Result<
 /// room, so closing a question again or out of order does no harm. Failing
 /// to write it is only reported: the answers of the question are saved by
 /// then, and the teacher may still want to reveal the correct ones.
-async fn save_room(api: &Api, source: &Path, dir: Option<&Path>) {
-    match write_room(api, source, dir).await {
+async fn save_room(cli: &Cli, api: &Api, source: &Path, dir: Option<&Path>) {
+    let brute = cli.brute();
+    match write_room(api, source, dir, brute).await {
         Ok(Some(path)) => {
             println!(
                 "Points of the room saved to {BOLD}{}{BOLD:#}",
                 path.display()
             );
-            #[cfg(feature = "brute")]
-            println!(
-                "Points for BRUTE saved to {BOLD}{}{BOLD:#}",
-                report::brute_path(&path).display()
-            );
+            if brute {
+                #[cfg(feature = "brute")]
+                println!(
+                    "Points for BRUTE saved to {BOLD}{}{BOLD:#}",
+                    report::brute_path(&path).display()
+                );
+            }
         }
         Ok(None) => {}
         Err(error) => println!("{YELLOW}Cannot save the points of the room ({error:#}).{YELLOW:#}"),
     }
 }
 
-/// Writes the room CSV, and with the `brute` feature the zip for BRUTE
-/// next to it, and says where the CSV is, or `None` when there is nothing to
-/// write: no room, or no closed scored question in it.
-async fn write_room(api: &Api, source: &Path, dir: Option<&Path>) -> Result<Option<PathBuf>> {
+/// Writes the room CSV, and when `brute` asks for it (only possible with the
+/// `brute` feature) the zip for BRUTE next to it, and says where the CSV is,
+/// or `None` when there is nothing to write: no room, or no closed scored
+/// question in it.
+async fn write_room(
+    api: &Api,
+    source: &Path,
+    dir: Option<&Path>,
+    brute: bool,
+) -> Result<Option<PathBuf>> {
     let Some(room) = api.room_status().await?.room else {
         return Ok(None);
     };
@@ -520,8 +529,10 @@ async fn write_room(api: &Api, source: &Path, dir: Option<&Path>) -> Result<Opti
     let opened = room.created_at.with_timezone(&Local);
     let path = report::room_csv_path(source, dir, &room.code, opened);
     report::write_room_csv(&path, &questions)?;
-    #[cfg(feature = "brute")]
-    report::write_brute_zip(&report::brute_path(&path), &questions)?;
+    if brute {
+        #[cfg(feature = "brute")]
+        report::write_brute_zip(&report::brute_path(&path), &questions)?;
+    }
     Ok(Some(path))
 }
 
@@ -551,7 +562,7 @@ async fn award_points(
     // No question file to put it next to: the current directory it is.
     let here = Path::new("");
     let dir = destination.dir(&api, here).await?;
-    save_room(&api, here, dir.as_deref()).await;
+    save_room(cli, &api, here, dir.as_deref()).await;
     Ok(())
 }
 

@@ -305,16 +305,20 @@ long as they live in one directory. It is written anew each time from the
 questions the server still keeps in the room, so a question dropped from the
 room (see below) drops out of the file as well.
 
-When the CLI is built with the `brute` feature (`cargo install --features
-brute …`), the points of the room are also written in the format
-[BRUTE](https://brute.fel.cvut.cz) imports: next to the CSV above, a
-CSV without a header with just the login and the total, zipped into
-`room_2026-09-21_14-00-07_428173.brute.zip`:
+With `--brute` (or `QUIZ_BRUTE=true`, or `brute = true` in a
+[configuration file](#configuration-files)), the points of the room are also
+written in the format [BRUTE](https://brute.fel.cvut.cz) imports: next to
+the CSV above, a CSV without a header with just the login and the total,
+zipped into `room_2026-09-21_14-00-07_428173.brute.zip`:
 
 ```csv
 novakja1,0.5
 svobodpe,1.0
 ```
+
+This needs the `brute` feature of the CLI, which is on by default; a CLI
+built with `--no-default-features` has no `--brute` option and rejects
+`brute` in a configuration file.
 
 ### Rooms
 
@@ -640,11 +644,9 @@ least 1.88 (`cargo --version`); if it is older, install the toolchain with
 Download the binaries of a released version, or of the development
 version:
 
-* **Released versions**, which are kept for good, in two variants:
-  * on the [GitLab releases page](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/releases)
-    with the [BRUTE support](#whole-room-lecture-points),
-  * on the [GitHub releases page](https://github.com/wentasah/ctu-quiz/releases)
-    without it.
+* **Released versions**, which are kept for good, on the
+  [GitLab releases page](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/releases)
+  and on the [GitHub releases page](https://github.com/wentasah/ctu-quiz/releases).
 * **The development version**, the newest build of the `main` branch:
 
   | Platform | Binaries | Download |
@@ -655,8 +657,7 @@ version:
   | Windows x86-64 | `quiz.exe` | [build-windows](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-windows) |
 
   The GitLab CI (`.gitlab-ci.yml`) cross-compiles these on every push with
-  [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild), with the
-  BRUTE support, and keeps them as job artifacts for two weeks.
+  [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and keeps them as job artifacts for two weeks.
 
 The macOS binary is not signed, so Gatekeeper refuses to start it when it was
 downloaded with a browser; `xattr -d com.apple.quarantine quiz` lets it run.

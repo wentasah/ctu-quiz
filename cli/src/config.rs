@@ -189,6 +189,25 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "brute")]
+    fn brute_is_off_unless_the_file_turns_it_on() {
+        assert!(!parse("", &["quiz", "parse", "q.md"]).brute);
+        assert!(parse("brute = true\n", &["quiz", "parse", "q.md"]).brute);
+    }
+
+    #[test]
+    #[cfg(not(feature = "brute"))]
+    fn there_is_no_brute_without_the_feature() {
+        let figment = Figment::new().merge(Toml::string("brute = true\n"));
+        assert!(with_defaults(&figment, Cli::command()).is_err());
+        assert!(
+            Cli::command()
+                .try_get_matches_from(["quiz", "--brute", "parse", "q.md"])
+                .is_err()
+        );
+    }
+
+    #[test]
     fn the_command_line_wins_over_the_file() {
         let toml = "server = 'https://quiz.example.org'\n[ask]\nclose-after = 120\n";
         let cli = parse(

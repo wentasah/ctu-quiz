@@ -53,6 +53,8 @@ async fn ask_flow() {
             "0",
             "ask",
         ])
+        // The zip for BRUTE is only written when asked for.
+        .args(cfg!(feature = "brute").then_some("--brute"))
         .arg(&question)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -239,7 +241,8 @@ async fn ask_flow() {
         csv,
         "login,name,questions.md,total\nnovakja1,Jan Novák,1.0,1.0\n"
     );
-    // With the `brute` feature, the points also go to a zip for BRUTE.
+    // With the `brute` feature and `--brute`, the points also go to a zip
+    // for BRUTE.
     #[cfg(feature = "brute")]
     {
         let zip = room_csv.with_extension("brute.zip");
@@ -389,6 +392,8 @@ async fn ask_flow() {
     let output = quiz(&dir)
         .args(["--server", &base, "--no-browser", "award", "--room-dir"])
         .args(["novakja1", "1"])
+        // Asked for by the environment this time.
+        .env("QUIZ_BRUTE", "true")
         .output()
         .await
         .unwrap();
@@ -551,13 +556,10 @@ async fn reveal_in_presentation_view() {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     saved.sort();
-    let brute = cfg!(feature = "brute");
-    assert_eq!(saved.len(), if brute { 3 } else { 2 }, "{saved:?}");
+    // Without `--brute`, there is no zip for BRUTE.
+    assert_eq!(saved.len(), 2, "{saved:?}");
     assert!(saved[0].starts_with("questions_"), "{saved:?}");
-    assert!(
-        saved[1..].iter().all(|name| name.starts_with("room_")),
-        "{saved:?}"
-    );
+    assert!(saved[1].starts_with("room_"), "{saved:?}");
     let next_to_question = std::fs::read_dir(&dir)
         .unwrap()
         .flatten()
@@ -650,12 +652,9 @@ async fn ask_without_stdin() {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     saved.sort();
-    let brute = cfg!(feature = "brute");
-    assert_eq!(saved.len(), if brute { 3 } else { 2 }, "{saved:?}");
+    // Without `--brute`, there is no zip for BRUTE.
+    assert_eq!(saved.len(), 2, "{saved:?}");
     assert!(saved[0].starts_with("questions_"), "{saved:?}");
-    if brute {
-        assert_eq!(saved[1], format!("{room_dir}.brute.zip"));
-    }
     assert_eq!(saved.last(), Some(&format!("{room_dir}.csv")));
 }
 
@@ -1019,6 +1018,7 @@ fn quiz(dir: &Path) -> Command {
         .env("XDG_CONFIG_HOME", dir)
         .env_remove("QUIZ_SERVER")
         .env_remove("QUIZ_COLOR")
+        .env_remove("QUIZ_BRUTE")
         .env_remove("NO_COLOR");
     command
 }

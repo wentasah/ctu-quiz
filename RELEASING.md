@@ -89,8 +89,8 @@ The changelog is generated from commit subjects by
 
    Pushed to GitHub, the tag does the same in the workflow
    `.github/workflows/build.yml`: it checks the tag and the changelog,
-   builds the binaries (without the `brute` feature) and creates a GitHub
-   release with the changelog section as notes and the binaries attached.
+   builds the binaries and creates a GitHub release with the changelog
+   section as notes and the binaries attached.
 
 5. **Deploy the server** from the tag (NixOS: point the flake input at
    `?ref=vX.Y.Z`; Docker: `git checkout vX.Y.Z && docker compose up -d

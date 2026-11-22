@@ -14,8 +14,11 @@ name = "quiz"
 path = "src/main.rs"
 
 [features]
-# Write the points of a room also in the BRUTE (https://brute.fel.cvut.cz)
-# import format: no header, just `login,points`.
+default = ["brute"]
+# Support writing the points of a room also in the BRUTE
+# (https://brute.fel.cvut.cz) import format: no header, just `login,points`.
+# The file is written only when `--brute` (or `brute = true` in the
+# configuration) asks for it.
 brute = ["dep:zip"]
 
 [build-dependencies]

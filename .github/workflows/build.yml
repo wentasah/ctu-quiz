@@ -1,7 +1,5 @@
 # The GitHub counterpart of .gitlab-ci.yml, with these differences:
 #
-# - The CLI is built without the brute feature, which is only of use at the
-#   CTU FEE.
 # - The macOS and Windows binaries are built natively on their runners;
 #   only the Linux ones are cross-compiled with cargo-zigbuild, for the
 #   oldest glibc and for musl.
