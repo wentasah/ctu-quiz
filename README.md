@@ -1009,6 +1009,10 @@ The counters start from zero whenever the server restarts.
   rendered, and links that could run a script, such as `javascript:` ones,
   are left as plain text, so a question cannot bring scripts into the
   students' browsers.
+* Every response carries a `Content-Security-Policy` that allows scripts
+  only from the server itself and forbids showing the pages in frames of
+  other sites, and a `Referrer-Policy` that keeps the URL of a room, which
+  is enough to enter it, from going to the sites a question links to.
 
 ### Troubleshooting
 

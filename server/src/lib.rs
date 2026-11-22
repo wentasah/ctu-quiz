@@ -26,9 +26,9 @@ use axum::{
     Router,
     body::Body,
     extract::DefaultBodyLimit,
-    http::{Request, header},
+    http::{HeaderValue, Request, header},
     middleware,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use quiz_common::api::API_PREFIX;
@@ -139,6 +139,7 @@ pub fn router(state: AppState) -> Router {
             state.clone(),
             i18n::negotiate,
         ))
+        .layer(middleware::map_response(security_headers))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(move |request: &Request<Body>| {
@@ -237,6 +238,36 @@ async fn shutdown_signal() {
         () = terminate => {}
     }
     tracing::info!("shutting down");
+}
+
+/// What every page may load, as `Content-Security-Policy`.
+///
+/// Scripts come only from this server, so that a mistake in escaping a
+/// question cannot run one, and no other site may show the pages in a frame
+/// to trick a teacher into closing a question. Styles may be inline, as the
+/// pages size the bars and the countdown with `style` attributes, and images
+/// may be remote, as a question may show them.
+const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self'; \
+    style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; \
+    object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+
+/// Adds the security headers to every response that has not set them.
+///
+/// `Referrer-Policy` keeps the URL of a student's room, which is how the
+/// room is reached, from going to the sites a question links to.
+async fn security_headers(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    for (name, value) in [
+        (header::CONTENT_SECURITY_POLICY, CONTENT_SECURITY_POLICY),
+        (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+        (header::X_FRAME_OPTIONS, "DENY"),
+        (header::REFERRER_POLICY, "same-origin"),
+    ] {
+        headers
+            .entry(name)
+            .or_insert(HeaderValue::from_static(value));
+    }
+    response
 }
 
 async fn stylesheet() -> impl IntoResponse {

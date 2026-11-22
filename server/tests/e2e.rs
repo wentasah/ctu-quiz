@@ -1191,6 +1191,45 @@ async fn points_stay_hidden_until_the_teacher_reveals_them() {
 }
 
 #[tokio::test]
+async fn every_response_carries_the_security_headers() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let teacher = User::new("sojkam1", "Michal Sojka");
+    let browser = browser_as(&base, &idp, &teacher).await;
+
+    // A page, a redirect to the login, the API and a static file.
+    let responses = [
+        browser.get(format!("{base}/")).send().await.unwrap(),
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap()
+            .get(format!("{base}/"))
+            .send()
+            .await
+            .unwrap(),
+        reqwest::get(format!("{base}/api/v1/oidc")).await.unwrap(),
+        reqwest::get(format!("{base}/static/app.js")).await.unwrap(),
+    ];
+    for response in responses {
+        let header = |name: &str| {
+            response
+                .headers()
+                .get(name)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let policy = header("content-security-policy");
+        assert!(policy.contains("script-src 'self'"), "{policy}");
+        assert!(policy.contains("frame-ancestors 'none'"), "{policy}");
+        assert_eq!(header("x-content-type-options"), "nosniff");
+        assert_eq!(header("x-frame-options"), "DENY");
+        assert_eq!(header("referrer-policy"), "same-origin");
+    }
+}
+
+#[tokio::test]
 async fn pages_link_the_stylesheet_and_script_of_this_version() {
     let idp = MockIdp::start().await;
     let base = start_server(&idp, &["sojkam1"]).await;
