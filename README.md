@@ -1089,3 +1089,9 @@ saves its state over a restart.
 `QUIZ_DUMP_PAGES=/tmp/pages cargo test -p quiz-server --test e2e` additionally
 saves the rendered pages with the stylesheet inlined, so they can be opened
 straight from disk to check the styling and the highlighting.
+
+### Contributing
+
+Questions, bug reports and merge or pull requests are welcome on
+[GitHub](https://github.com/wentasah/ctu-quiz) or
+[CTU/FEE GitLab](https://gitlab.fel.cvut.cz/sojkam1/quiz).
