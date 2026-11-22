@@ -92,7 +92,22 @@ The changelog is generated from commit subjects by
    builds the binaries and creates a GitHub release with the changelog
    section as notes and the binaries attached.
 
-5. **Deploy the server** from the tag (NixOS: point the flake input at
+5. **Publish the CLI on crates.io** once the GitHub release has its
+   binaries, which `cargo binstall ctu-quiz` downloads (see
+   `[package.metadata.binstall]` in `cli/Cargo.toml`). The shared crate goes
+   first, as the CLI depends on it; `--workspace` publishes both in that
+   order and skips the server and `testsupport`, which are not published:
+
+   ```sh
+   git checkout vX.Y.Z
+   cargo publish --workspace --dry-run
+   cargo publish --workspace
+   ```
+
+   A published version cannot be replaced, only yanked; a fix needs a new
+   release.
+
+6. **Deploy the server** from the tag (NixOS: point the flake input at
    `?ref=vX.Y.Z`; Docker: `git checkout vX.Y.Z && docker compose up -d
    --build`) and check that it runs the new version:
 
@@ -103,7 +118,7 @@ The changelog is generated from commit subjects by
    Deploy between lectures: a restart drops open questions unless the server
    runs with `--state-file`.
 
-6. **Tell the teachers** when they have to upgrade the CLI, with a link to
+7. **Tell the teachers** when they have to upgrade the CLI, with a link to
    the release.
 
 ## When the release pipeline fails

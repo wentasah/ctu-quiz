@@ -6,6 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+# Deployed from the repository, not installed from crates.io.
+publish = false
 
 [dependencies]
 quiz-common = { workspace = true, features = ["highlight"] }

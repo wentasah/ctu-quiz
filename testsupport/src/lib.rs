@@ -1,6 +1,6 @@
 //! A mock OIDC provider and a helper for starting the quiz server under test.
 //!
-//! This crate is a development dependency of `quiz-server` and `quiz-cli`; it
+//! This crate is a development dependency of `quiz-server` and `ctu-quiz`; it
 //! is never part of a release build, which is why it may carry a private key.
 //!
 //! The mock speaks enough of OpenID Connect for the real client code to work:

@@ -28,6 +28,9 @@ git fetch -q origin main
 
 sed -i "/^\[workspace\.package\]/,/^\[/ s/^version = \".*\"/version = \"$version\"/" Cargo.toml
 grep -qx "version = \"$version\"" Cargo.toml || die "could not set the version in Cargo.toml"
+# The version crates.io needs for the dependency on the shared crate.
+sed -i "s/^\(quiz-common = {.*version = \"\)[^\"]*\"/\1$version\"/" Cargo.toml
+grep -q "^quiz-common = {.*version = \"$version\"" Cargo.toml || die "could not set the version of quiz-common"
 cargo update -q --workspace
 
 if git describe --tags --abbrev=0 --match 'v[0-9]*' >/dev/null 2>&1; then

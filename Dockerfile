@@ -6,7 +6,7 @@
 FROM rust:1.98-bookworm AS build
 WORKDIR /src
 COPY . .
-RUN cargo build --release --locked --package quiz-server --package quiz-cli
+RUN cargo build --release --locked --package quiz-server --package ctu-quiz
 
 FROM debian:bookworm-slim
 # TLS to the OIDC provider needs the CA bundle; rustls brings the rest.

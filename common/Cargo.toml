@@ -1,11 +1,15 @@
 [package]
-name = "quiz-common"
-description = "Shared types and Markdown question parser for the quiz app"
+name = "ctu-quiz-common"
+description = "Markdown question parser and API types shared by the ctu-quiz CLI and server"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+readme = "../README.md"
+keywords = ["quiz", "markdown", "parser", "education", "classroom"]
+categories = ["text-processing"]
 
 [features]
 # Syntax highlighting of fenced code blocks. Only the server renders HTML, so

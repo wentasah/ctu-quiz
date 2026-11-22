@@ -21,7 +21,7 @@ language; students can switch it on the main page.
 ![The presentation view on the projector: the question with its answers A,
 B and C, and next to it the QR code and the six-digit code students join
 with, the number of answers so far and the Close the question
-button.](misc/screenshot.webp)
+button.](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/raw/main/misc/screenshot.webp)
 
 
 ## Features
@@ -596,7 +596,7 @@ Details worth knowing:
 They are generated while the CLI is compiled, from the very command line the
 binary parses, so they never fall behind the options. `cli/build.rs` writes
 one script per shell (bash, zsh, fish, elvish, PowerShell) into
-`target/<profile>/build/quiz-cli-*/out/completions/`, and into
+`target/<profile>/build/ctu-quiz-*/out/completions/`, and into
 `$QUIZ_COMPLETIONS_DIR` as well when that variable is set:
 
 ```sh
@@ -662,19 +662,29 @@ the HTML templates are compiled into the binaries.
 With Nix: `nix build` builds both binaries, `nix develop` gives a shell with
 the toolchain.
 
-Syntax highlighting sits behind the `highlight` feature of `quiz-common`, which
-`quiz-server` turns on: only the server renders HTML. Building the CLI on its
-own (`cargo build -p quiz-cli`) therefore leaves the syntax definitions out.
+Syntax highlighting sits behind the `highlight` feature of `ctu-quiz-common`,
+which `quiz-server` turns on: only the server renders HTML. Building the CLI
+on its own (`cargo build -p ctu-quiz`) therefore leaves the syntax
+definitions out.
 
-To install just the CLI without cloning the repository first:
+The CLI is also published on [crates.io](https://crates.io/crates/ctu-quiz),
+so it can be installed without cloning the repository. Use one of these
+commands:
 
 ```sh
-sudo apt install cargo         # Debian/Ubuntu, if Cargo is not installed yet
-cargo install --git https://gitlab.fel.cvut.cz/sojkam1/quiz.git quiz-cli
+cargo install ctu-quiz         # the latest release, compiled from source
+cargo binstall ctu-quiz        # the latest release, prebuilt
+cargo install --git https://gitlab.fel.cvut.cz/sojkam1/quiz.git ctu-quiz  # main
 ```
 
-This puts `quiz` into `~/.cargo/bin`. The distribution's Cargo has to be at
-least 1.88 (`cargo --version`); if it is older, install the toolchain with
+[`cargo binstall`](https://github.com/cargo-bins/cargo-binstall), which has
+to be installed first, downloads the [prebuilt binaries](#prebuilt-binaries)
+of the release and compiles only on platforms that have none. All three
+commands put `quiz` into `~/.cargo/bin`.
+
+To compile, Cargo 1.88 or newer is needed (check with `cargo --version`).
+On Debian or Ubuntu, `sudo apt install cargo` installs it; if the
+distribution's version is too old, install the toolchain with
 [rustup](https://rustup.rs) instead.
 
 #### Prebuilt binaries
@@ -725,7 +735,7 @@ cargo run -p quiz-server -- \
     --teachers sojkam1
 
 # 3. ask the example question
-cargo run -p quiz-cli --bin quiz -- ask testsupport/question.md
+cargo run -p ctu-quiz --bin quiz -- ask testsupport/question.md
 ```
 
 What happens then:
@@ -1054,14 +1064,14 @@ For those working on the code.
 
 ```sh
 cargo test                                  # everything
-cargo test -p quiz-common                   # the Markdown parser
+cargo test -p ctu-quiz-common               # the Markdown parser
 cargo test -p quiz-server --test e2e        # a whole question, over HTTP
-cargo test -p quiz-cli --test cli           # drives the compiled binary
+cargo test -p ctu-quiz --test cli            # drives the compiled binary
 ```
 
 The tests need no credentials and no network: `testsupport` starts a mock OIDC
 provider that serves a discovery document and a JWKS and signs real RS256 ID
-tokens, so the actual OIDC code paths are exercised. `cargo test -p quiz-cli`
+tokens, so the actual OIDC code paths are exercised. `cargo test -p ctu-quiz`
 runs the real `quiz` binary, including the loopback login and the CSV export.
 
 `nix flake check` builds the package, which runs all of the above, and the

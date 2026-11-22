@@ -1,17 +1,45 @@
 [package]
-name = "quiz-cli"
-description = "Teacher's command line tool for asking questions with the quiz server"
+name = "ctu-quiz"
+description = "Teacher's command line tool for asking students questions in class with the ctu-quiz server"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+readme = "../README.md"
+keywords = ["quiz", "education", "classroom", "markdown", "oidc"]
+categories = ["command-line-utilities"]
 # Writes the shell completion scripts while the CLI is compiled.
 build = "build.rs"
 
 [[bin]]
 name = "quiz"
 path = "src/main.rs"
+
+# Where `cargo binstall ctu-quiz` downloads the binaries from: the GitHub
+# releases, whose file names have no Rust target triples in them.
+[package.metadata.binstall]
+pkg-fmt = "tgz"
+# The binaries are at the top of the archives.
+bin-dir = "{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-linux-x86_64-gnu.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-musl]
+pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-linux-x86_64-musl.tar.gz"
+
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-macos-universal.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-apple-darwin]
+pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-macos-universal.tar.gz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "https://github.com/wentasah/ctu-quiz/releases/download/v{ version }/quiz-v{ version }-windows-x86_64.exe"
+# The executable itself, not an archive.
+pkg-fmt = "bin"
 
 [features]
 default = ["brute", "ods"]

@@ -718,6 +718,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctu-quiz"
+version = "0.3.0"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "anyhow",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "csv",
+ "ctu-quiz-common",
+ "etcetera",
+ "figment",
+ "open",
+ "openidconnect",
+ "quiz-testsupport",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "spreadsheet-ods",
+ "tokio",
+ "url",
+ "zip 9.4.1",
+]
+
+[[package]]
+name = "ctu-quiz-common"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "pulldown-cmark",
+ "rand 0.10.3",
+ "serde",
+ "syntect",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "ctutils"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2371,45 +2410,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "quiz-cli"
-version = "0.3.0"
-dependencies = [
- "anstream",
- "anstyle",
- "anyhow",
- "base64 0.22.1",
- "chrono",
- "clap",
- "clap_complete",
- "csv",
- "etcetera",
- "figment",
- "open",
- "openidconnect",
- "quiz-common",
- "quiz-testsupport",
- "reqwest",
- "serde",
- "serde_json",
- "spreadsheet-ods",
- "tokio",
- "url",
- "zip 9.4.1",
-]
-
-[[package]]
-name = "quiz-common"
-version = "0.3.0"
-dependencies = [
- "chrono",
- "pulldown-cmark",
- "rand 0.10.3",
- "serde",
- "syntect",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "quiz-server"
 version = "0.3.0"
 dependencies = [
@@ -2421,11 +2421,11 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "clap",
+ "ctu-quiz-common",
  "fluent-bundle",
  "futures-core",
  "openidconnect",
  "qrcode",
- "quiz-common",
  "quiz-testsupport",
  "reqwest",
  "serde",

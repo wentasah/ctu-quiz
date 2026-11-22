@@ -45,7 +45,7 @@ Start the quiz server (in another terminal):
 
 and ask a question (in a third one):
 
-  cargo run -p quiz-cli --bin quiz -- ask question.md
+  cargo run -p ctu-quiz --bin quiz -- ask question.md
 
 Press Ctrl-C to stop."
     );

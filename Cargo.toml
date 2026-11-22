@@ -7,11 +7,13 @@ version = "0.3.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
-authors = ["Michal Sojka <sojkam1@cvut.cz>"]
+authors = ["Michal Sojka <michal.sojka@cvut.cz>"]
 repository = "https://gitlab.fel.cvut.cz/sojkam1/quiz"
 
 [workspace.dependencies]
-quiz-common = { path = "common" }
+# Published on crates.io as ctu-quiz-common, which needs a version; the code
+# still calls it quiz_common. scripts/release.sh bumps the version.
+quiz-common = { path = "common", version = "0.3.0", package = "ctu-quiz-common" }
 quiz-testsupport = { path = "testsupport" }
 
 axum = { version = "0.8", features = ["macros"] }
