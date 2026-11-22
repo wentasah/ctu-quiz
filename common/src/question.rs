@@ -276,6 +276,37 @@ pub fn local_images(source: &str) -> Vec<String> {
 
 /// Whether an image is a file next to the question, rather than something
 /// with a URL of its own: `https://...`, `data:...` or `//host/...`.
+/// Whether a link to `url` is safe to put into a page: a relative one, or one
+/// with the scheme `http`, `https` or `mailto`. Others, above all
+/// `javascript:`, could run a script in the browsers of the whole room.
+///
+/// Browsers ignore tabs and line breaks anywhere in a URL and spaces and
+/// control characters before it, so `java\tscript:` is `javascript:` too.
+fn is_safe_link(url: &str) -> bool {
+    let url: String = url
+        .chars()
+        .filter(|c| !matches!(c, '\t' | '\n' | '\r'))
+        .collect();
+    let url = url.trim_start_matches(|c: char| c <= ' ');
+    if url.starts_with("//") || is_local(url) {
+        return true;
+    }
+    let scheme = url
+        .split_once(':')
+        .map(|(scheme, _)| scheme.to_ascii_lowercase());
+    matches!(scheme.as_deref(), Some("http" | "https" | "mailto"))
+}
+
+/// Whether a remote image at `url` is safe to put into a page: as a link,
+/// or an image of its own as a `data:` URL.
+fn is_safe_image(url: &str) -> bool {
+    is_safe_link(url)
+        || url
+            .trim_start()
+            .to_ascii_lowercase()
+            .starts_with("data:image/")
+}
+
 fn is_local(url: &str) -> bool {
     if url.starts_with("//") {
         return false;
@@ -562,11 +593,19 @@ fn render(markdown: &str, images: &Images) -> Result<String, ParseError> {
 /// their browsers. The only HTML in the stream is the one this function puts
 /// there itself.
 ///
+/// For the same reason, a link or an image with a URL that could run a script,
+/// such as `javascript:`, loses its tag and leaves only its text; see
+/// [`is_safe_link`].
+///
 /// Local images get their `data:` URL from `images`.
 fn rendered_events<'a>(markdown: &'a str, images: &Images) -> Result<Vec<Event<'a>>, ParseError> {
     let mut events = Vec::new();
     // Language and contents of the code block currently being collected.
     let mut code: Option<(String, String)> = None;
+    // Whether the link or the image currently open lost its tag. Neither
+    // can contain another one of its kind.
+    let mut unsafe_link = false;
+    let mut unsafe_image = false;
 
     for event in events_without_comments(markdown) {
         match event {
@@ -606,6 +645,14 @@ fn rendered_events<'a>(markdown: &'a str, images: &Images) -> Result<Vec<Event<'
                 title,
                 id,
             })),
+            Event::Start(Tag::Link { dest_url, .. }) if !is_safe_link(&dest_url) => {
+                unsafe_link = true;
+            }
+            Event::End(TagEnd::Link) if unsafe_link => unsafe_link = false,
+            Event::Start(Tag::Image { dest_url, .. }) if !is_safe_image(&dest_url) => {
+                unsafe_image = true;
+            }
+            Event::End(TagEnd::Image) if unsafe_image => unsafe_image = false,
             // Raw HTML, escaped rather than dropped, so that a teacher sees
             // what they wrote instead of the text silently disappearing.
             Event::Html(html) => events.push(Event::Text(html)),
@@ -877,6 +924,50 @@ What's wrong with it?
             answer.html
         );
         assert_eq!(answer.plain, "<b onmouseover=alert(2)>bold</b>");
+    }
+
+    #[test]
+    fn links_and_images_that_could_run_a_script_keep_only_their_text() {
+        let q = parse(
+            "Q [one](javascript:alert(1)) [two](JavaScript:alert(2)) \
+             [three](<java\tscript:alert(3)>) [four](&#106;avascript:alert(4)) \
+             <javascript:alert(5)> [six](data:text/html,<script>alert(6)</script>) \
+             ![seven](javascript:alert(7)) [vbs](vbscript:msgbox(8))\n\n\
+             ---\n\n- [bad](javascript:alert(9))\n- plain\n",
+        )
+        .unwrap();
+
+        for html in [&q.prompt_html, &q.answers[0].html] {
+            let lower = html.to_ascii_lowercase();
+            for bad in ["<a", "href", "<img", "src"] {
+                assert!(!lower.contains(bad), "{bad} in {html}");
+            }
+        }
+        // The text stays, so the teacher sees what they wrote.
+        for text in ["one", "two", "three", "four", "six", "seven", "vbs"] {
+            assert!(q.prompt_html.contains(text), "{text} in {}", q.prompt_html);
+        }
+        assert_eq!(q.answers[0].html, "bad");
+    }
+
+    #[test]
+    fn ordinary_links_and_images_stay() {
+        let q = parse(
+            "Q [a](https://example.org/a) [b](http://example.org/b) \
+             [c](mailto:x@example.org) [d](other.html#x) [e](//example.org/e) \
+             ![f](https://example.org/f.png)\n\n---\n\n- one\n- two\n",
+        )
+        .unwrap();
+        for part in [
+            "href=\"https://example.org/a\"",
+            "href=\"http://example.org/b\"",
+            "href=\"mailto:x@example.org\"",
+            "href=\"other.html#x\"",
+            "href=\"//example.org/e\"",
+            "src=\"https://example.org/f.png\"",
+        ] {
+            assert!(q.prompt_html.contains(part), "{part} in {}", q.prompt_html);
+        }
     }
 
     #[test]

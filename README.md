@@ -576,7 +576,9 @@ Details worth knowing:
   server.
 * HTML written in the Markdown is **escaped**, not rendered: the question is
   shown to a whole lecture hall, so `<script>` in it must not run in their
-  browsers.
+  browsers. For the same reason, links and images may only use `http`,
+  `https` or `mailto` URLs, or relative ones; a `javascript:` link is left
+  as plain text.
 * A question file may be made **executable** and given a shebang line, so that
   asking the question is a matter of running the file:
 
@@ -1004,7 +1006,9 @@ The counters start from zero whenever the server restarts.
   asked it. The server refuses to start with neither of them unless
   `--allow-any-teacher` says that everybody who can log in may ask.
 * A question is Markdown, but HTML written in it is escaped rather than
-  rendered, so a question cannot bring scripts into the students' browsers.
+  rendered, and links that could run a script, such as `javascript:` ones,
+  are left as plain text, so a question cannot bring scripts into the
+  students' browsers.
 
 ### Troubleshooting
 
