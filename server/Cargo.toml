@@ -23,10 +23,8 @@ openidconnect.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 time = "0.3"
 tokio.workspace = true
-tokio-stream = { version = "0.1", features = ["sync"] }
 tower-http = { version = "0.7", features = ["trace"] }
 tracing.workspace = true
 tracing-appender = "0.2"
@@ -37,7 +35,6 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 async-stream = "0.3"
 futures-core = "0.3"
 fluent-bundle = "0.16"
-unic-langid = "0.9"
 
 [dev-dependencies]
 quiz-testsupport.workspace = true
