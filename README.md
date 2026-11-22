@@ -309,6 +309,23 @@ long as they live in one directory. It is written anew each time from the
 questions the server still keeps in the room, so a question dropped from the
 room (see below) drops out of the file as well.
 
+Next to it, and rewritten along with it, the OpenDocument spreadsheet
+`room_2026-09-21_14-00-07_428173.ods` (for LibreOffice Calc and similar
+applications) has two sheets, both with the same students and questions as
+the CSV:
+
+* *Points*: the points, each question colored separately from red (fewest
+  points) to green (most), and the total, a `SUM` formula shown with a
+  data bar.
+* *Time*: the seconds each student took to answer, counted from when the
+  question was asked, each question colored separately from green
+  (fastest) to red (slowest). Columns of points given by hand stay empty.
+
+The question file names in the header are rotated by 90°, so that the
+columns stay narrow. The colors and data bars are a LibreOffice extension
+of the format, which other applications may ignore. The spreadsheet needs
+the `ods` feature of the CLI, which is on by default.
+
 With `--brute` (or `QUIZ_BRUTE=true`, or `brute = true` in a
 [configuration file](#configuration-files)), the points of the room are also
 written in the format [BRUTE](https://brute.fel.cvut.cz) imports: next to

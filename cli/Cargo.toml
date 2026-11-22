@@ -14,12 +14,15 @@ name = "quiz"
 path = "src/main.rs"
 
 [features]
-default = ["brute"]
+default = ["brute", "ods"]
 # Support writing the points of a room also in the BRUTE
 # (https://brute.fel.cvut.cz) import format: no header, just `login,points`.
 # The file is written only when `--brute` (or `brute = true` in the
 # configuration) asks for it.
 brute = ["dep:zip"]
+# Write the points of a room, and how long the students took to answer, also
+# as an OpenDocument spreadsheet, with color scales and data bars.
+ods = ["dep:spreadsheet-ods", "dep:zip"]
 
 [build-dependencies]
 clap.workspace = true
@@ -45,6 +48,7 @@ tokio.workspace = true
 url.workspace = true
 figment = { version = "0.10.19", features = ["toml"] }
 etcetera = "0.10.0"
+spreadsheet-ods = { version = "1.0.4", default-features = false, optional = true }
 zip = { version = "9.4.1", default-features = false, features = ["deflate"], optional = true }
 
 [dev-dependencies]

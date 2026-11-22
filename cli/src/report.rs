@@ -195,7 +195,6 @@ struct CsvRow<'a> {
 
 impl<'a> CsvRow<'a> {
     fn new(row: &'a ResultRow, asked_at: DateTime<Utc>) -> Self {
-        let millis = (row.answered_at - asked_at).num_milliseconds();
         CsvRow {
             login: &row.login,
             name: &row.name,
@@ -203,9 +202,16 @@ impl<'a> CsvRow<'a> {
             answer: &row.answer,
             answer_text: &row.answer_text,
             answered_at: row.answered_at,
-            seconds: (millis as f64 / 100.0).round() / 10.0,
+            seconds: seconds(row, asked_at),
         }
     }
+}
+
+/// Seconds from asking a question at `asked_at` to the answer in `row`, to
+/// a tenth.
+fn seconds(row: &ResultRow, asked_at: DateTime<Utc>) -> f64 {
+    let millis = (row.answered_at - asked_at).num_milliseconds();
+    (millis as f64 / 100.0).round() / 10.0
 }
 
 /// Writes one row per student: login, name, chosen answer, when, and how
@@ -257,11 +263,39 @@ fn to_csv(table: Vec<Vec<String>>) -> Result<Vec<u8>> {
     Ok(writer.into_inner()?)
 }
 
-/// The records of the room CSV, the header first. Students are sorted by
-/// login; a question a student did not answer is left empty and counts as
-/// nothing towards the total.
-fn room_table(questions: &[Results]) -> Vec<Vec<String>> {
-    let mut header = vec!["login".to_owned(), "name".to_owned()];
+/// The points of every student in the room, and how long they took to
+/// answer: what the room CSV and the room spreadsheet show.
+pub(crate) struct Room<'a> {
+    /// One heading per question, in the order they were asked: the name of
+    /// its file, with ` (2)` and so on for a file asked again.
+    pub columns: Vec<String>,
+    /// Sorted by login.
+    pub students: Vec<Student<'a>>,
+}
+
+/// One row of [`Room`].
+pub(crate) struct Student<'a> {
+    pub login: &'a str,
+    pub name: &'a str,
+    /// Per question, `None` when the student did not answer it.
+    pub points: Vec<Option<f64>>,
+    /// Seconds the student took to answer, per question; `None` also for
+    /// points given by hand.
+    pub seconds: Vec<Option<f64>>,
+}
+
+impl Student<'_> {
+    /// The sum of the points, rounded, so that 0.1 + 0.2 does not end up as
+    /// 0.30000000000000004.
+    pub fn total(&self) -> f64 {
+        let total: f64 = self.points.iter().flatten().sum();
+        (total * 1e6).round() / 1e6
+    }
+}
+
+/// Collects the [`Room`] of the closed scored `questions`.
+pub(crate) fn room(questions: &[Results]) -> Room<'_> {
+    let mut columns = Vec::new();
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
     for results in questions {
         // The same file asked twice still gets two columns that can be
@@ -269,35 +303,54 @@ fn room_table(questions: &[Results]) -> Vec<Vec<String>> {
         let name = results.question.source_name.as_str();
         let count = seen.entry(name).or_default();
         *count += 1;
-        header.push(match *count {
+        columns.push(match *count {
             1 => name.to_owned(),
             n => format!("{name} ({n})"),
         });
     }
-    header.push("total".to_owned());
 
-    let mut students: BTreeMap<&str, (&str, Vec<Option<f64>>)> = BTreeMap::new();
+    let mut students: BTreeMap<&str, Student> = BTreeMap::new();
     for (column, results) in questions.iter().enumerate() {
+        let question = &results.question;
         for row in &results.rows {
-            let student = students
-                .entry(&row.login)
-                .or_insert_with(|| ("", vec![None; questions.len()]));
-            student.0 = &row.name;
-            student.1[column] = row.points;
+            let student = students.entry(&row.login).or_insert_with(|| Student {
+                login: &row.login,
+                name: "",
+                points: vec![None; questions.len()],
+                seconds: vec![None; questions.len()],
+            });
+            student.name = &row.name;
+            student.points[column] = row.points;
+            if !question.manual {
+                student.seconds[column] = Some(seconds(row, question.created_at));
+            }
         }
     }
+    Room {
+        columns,
+        students: students.into_values().collect(),
+    }
+}
+
+/// The records of the room CSV, the header first. Students are sorted by
+/// login; a question a student did not answer is left empty and counts as
+/// nothing towards the total.
+fn room_table(questions: &[Results]) -> Vec<Vec<String>> {
+    let room = room(questions);
+    let mut header = vec!["login".to_owned(), "name".to_owned()];
+    header.extend(room.columns);
+    header.push("total".to_owned());
 
     let mut table = vec![header];
-    for (login, (name, points)) in students {
-        let mut record = vec![login.to_owned(), name.to_owned()];
+    for student in room.students {
+        let mut record = vec![student.login.to_owned(), student.name.to_owned()];
         record.extend(
-            points
+            student
+                .points
                 .iter()
                 .map(|points| points.map(number).unwrap_or_default()),
         );
-        // Rounded, so that 0.1 + 0.2 does not end up as 0.30000000000000004.
-        let total: f64 = points.iter().flatten().sum();
-        record.push(number((total * 1e6).round() / 1e6));
+        record.push(number(student.total()));
         table.push(record);
     }
     table

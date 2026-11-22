@@ -12,6 +12,8 @@ mod cli;
 mod client;
 mod color;
 mod config;
+#[cfg(feature = "ods")]
+mod ods;
 mod report;
 
 use std::{
@@ -500,6 +502,11 @@ async fn save_room(cli: &Cli, api: &Api, source: &Path, dir: Option<&Path>) {
                 "Points of the room saved to {BOLD}{}{BOLD:#}",
                 path.display()
             );
+            #[cfg(feature = "ods")]
+            println!(
+                "Spreadsheet of the room saved to {BOLD}{}{BOLD:#}",
+                ods::ods_path(&path).display()
+            );
             if brute {
                 #[cfg(feature = "brute")]
                 println!(
@@ -513,10 +520,11 @@ async fn save_room(cli: &Cli, api: &Api, source: &Path, dir: Option<&Path>) {
     }
 }
 
-/// Writes the room CSV, and when `brute` asks for it (only possible with the
-/// `brute` feature) the zip for BRUTE next to it, and says where the CSV is,
-/// or `None` when there is nothing to write: no room, or no closed scored
-/// question in it.
+/// Writes the room CSV, the room spreadsheet next to it (with the
+/// `ods` feature), and when `brute` is true (only possible with the
+/// `brute` feature) the zip for BRUTE. It also says where the CSV is,
+/// or `None` when there is nothing to write: no room, or no closed
+/// scored question in it.
 async fn write_room(
     api: &Api,
     source: &Path,
@@ -547,6 +555,8 @@ async fn write_room(
     let opened = room.created_at.with_timezone(&Local);
     let path = report::room_csv_path(source, dir, &room.code, opened);
     report::write_room_csv(&path, &questions)?;
+    #[cfg(feature = "ods")]
+    ods::write_room_ods(&ods::ods_path(&path), &questions)?;
     if brute {
         #[cfg(feature = "brute")]
         report::write_brute_zip(&report::brute_path(&path), &questions)?;

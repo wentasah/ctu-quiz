@@ -241,6 +241,20 @@ async fn ask_flow() {
         csv,
         "login,name,questions.md,total\nnovakja1,Jan Novák,1.0,1.0\n"
     );
+    // With the `ods` feature, the points also go to a spreadsheet.
+    #[cfg(feature = "ods")]
+    {
+        let ods = room_csv.with_extension("ods");
+        let ods_name = ods.file_name().unwrap().to_string_lossy();
+        assert!(
+            printed.lines().any(|line| {
+                line.starts_with("Spreadsheet of the room saved to ") && line.ends_with(&*ods_name)
+            }),
+            "{printed}"
+        );
+        // A zip, as every OpenDocument file.
+        assert!(std::fs::read(&ods).unwrap().starts_with(b"PK"));
+    }
     // With the `brute` feature and `--brute`, the points also go to a zip
     // for BRUTE.
     #[cfg(feature = "brute")]
@@ -556,10 +570,15 @@ async fn reveal_in_presentation_view() {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     saved.sort();
-    // Without `--brute`, there is no zip for BRUTE.
-    assert_eq!(saved.len(), 2, "{saved:?}");
+    // Without `--brute`, there is no zip for BRUTE; the spreadsheet comes
+    // with the `ods` feature.
+    let ods = cfg!(feature = "ods");
+    assert_eq!(saved.len(), if ods { 3 } else { 2 }, "{saved:?}");
     assert!(saved[0].starts_with("questions_"), "{saved:?}");
     assert!(saved[1].starts_with("room_"), "{saved:?}");
+    if ods {
+        assert_eq!(saved[2], saved[1].replace(".csv", ".ods"), "{saved:?}");
+    }
     let next_to_question = std::fs::read_dir(&dir)
         .unwrap()
         .flatten()
@@ -652,10 +671,15 @@ async fn ask_without_stdin() {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     saved.sort();
-    // Without `--brute`, there is no zip for BRUTE.
-    assert_eq!(saved.len(), 2, "{saved:?}");
+    // Without `--brute`, there is no zip for BRUTE; the spreadsheet comes
+    // with the `ods` feature.
+    let ods = cfg!(feature = "ods");
+    assert_eq!(saved.len(), if ods { 3 } else { 2 }, "{saved:?}");
     assert!(saved[0].starts_with("questions_"), "{saved:?}");
-    assert_eq!(saved.last(), Some(&format!("{room_dir}.csv")));
+    assert_eq!(saved[1], format!("{room_dir}.csv"));
+    if ods {
+        assert_eq!(saved[2], format!("{room_dir}.ods"));
+    }
 }
 
 #[tokio::test]
