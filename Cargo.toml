@@ -8,7 +8,7 @@ edition = "2024"
 rust-version = "1.88"
 license = "MIT"
 authors = ["Michal Sojka <michal.sojka@cvut.cz>"]
-repository = "https://gitlab.fel.cvut.cz/sojkam1/quiz"
+repository = "https://github.com/wentasah/ctu-quiz"
 
 [workspace.dependencies]
 # Published on crates.io as ctu-quiz-common, which needs a version; the code
