@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0] – 2026-11-22
+
+### Added
+
+- Add security headers to every response ([4f20d67](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/4f20d6762038601d0a3fa19fcf7969168b972719))
+- Ring the terminal bell when every student has answered ([ac48a51](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/ac48a51359bbe006d8a5a2c4972407b6daf3b344))
+- Clear the terminal before showing a question ([f10e8d6](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/f10e8d6b13673b2afe7fffc6547ad558f5a37674))
+- Tell students whether a question is scored ([33f482d](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/33f482d202e8a8845929c26c24a92c96c7bea6cf))
+- Save the points of a room also as an OpenDocument spreadsheet ([2f03118](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/2f031186886e451dc569aebb739f62d99650887a))
+- Prepare publishing the CLI on crates.io as ctu-quiz ([ee2d886](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/ee2d88668586ab73d90b85128ff7b56c7d3c341b))
+- Build the binaries for ARM64 Linux too ([e3d2049](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/e3d204990befd16f651e606ea1aae8b78c3bc7b0))
+
+### Changed
+
+- Build with the brute feature by default, write the zip only on request ([c52b536](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/c52b536f64731e4407e7d3b3fc4982cec2fd9086))
+- Remove unused dependencies ([408eb54](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/408eb541c7909cfcf69bfd2bc8a9b54f6544884a))
+- Prevent script injection through JavaScript links in questions ([05d68c7](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/05d68c7fc5b5d7d7a2475bd6dfd9fdf7d9d4ef02))
+- Prevent guessing room codes by limiting wrong ones to 10 a minute ([e027170](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/e0271702134847cc866fdc20ab35ad2d20236e64))
+- Cargo.toml: Point to the GitHub repo ([2a2f4f3](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/2a2f4f3189ee81a20a238ed77b1a8bbc3a5e58e4))
+
+### Documentation
+
+- README: Describe the color scales of the room spreadsheet ([0fd39de](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/0fd39de8930dda9fb7789d74f59b41ba6e1e3496))
+- README: Caption the screenshot ([5b21f25](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/5b21f2567615246a7133756d23d72e064da266a0))
+- README: Add Contributing section ([a4908cb](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/a4908cb06b8f9a03fca25aeceae79f03077ce542))
+
 ## [0.3.0] – 2026-11-06
 
 ### Added
