@@ -21,8 +21,8 @@ use crate::{
     color::{BOLD, CYAN, DIM, GREEN, RED, YELLOW},
 };
 
-/// Shows the parsed question, so that the teacher can check the Markdown was
-/// understood as intended before students see it.
+/// Shows the title and the text of the parsed question, so that the teacher
+/// can check the Markdown was understood as intended before students see it.
 pub fn print_question(question: &Question) {
     if let Some(title) = &question.title {
         println!(
@@ -31,21 +31,55 @@ pub fn print_question(question: &Question) {
         );
     }
     println!("{}\n", question.prompt_markdown.trim());
-    for answer in &question.answers {
-        print_answer(&answer.label, &answer.plain, answer.points);
+}
+
+/// Something [`print_answers`] can list: an answer as parsed from the
+/// Markdown file, or as the server returned it for a published question.
+pub trait AnswerLine {
+    fn label(&self) -> &str;
+    fn text(&self) -> &str;
+    fn points(&self) -> Option<f64>;
+}
+
+impl AnswerLine for quiz_common::question::Answer {
+    fn label(&self) -> &str {
+        &self.label
     }
-    println!();
-    if let Some(notes) = &question.notes {
-        println!("{YELLOW}Teacher notes (not shown to students):{YELLOW:#}");
-        println!("{DIM}{notes}{DIM:#}\n");
+    fn text(&self) -> &str {
+        &self.plain
+    }
+    fn points(&self) -> Option<f64> {
+        self.points
     }
 }
 
-/// Lists the answers of a published question, in the order the students see
-/// them, which after a shuffle is not the order of the Markdown file.
-pub fn print_answers(answers: &[AnswerInfo]) {
+impl AnswerLine for AnswerInfo {
+    fn label(&self) -> &str {
+        &self.label
+    }
+    fn text(&self) -> &str {
+        &self.text
+    }
+    fn points(&self) -> Option<f64> {
+        self.points
+    }
+}
+
+/// Lists the answers in the given order: the order of the Markdown file for
+/// a parsed question, the order the students see for a published one, which
+/// after a shuffle differs.
+pub fn print_answers<A: AnswerLine>(answers: &[A]) {
     for answer in answers {
-        print_answer(&answer.label, &answer.text, answer.points);
+        print_answer(answer.label(), answer.text(), answer.points());
+    }
+}
+
+/// Shows the teacher notes of the question, if it has any. They are never
+/// shown to the students.
+pub fn print_teacher_notes(question: &Question) {
+    if let Some(notes) = &question.notes {
+        println!("{YELLOW}Teacher notes (not shown to students):{YELLOW:#}");
+        println!("{DIM}{notes}{DIM:#}\n");
     }
 }
 

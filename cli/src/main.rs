@@ -228,6 +228,9 @@ async fn ask(
         let _ = std::io::stdout().flush();
     }
     report::print_question(&question);
+    report::print_answers(&question.answers);
+    println!();
+    report::print_teacher_notes(&question);
 
     let api = connect(cli, false).await?;
     let question_info = api
@@ -369,6 +372,9 @@ fn parse(file: &Path) -> Result<()> {
     let question = quiz_common::parse_with_images(&markdown, &images)
         .with_context(|| format!("{} is not a usable question", file.display()))?;
     report::print_question(&question);
+    report::print_answers(&question.answers);
+    println!();
+    report::print_teacher_notes(&question);
     println!(
         "{GREEN}{} is a valid {}question with {} possible answers.{GREEN:#}",
         file.display(),
