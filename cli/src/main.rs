@@ -230,7 +230,7 @@ async fn ask(
     report::print_question(&question);
 
     let api = connect(cli, false).await?;
-    let question = api
+    let question_info = api
         .create_question(&CreateQuestion {
             source_name: file
                 .file_name()
@@ -249,17 +249,17 @@ async fn ask(
     // the one the file has.
     if shuffle {
         println!("\nThe answers were shuffled into this order:");
-        report::print_answers(&question.answers);
+        report::print_answers(&question_info.answers);
     }
 
-    println!("Question code:      {BOLD}{}{BOLD:#}", question.code);
-    println!("Students answer at: {CYAN}{}{CYAN:#}", question.answer_url);
-    println!("Presentation view:  {CYAN}{}{CYAN:#}", question.display_url);
+    println!("Question code:      {BOLD}{}{BOLD:#}", question_info.code);
+    println!("Students answer at: {CYAN}{}{CYAN:#}", question_info.answer_url);
+    println!("Presentation view:  {CYAN}{}{CYAN:#}", question_info.display_url);
     println!("Students see:       {}", describe(view));
-    if question.presented {
+    if question_info.presented {
         println!("\nThe presentation view that is already open shows the question.");
     } else {
-        show_in_browser(&question.display_url, !cli.no_browser);
+        show_in_browser(&question_info.display_url, !cli.no_browser);
     }
 
     // One reader for the whole run, so that an Enter typed ahead is not
@@ -274,10 +274,10 @@ async fn ask(
             );
         }
     }
-    wait_for_close(&api, &question.id, &mut stdin, terminal.bell).await?;
+    wait_for_close(&api, &question_info.id, &mut stdin, terminal.bell).await?;
 
-    let closed = api.close(&question.id).await?;
-    let results = api.results(&question.id).await?;
+    let closed = api.close(&question_info.id).await?;
+    let results = api.results(&question_info.id).await?;
 
     let dir = destination.dir(&api, file).await?;
     let path = destination
@@ -289,7 +289,7 @@ async fn ask(
     save_room(cli, &api, file, dir.as_deref()).await;
 
     if closed.answers.iter().any(|answer| answer.points.is_some()) {
-        wait_for_reveal(&api, &question.id, &mut stdin).await?;
+        wait_for_reveal(&api, &question_info.id, &mut stdin).await?;
     }
     Ok(())
 }
