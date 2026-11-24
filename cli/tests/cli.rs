@@ -587,6 +587,77 @@ async fn reveal_in_presentation_view() {
     assert_eq!(next_to_question, 0);
 }
 
+/// Ctrl-C at the prompt of an unscored question ends the program, although
+/// the standard input is still open and nothing was typed: the pending read
+/// of Enter must not keep the process alive.
+#[cfg(unix)]
+#[tokio::test]
+async fn ctrl_c_ends_ask_of_an_unscored_question() {
+    tokio::time::timeout(TIMEOUT, ctrl_c_unscored())
+        .await
+        .expect("the CLI finished in time");
+}
+
+#[cfg(unix)]
+async fn ctrl_c_unscored() {
+    let idp = MockIdp::start().await;
+    let base = start_server(&idp, &["sojkam1"]).await;
+    let dir = scratch("ctrl-c-unscored");
+    let question = dir.join("division.md");
+    std::fs::write(&question, UNSCORED_QUESTION).unwrap();
+    idp.login_as(&User::new("sojkam1", "Michal Sojka"));
+
+    let mut child = quiz(&dir)
+        .args([
+            "--server",
+            &base,
+            "--no-browser",
+            "--login-port",
+            "0",
+            "ask",
+        ])
+        .arg(&question)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("the quiz binary is built");
+    // Kept open, as a terminal would be, but nothing is ever typed.
+    let _stdin = child.stdin.take().unwrap();
+    let pid = child.id().unwrap().to_string();
+
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut printed = String::new();
+    while let Some(line) = lines.next_line().await.unwrap() {
+        printed.push_str(&line);
+        printed.push('\n');
+        if line.contains(&idp.issuer) && line.contains("/authorize") {
+            let response = reqwest::Client::new()
+                .get(line.trim())
+                .send()
+                .await
+                .expect("the login URL can be opened");
+            assert!(response.status().is_success());
+        }
+        if line.starts_with("Press Enter") {
+            // The prompt is printed before the Ctrl-C handler is set up,
+            // so give the CLI a moment to get there.
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let status = std::process::Command::new("kill")
+                .args(["-INT", &pid])
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+    }
+
+    let status = child.wait().await.unwrap();
+    assert!(status.success(), "{printed}");
+    assert!(printed.contains("Answers saved to"), "{printed}");
+    assert!(!printed.contains("reveal"), "{printed}");
+}
+
 #[tokio::test]
 async fn ask_without_standard_input_closes_the_question_after_the_given_time() {
     tokio::time::timeout(TIMEOUT, ask_without_stdin())

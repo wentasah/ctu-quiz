@@ -40,8 +40,24 @@ use quiz_common::{
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use url::Url;
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("quiz: cannot start the async runtime: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let code = runtime.block_on(async_main());
+    // Waiting for Enter leaves a read of the standard input on tokio's
+    // blocking pool, and a read cannot be cancelled. Dropping the runtime
+    // would wait for that read, so after Ctrl-C the program would not end
+    // until Enter is pressed.
+    runtime.shutdown_background();
+    code
+}
+
+async fn async_main() -> ExitCode {
     let cli = match parse_command_line() {
         Ok(cli) => cli,
         Err(error) => {
@@ -339,19 +355,14 @@ async fn wait_for_reveal(
             question = next_state(api, id, &mut events), if watching => match question {
                 Ok(question) if question.revealed => {
                     println!("{GREEN}The correct answers were revealed in the presentation view.{GREEN:#}");
-                    // As below: the Enter-reading task would keep the
-                    // process alive.
-                    std::process::exit(0);
+                    return Ok(());
                 }
                 Ok(_) => {}
                 Err(_) => watching = false,
             },
-            // A plain `return` would leave the Enter-reading task stuck on
-            // tokio's blocking pool, which the runtime waits for on shutdown, so
-            // the process would not actually exit until Enter is pressed anyway.
             _ = tokio::signal::ctrl_c() => {
                 println!("\n{YELLOW}The correct answers were not revealed; {later}.{YELLOW:#}");
-                std::process::exit(0);
+                return Ok(());
             }
         }
     }
