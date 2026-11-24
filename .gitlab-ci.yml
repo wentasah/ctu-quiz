@@ -59,14 +59,14 @@ check-release:
 .build:
   stage: build
   rules:
-    # Without the first rule, a merge request would run a second pipeline
-    # next to the one of its branch.
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_PIPELINE_SOURCE == "schedule"
+    # Without this rule, a merge request would run a second pipeline next to
+    # the one of its branch.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: never
-    # "Run pipeline" is for security-update; for a tag, though, the release
-    # job needs the builds.
-    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_TAG == null
-      when: never
+    # Also in the scheduled and "Run pipeline" pipelines of security-update:
+    # the README links to the artifacts of the latest successful pipeline on
+    # main, and without the builds there they would be gone until the next
+    # push.
     - when: on_success
   image: ghcr.io/rust-cross/cargo-zigbuild:0.23.4
   variables:

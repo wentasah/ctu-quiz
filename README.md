@@ -713,8 +713,9 @@ version:
   | macOS, Apple Silicon and Intel | `quiz` | [build-macos](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-macos) |
   | Windows x86-64 | `quiz.exe` | [build-windows](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/jobs/artifacts/main/download?job=build-windows) |
 
-  The GitLab CI (`.gitlab-ci.yml`) cross-compiles these on every push with
-  [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and keeps them as job artifacts for two weeks.
+  The GitLab CI (`.gitlab-ci.yml`) cross-compiles these on every push, and
+  in the weekly pipeline that checks for security updates, with
+  [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild).
 
 The macOS binary is not signed, so Gatekeeper refuses to start it when it was
 downloaded with a browser; `xattr -d com.apple.quarantine quiz` lets it run.
