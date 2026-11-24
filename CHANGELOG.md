@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.1] – 2026-11-24
+
+### Changed
+
+- When answers are shuffled, print them only once ([7e923ca](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/7e923ca946b1f125e4169579dcb3f6cbe4698729))
+
+### Fixed
+
+- Let Ctrl-C end ask of an unscored question ([19003ea](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/19003ea93d3fe51bfb391e7537c45c6fa3d289c9))
+
+### Documentation
+
+- README: Point "Getting started" download link to GitHub releases ([b534d97](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/b534d97ac83c6df2286d8f48c5ac0f7eab52d105))
+
+### Build and deployment
+
+- Build in scheduled pipelines too, so the download links keep working ([b56774d](https://gitlab.fel.cvut.cz/sojkam1/quiz/-/commit/b56774dd5765bd12a02750326b70b0383e2ef7b8))
+
 ## [0.4.0] – 2026-11-22
 
 ### Added
