@@ -50,3 +50,4 @@ git tag -a "$tag" -m "Release $tag"
 
 echo "Tagged $tag. Look it over (git show $tag), then publish it with"
 echo "  git push --atomic origin main $tag"
+echo "  cargo publish --workspace"
