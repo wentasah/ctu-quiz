@@ -32,7 +32,7 @@ use chrono::Local;
 use clap::{CommandFactory, FromArgMatches};
 use cli::{Cli, Command, Format};
 use client::{Api, Events, Login};
-use color::{BOLD, CYAN, GREEN, YELLOW};
+use color::{BOLD, CYAN, DIM, GREEN, YELLOW};
 use quiz_common::{
     Image, Images, ParseError,
     api::{AwardPoints, CreateQuestion, QuestionInfo, StudentView},
@@ -228,10 +228,11 @@ async fn ask(
         let _ = std::io::stdout().flush();
     }
     report::print_question(&question);
-    report::print_answers(&question.answers);
-    println!();
-    report::print_teacher_notes(&question);
-
+    if !shuffle {
+        report::print_answers(&question.answers);
+        println!();
+        report::print_teacher_notes(&question);
+    }
     let api = connect(cli, false).await?;
     let question_info = api
         .create_question(&CreateQuestion {
@@ -251,8 +252,10 @@ async fn ask(
     // The order on the screen is the server's now, so show it rather than
     // the one the file has.
     if shuffle {
-        println!("\nThe answers were shuffled into this order:");
+        println!("\n{DIM}The answers were shuffled into this order:{DIM:#}");
         report::print_answers(&question_info.answers);
+        println!();
+        report::print_teacher_notes(&question);
     }
 
     println!("Question code:      {BOLD}{}{BOLD:#}", question_info.code);
