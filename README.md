@@ -58,7 +58,7 @@ Asking questions with the `quiz` command line tool, for teachers.
 
 ### Getting started
 
-1. Install `quiz`: download a [prebuilt binary]((https://github.com/wentasah/ctu-quiz/releases)) or
+1. Install `quiz`: download a [prebuilt binary](https://github.com/wentasah/ctu-quiz/releases) or
    [build it](#building) from source. Optionally set up
    [shell completions](#shell-completions).
 2. Tell it which server to use, either with `--server` or once and for all in
